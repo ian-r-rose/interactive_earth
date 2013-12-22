@@ -2,3 +2,6 @@
 Makefile
 *.swp
 biharmonic
+*.sh
+*.txt
+*.ps
