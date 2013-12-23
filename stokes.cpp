@@ -1,49 +1,43 @@
-#include <Epetra_ConfigDefs.h>
 #include <Epetra_SerialComm.h>
 #include <Epetra_Map.h>
 #include <Epetra_Vector.h>
 #include <Epetra_CrsMatrix.h>
-#include <Epetra_CrsGraph.h>
-#include <Epetra_Time.h>
-#include <AztecOO.h>
 #include <Amesos.h>
-#include <ml_include.h>
-#include <Epetra_LinearProblem.h>
-#include <ml_MultiLevelOperator.h>
-#include <ml_epetra_utils.h>
 
-#include "staggered_grid.h"
+#include "stokes.h"
 #include <vector>
 #include <cmath>
 #include <fstream>
 
-double temperature(const Point &p)
+
+StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
+                          nx(nx), ny(ny), ncells(nx*ny), Ra(10.0),
+                          grid(lx, ly, nx, ny),
+                          map(ncells, 0, Comm),
+                          T(map), vorticity(map), stream(map),
+                          dTdx(map), u(map), v(map),
+                          poisson_matrix(Copy, map, 5)
+{
+  initialize_temperature();
+  assemble_stokes_matrix();
+}
+
+double StokesSolver::initial_temperature(const Point &p)
 {
 //  return -std::exp( (-(0.5-p.x)*(0.5-p.x) - (0.5-p.y)*(0.5-p.y) )/.05);
   return ( std::sqrt( (0.5-p.x)*(0.5-p.x)+(0.5-p.y)*(0.5-p.y)) < 0.15 ? 1.0 : 2.0);
 }
 
-int main(int argc, char **argv)
+void StokesSolver::initialize_temperature()
 {
-  Epetra_SerialComm Comm;
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    T[cell->self()] = initial_temperature(cell->center());
+}
 
-  int nx = 100, ny = 100;
-  int ncells = nx*ny;
-  double Ra = 10.e5; 
-
-  Epetra_Map map(ncells, 0, Comm);
-
-  Epetra_Vector T(map);
-  Epetra_Vector vorticity(map);
-  Epetra_Vector stream(map);
-  Epetra_Vector dTdx(map);
-  Epetra_Vector u(map);
-  Epetra_Vector v(map);
-
-  StaggeredGrid grid(1.0, 1.0, nx, ny);
-  Epetra_CrsMatrix mat(Copy, map, 5);
-  std::vector<int> indices; //5 point stencil
+void StokesSolver::assemble_stokes_matrix()
+{
   std::vector<double> values;
+  std::vector<int> indices; //5 point stencil
 
   //Assemble poisson matrix 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
@@ -57,21 +51,21 @@ int main(int argc, char **argv)
     }
     else
     {
-      indices.push_back(cell->self()); values.push_back(-4.0);
-      indices.push_back( cell->left() ); values.push_back(1.0);
-      indices.push_back( cell->right() ); values.push_back(1.0);
-      indices.push_back( cell->up() ); values.push_back(1.0);
-      indices.push_back( cell->down() ); values.push_back(1.0);
+      indices.push_back(cell->self()); values.push_back(-4.0/grid.dx/grid.dy);
+      indices.push_back( cell->left() ); values.push_back(1.0/grid.dx/grid.dy);
+      indices.push_back( cell->right() ); values.push_back(1.0/grid.dx/grid.dy);
+      indices.push_back( cell->up() ); values.push_back(1.0/grid.dx/grid.dy);
+      indices.push_back( cell->down() ); values.push_back(1.0/grid.dx/grid.dy);
     }
 
-    int ierr =  mat.InsertGlobalValues(cell->self(), indices.size(), &values[0], &indices[0]);
+    int ierr =  poisson_matrix.InsertGlobalValues(cell->self(), indices.size(), &values[0], &indices[0]);
   }
-  mat.FillComplete();
+  poisson_matrix.FillComplete();
 
-  //Assemble T vector
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    T[cell->self()] = temperature(cell->center());
+}
 
+void StokesSolver::assemble_dTdx_vector()
+{
   //Assemble dTdx vector
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     if(cell->at_boundary())
@@ -79,10 +73,13 @@ int main(int argc, char **argv)
     else
       dTdx[cell->self()] = Ra*(T[cell->self()] - T[cell->left()]
                             + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx;
+}
+
  
-  
+void StokesSolver::solve_stokes()
+{  
   Epetra_LinearProblem poisson_problem;
-  poisson_problem.SetOperator(&mat);
+  poisson_problem.SetOperator(&poisson_matrix);
 
   Amesos Amesos_Factory;
   Amesos_BaseSolver *Solver;
@@ -91,6 +88,7 @@ int main(int argc, char **argv)
   Solver->NumericFactorization();
 
   
+  assemble_dTdx_vector();
   poisson_problem.SetLHS(&vorticity);
   poisson_problem.SetRHS(&dTdx);
   Solver->Solve();
@@ -102,8 +100,14 @@ int main(int argc, char **argv)
   //Come up with the velocities
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    u[cell->self()] = -(stream[cell->up()] - stream[cell->self()])/grid.dy;
-    v[cell->self()] = (stream[cell->right()] - stream[cell->self()])/grid.dx;
+    if( cell->at_top_boundary() == false)
+      u[cell->self()] = -(stream[cell->up()] - stream[cell->self()])/grid.dy;
+    else
+      u[cell->self()] = -(stream[cell->self()] - stream[cell->down()])/grid.dy;
+    if ( cell->at_right_boundary() == false)
+      v[cell->self()] = (stream[cell->right()] - stream[cell->self()])/grid.dx;
+    else 
+      v[cell->self()] = (stream[cell->self()] - stream[cell->left()])/grid.dx;
   }
 
   std::ofstream temperature("temperature.txt");
@@ -114,7 +118,9 @@ int main(int argc, char **argv)
   {
     vort<<cell->corner().x<<"\t"<<cell->corner().y<<"\t"<<vorticity[cell->self()]<<std::endl;
     psi<<cell->corner().x<<"\t"<<cell->corner().y<<"\t"<<stream[cell->self()]<<std::endl;
-    temperature<<cell->corner().x<<"\t"<<cell->corner().y<<"\t"<<T[cell->self()]<<std::endl;
+    temperature<<cell->center().x<<"\t"<<cell->center().y<<"\t"<<T[cell->self()]<<std::endl;
     vel<<cell->corner().x<<"\t"<<cell->corner().y<<"\t"<<u[cell->self()]<<"\t"<<v[cell->self()]<<std::endl;
   }
 } 
+
+

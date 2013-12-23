@@ -10,6 +10,9 @@ calculations
 #include <iterator>
 #include <iostream>
 
+#ifndef STAGGERED_GRID_H
+#define STAGGERED_GRID_H
+
 struct Point
 {
   double x;
@@ -94,3 +97,5 @@ class StaggeredGrid
     const iterator begin() { return iterator(0, *this); };
     const iterator end() {return iterator(ncells, *this);};
 };
+
+#endif
