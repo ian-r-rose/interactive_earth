@@ -39,6 +39,10 @@ class StaggeredGrid
         int right() { return ( (id+1)%grid.nx == 0 ? -1 : id+1); };
         int up() { return (id + grid.nx >= grid.ncells ? -1 : id + grid.nx); };
         int down() { return ( id-grid.nx < 0 ? -1 : id-grid.nx) ; };
+        int upleft() { return ( id % grid.nx == 0 || id + grid.nx >= grid.ncells ? -1 : id+grid.nx-1 ); }
+        int upright() { return ( (id+1)%grid.nx == 0 || id+grid.nx >= grid.ncells ? -1 : id+grid.nx+1 ); }
+        int downleft() { return ( (id)%grid.nx == 0 || id-grid.nx < 0 ? -1 : id-grid.nx-1 ); }
+        int downright() { return ( (id+1)%grid.nx == 0 || id-grid.nx < 0 ? -1 : id-grid.nx+1 ); }
         int self() { return id; };
  
         //query for boundary information

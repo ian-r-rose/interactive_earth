@@ -17,11 +17,11 @@ LIBRARIES=$(Trilinos_LIBRARIES) $(Trilinos_TPL_LIBRARIES)
 
 LINK_FLAGS=$(Trilinos_EXTRA_LD_FLAGS)
 
-biharmonic: biharmonic.o
-	$(CXX) $(CXX_FLAGS) biharmonic.o -o biharmonic $(LINK_FLAGS) $(INCLUDE_DIRS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
+stokes: stokes.o
+	$(CXX) $(CXX_FLAGS) stokes.o -o stokes $(LINK_FLAGS) $(INCLUDE_DIRS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
-biharmonic.o: biharmonic.cpp
-	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) biharmonic.cpp
+stokes.o: stokes.cpp
+	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) stokes.cpp
 
 .PHONY: clean
 clean:

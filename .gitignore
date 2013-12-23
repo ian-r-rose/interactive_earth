@@ -1,7 +1,7 @@
 *.o
 Makefile
 *.swp
-biharmonic
+stokes
 *.sh
 *.txt
 *.ps
