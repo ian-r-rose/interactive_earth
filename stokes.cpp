@@ -3,6 +3,7 @@
 #include <Epetra_Vector.h>
 #include <Epetra_CrsMatrix.h>
 #include <Amesos.h>
+#include <AztecOO.h>
 
 #include "stokes.h"
 #include <vector>
@@ -15,11 +16,17 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
                           grid(lx, ly, nx, ny),
                           map(ncells, 0, Comm),
                           T(map), vorticity(map), stream(map),
-                          dTdx(map), u(map), v(map),
+                          dTdx(map), u(map), v(map), Tnew(map),
                           poisson_matrix(Copy, map, 5)
 {
   initialize_temperature();
   assemble_stokes_matrix();
+
+  Amesos Amesos_Factory;
+  poisson_problem.SetOperator(&poisson_matrix);
+  poisson_solver = Amesos_Factory.Create("Amesos_Klu", poisson_problem);
+  poisson_solver->SymbolicFactorization(); 
+  poisson_solver->NumericFactorization();
 }
 
 double StokesSolver::initial_temperature(const Point &p)
@@ -34,6 +41,63 @@ void StokesSolver::initialize_temperature()
     T[cell->self()] = initial_temperature(cell->center());
 }
 
+int StokesSolver::cell_id(const Point&p)
+{
+  int xindex = p.x/grid.dx;
+  int yindex = p.y/grid.dy;
+  return nx*yindex + xindex;
+}
+
+void StokesSolver::upwind_advect()
+{
+  double dTdx;
+  double dTdy;
+  double vx, vy;
+
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    if( cell->at_right_boundary())
+    {
+      vx = 0;
+      dTdx = 0;
+    }
+    else if (cell->at_left_boundary())
+    {
+      vx = 0;
+      dTdx = 0;
+    }
+    else
+    {
+      vx = (u[cell->self()]+u[cell->right()])/2.0;
+      if (vx <= 0.0) 
+        dTdx = (T[cell->right()]-T[cell->self()])/grid.dx;
+      else
+        dTdx = (T[cell->self()]-T[cell->left()])/grid.dx;
+    }
+    if( cell->at_top_boundary())
+    {
+      vy = 0;
+      dTdy = (0.0 - T[cell->self()])/grid.dy/2.0;
+    }
+    else if (cell->at_bottom_boundary())
+    {
+      vy = 0;
+      dTdy = (T[cell->self()] - 1.0)/grid.dy/2.0;
+    }
+    else
+    {
+      vy = (v[cell->up()]+v[cell->self()])/2.0;
+      if (vy <= 0.0) 
+        dTdy = (T[cell->up()]-T[cell->self()])/grid.dy;
+      else
+        dTdy = (T[cell->self()]-T[cell->down()])/grid.dy;
+    }
+    
+    Tnew[cell->self()] = T[cell->self()] - .1*(vx*dTdx+vy*dTdy);
+  }
+  T = Tnew;
+}
+  
 void StokesSolver::assemble_stokes_matrix()
 {
   std::vector<double> values;
@@ -64,6 +128,16 @@ void StokesSolver::assemble_stokes_matrix()
 
 }
 
+void StokesSolver::assemble_diffusion_rhs()
+{
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    if(cell->at_boundary())
+      dTdx[cell->self()] = 0.0;
+    else
+      dTdx[cell->self()] = Ra*(T[cell->self()] - T[cell->left()]
+                            + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx;
+}
+
 void StokesSolver::assemble_dTdx_vector()
 {
   //Assemble dTdx vector
@@ -78,24 +152,17 @@ void StokesSolver::assemble_dTdx_vector()
  
 void StokesSolver::solve_stokes()
 {  
-  Epetra_LinearProblem poisson_problem;
-  poisson_problem.SetOperator(&poisson_matrix);
 
-  Amesos Amesos_Factory;
-  Amesos_BaseSolver *Solver;
-  Solver = Amesos_Factory.Create("Amesos_Klu", poisson_problem);
-  Solver->SymbolicFactorization(); 
-  Solver->NumericFactorization();
 
   
   assemble_dTdx_vector();
   poisson_problem.SetLHS(&vorticity);
   poisson_problem.SetRHS(&dTdx);
-  Solver->Solve();
+  poisson_solver->Solve();
 
   poisson_problem.SetLHS(&stream);
   poisson_problem.SetRHS(&vorticity);
-  Solver->Solve();
+  poisson_solver->Solve();
 
   //Come up with the velocities
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
