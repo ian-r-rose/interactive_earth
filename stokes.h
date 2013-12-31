@@ -4,6 +4,7 @@
 #include <Epetra_Vector.h>
 #include <Epetra_CrsMatrix.h>
 #include "staggered_grid.h"
+#include <GL/gl.h>
 
 #ifndef STOKES_H
 #define STOKES_H
@@ -25,7 +26,6 @@ class StokesSolver
 
     Epetra_Vector T;
     Epetra_Vector Tnew;
-    Epetra_Vector T_rhs;
     Epetra_Vector vorticity;
     Epetra_Vector stream;
     Epetra_Vector dTdx;
@@ -33,7 +33,6 @@ class StokesSolver
     Epetra_Vector v;
 
     Epetra_CrsMatrix poisson_matrix;
-    Epetra_CrsMatrix diffusion_matrix;
 
  
     //workhorse functions
@@ -53,6 +52,7 @@ class StokesSolver
     void upwind_advect();
     void diffuse_temperature();
     void solve_stokes();
+    void draw();
 };
 
 #endif

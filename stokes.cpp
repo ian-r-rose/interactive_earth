@@ -32,7 +32,7 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
 double StokesSolver::initial_temperature(const Point &p)
 {
 //  return -std::exp( (-(0.5-p.x)*(0.5-p.x) - (0.5-p.y)*(0.5-p.y) )/.05);
-  return ( std::sqrt( (0.5-p.x)*(0.5-p.x)+(0.5-p.y)*(0.5-p.y)) < 0.15 ? 1.0 : 2.0);
+  return ( std::sqrt( (0.5-p.x)*(0.5-p.x)+(0.5-p.y)*(0.5-p.y)) < 0.15 ? 0.0 : 1.0);
 }
 
 void StokesSolver::initialize_temperature()
@@ -152,8 +152,6 @@ void StokesSolver::assemble_dTdx_vector()
  
 void StokesSolver::solve_stokes()
 {  
-
-
   
   assemble_dTdx_vector();
   poisson_problem.SetLHS(&vorticity);
@@ -191,3 +189,34 @@ void StokesSolver::solve_stokes()
 } 
 
 
+void StokesSolver::draw()
+{
+  double DX = 2.0/grid.nx;
+  double DY = 2.0/grid.ny;
+
+  glClearColor(0.0, 0.0, 0.0, 0.0);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+  glBegin(GL_TRIANGLES);
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    if( cell->at_right_boundary() == false && cell->at_top_boundary() == false)
+    {
+      glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
+      glColor3f(T[cell->self()], 0.0, 1.0-T[cell->self()]);
+      glVertex2f((cell->xindex()+1)*DX-1.0, (cell->yindex()+1)*DY-1.0);
+      glColor3f(T[cell->upright()], 0.0, 1.0-T[cell->upright()]);
+      glVertex2f((cell->xindex())*DX-1.0, (cell->yindex()+1)*DY-1.0);
+      glColor3f(T[cell->up()], 0.0, 1.0-T[cell->up()]);
+
+      glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
+      glColor3f(T[cell->self()], 0.0, 1.0-T[cell->self()]);
+      glVertex2f((cell->xindex()+1)*DX-1.0, cell->yindex()*DY-1.0);
+      glColor3f(T[cell->right()], 0.0, 1.0-T[cell->right()]);
+      glVertex2f((cell->xindex()+1)*DX-1.0, (cell->yindex()+1)*DY-1.0);
+      glColor3f(T[cell->upright()], 0.0, 1.0-T[cell->upright()]);
+
+    }
+  glEnd();
+  glFlush();
+}
+  
