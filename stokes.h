@@ -1,10 +1,16 @@
-#include <Epetra_SerialComm.h>
 #include <AztecOO.h>
 #include <Amesos.h>
 #include <Epetra_Map.h>
 #include <Epetra_Vector.h>
 #include <Epetra_CrsMatrix.h>
 #include <ml_MultiLevelPreconditioner.h>
+
+#ifdef EPETRA_MPI
+#  include <mpi.h>
+#  include <Epetra_MpiComm.h>
+#else
+#  include <Epetra_SerialComm.h>
+#endif
 
 #include "staggered_grid.h"
 #include <GL/gl.h>
@@ -28,7 +34,12 @@ class StokesSolver
     Epetra_LinearProblem diffusion_ud_problem, diffusion_lr_problem;
     Epetra_LinearProblem poisson_problem;
     
+#ifdef EPETRA_MPI
+    Epetra_MpiComm Comm;
+#else
     Epetra_SerialComm Comm;
+#endif
+
     Epetra_Map map;
 
     Epetra_Vector T;

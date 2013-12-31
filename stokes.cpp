@@ -1,4 +1,3 @@
-#include <Epetra_SerialComm.h>
 #include <Epetra_Map.h>
 #include <Epetra_Vector.h>
 #include <Epetra_CrsMatrix.h>
@@ -18,6 +17,9 @@ Teuchos::RCP<Teuchos::Time> Stokes = Teuchos::TimeMonitor::getNewCounter("Stokes
 Teuchos::RCP<Teuchos::Time> Draw = Teuchos::TimeMonitor::getNewCounter("Draw time");
 
 StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
+#ifdef EPETRA_MPI
+                          Comm(MPI_COMM_WORLD),
+#endif
                           nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e7),
                           grid(lx, ly, nx, ny), dt(5.e-7),
                           map(ncells, 0, Comm),

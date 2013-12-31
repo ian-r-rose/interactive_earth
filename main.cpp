@@ -5,7 +5,7 @@
 
 const unsigned int nx = 200;
 const unsigned int ny = 100;
-StokesSolver stokes(2.0, 1.0, nx,ny);
+StokesSolver* handle = NULL;
 
 /* display function - code from:
      http://fly.cc.fer.hr/~unreal/theredbook/chapter01.html
@@ -15,11 +15,11 @@ void renderFunction()
 {
   static int i=0;
   if(i%10== 0)
-    stokes.solve_stokes();
-  stokes.upwind_advect();
-  stokes.diffuse_temperature();
+    handle->solve_stokes();
+  handle->upwind_advect();
+  handle->diffuse_temperature();
   if(i%10==0)
-    stokes.draw();
+    handle->draw();
   ++i;
   std::cout<<"Step "<<i<<std::endl;
   glutPostRedisplay();
@@ -32,6 +32,13 @@ the freeglut library does the window creation work for us,
 regardless of the platform. */
 int main(int argc, char** argv)
 {
+#ifdef EPETRA_MPI
+    MPI_Init(&argc,&argv);
+#endif
+
+    StokesSolver stokes(2.0, 1.0, nx,ny);
+    handle = &stokes;
+
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_SINGLE);
     glutInitWindowSize(5*nx,5*ny);
