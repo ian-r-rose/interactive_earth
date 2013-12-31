@@ -21,7 +21,7 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
                           Comm(MPI_COMM_WORLD),
 #endif
                           nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e7),
-                          grid(lx, ly, nx, ny), dt(5.e-7),
+                          grid(lx, ly, nx, ny), dt(4.e-7),
                           map(ncells, 0, Comm),
                           T(map), vorticity(map), stream(map), dTdx(map), 
                           u(map), v(map), scratch1(map), scratch2(map),
@@ -31,9 +31,8 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
   initialize_temperature();
   assemble_dTdx_vector();
   assemble_stokes_matrix();
-
   poisson_problem.SetOperator(&poisson_matrix);
-  assemble_dTdx_vector();
+
   poisson_problem.SetLHS(&vorticity);
   poisson_problem.SetRHS(&dTdx);
   aztec_solver.SetProblem(poisson_problem);
@@ -53,9 +52,9 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
 double StokesSolver::initial_temperature(const Point &p)
 {
 //  return -std::exp( (-(0.5-p.x)*(0.5-p.x) - (0.5-p.y)*(0.5-p.y) )/.05);
-//  return ( std::sqrt( (0.5-p.x)*(0.5-p.x)+(0.5-p.y)*(0.5-p.y)) < 0.15 ? 1.0 : 0.0);
+  return ( std::sqrt( (0.05-p.x)*(0.05-p.x)+(0.5-p.y)*(0.5-p.y)) < 0.05 ? 1.0 : 0.5);
 //  double temp = 1.0-p.y/grid.ly + 0.1*std::sin( 2.0*3.14159*p.x/grid.lx )*(p.y)*(p.y-grid.ly)/grid.ly/grid.ly;
-  return 0.5;
+//  return 0.5;
 //  return (temp > 0.0 ? ( temp < 1.0 ? temp : 1.0 ) : 0.0);
 }
 
@@ -83,24 +82,11 @@ void StokesSolver::upwind_advect()
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    if( cell->at_right_boundary())
-    {
-      vx = 0;
-      dTdx = 0;
-    }
-    else if (cell->at_left_boundary())
-    {
-      vx = 0;
-      dTdx = 0;
-    }
+    vx = (u[cell->self()]+u[cell->right()])/2.0;
+    if (vx <= 0.0) 
+      dTdx = (T[cell->right()]-T[cell->self()])/grid.dx;
     else
-    {
-      vx = (u[cell->self()]+u[cell->right()])/2.0;
-      if (vx <= 0.0) 
-        dTdx = (T[cell->right()]-T[cell->self()])/grid.dx;
-      else
-        dTdx = (T[cell->self()]-T[cell->left()])/grid.dx;
-    }
+      dTdx = (T[cell->self()]-T[cell->left()])/grid.dx;
     if( cell->at_top_boundary())
     {
       vy = 0;
@@ -162,16 +148,6 @@ void StokesSolver::assemble_diffusion_matrix()
       indices.push_back(cell->self());
       values.push_back(1.0);
     }
-    else if(cell->at_left_boundary())
-    {
-      indices.push_back(cell->self()); values.push_back(1.0);
-      indices.push_back(cell->right()); values.push_back(-1.0);
-    } 
-    else if(cell->at_right_boundary())
-    {
-      indices.push_back(cell->self()); values.push_back(1.0);
-      indices.push_back(cell->left()); values.push_back(-1.0);
-    } 
     else
     {
       indices.push_back(cell->self()); values.push_back(1.0+dt*2.0/grid.dx/grid.dx);
@@ -187,16 +163,6 @@ void StokesSolver::assemble_diffusion_matrix()
       indices.push_back(cell->self());
       values.push_back(1.0);
     }
-    else if(cell->at_left_boundary())
-    {
-      indices.push_back(cell->self()); values.push_back(1.0);
-      indices.push_back(cell->right()); values.push_back(1.0);
-    } 
-    else if(cell->at_right_boundary())
-    {
-      indices.push_back(cell->self()); values.push_back(1.0);
-      indices.push_back(cell->left()); values.push_back(1.0);
-    } 
     else
     {
       indices.push_back(cell->self()); values.push_back(1.0+dt*2.0/grid.dx/grid.dx);
@@ -231,7 +197,7 @@ void StokesSolver::assemble_stokes_matrix()
   {
     indices.clear();
     values.clear();
-    if(cell->at_boundary())
+    if(cell->at_top_boundary() || cell->at_bottom_boundary())
     {
       indices.push_back(cell->self());
       values.push_back(1.0);
@@ -260,11 +226,13 @@ void StokesSolver::assemble_dTdx_vector()
 {
   //Assemble dTdx vector
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    if(cell->at_boundary())
+  {
+    if(cell->at_top_boundary() || cell->at_bottom_boundary())
       dTdx[cell->self()] = 0.0;
     else
       dTdx[cell->self()] = Ra*(T[cell->self()] - T[cell->left()]
                             + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx;
+  }
 }
 
  
@@ -291,10 +259,8 @@ void StokesSolver::solve_stokes()
       u[cell->self()] = (stream[cell->up()] - stream[cell->self()])/grid.dy;
     else
       u[cell->self()] = (stream[cell->self()] - stream[cell->down()])/grid.dy;
-    if ( cell->at_right_boundary() == false)
-      v[cell->self()] = -(stream[cell->right()] - stream[cell->self()])/grid.dx;
-    else 
-      v[cell->self()] = -(stream[cell->self()] - stream[cell->left()])/grid.dx;
+
+    v[cell->self()] = -(stream[cell->right()] - stream[cell->self()])/grid.dx;
   }
 
 } 
