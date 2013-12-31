@@ -1,5 +1,5 @@
-#include "GL/freeglut.h"
-#include "GL/gl.h"
+#include <GL/freeglut.h>
+#include <GL/gl.h>
 #include "stokes.h"
 #include <Teuchos_TimeMonitor.hpp>
 
