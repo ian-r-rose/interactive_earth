@@ -24,6 +24,7 @@ class StaggeredGrid
   public:
 
     class iterator;
+    class reverse_iterator;
 
     class Cell 
     {
@@ -66,6 +67,7 @@ class StaggeredGrid
         int id;
 
       friend class StaggeredGrid::iterator;
+      friend class StaggeredGrid::reverse_iterator;
 
     };
 
@@ -76,12 +78,28 @@ class StaggeredGrid
         const StaggeredGrid& grid;
         Cell c;
       public:
-        iterator(unsigned int i, const StaggeredGrid& g): id(i), grid(g), c(id,grid) {};
+        iterator(int i, const StaggeredGrid& g): id(i), grid(g), c(id,grid) {};
         iterator(const iterator &it) : id(it.id), grid(it.grid), c(id, grid) {};
         iterator& operator++() { ++id; ++c.id; return (*this);}
         iterator& operator++(int) { return operator++();}
         bool operator==(const iterator &rhs) {return id == rhs.id; };
         bool operator!=(const iterator &rhs) {return id != rhs.id; };
+        Cell &operator*() {return c;}
+        Cell* operator->() {return &c;}
+    };
+    class reverse_iterator : public std::iterator<std::input_iterator_tag, Cell>
+    {
+      private:
+        int id;
+        const StaggeredGrid& grid;
+        Cell c;
+      public:
+        reverse_iterator(int i, const StaggeredGrid& g): id(i), grid(g), c(id,grid) {};
+        reverse_iterator(const reverse_iterator &it) : id(it.id), grid(it.grid), c(id, grid) {};
+        reverse_iterator& operator++() { --id; --c.id; return (*this);}
+        reverse_iterator& operator++(int) { return operator++();}
+        bool operator==(const reverse_iterator &rhs) {return id == rhs.id; };
+        bool operator!=(const reverse_iterator &rhs) {return id != rhs.id; };
         Cell &operator*() {return c;}
         Cell* operator->() {return &c;}
     };
@@ -96,6 +114,8 @@ class StaggeredGrid
                   : lx(lenx), ly(leny), nx(numx), ny(numy), dx(lx/nx), dy(ly/ny), ncells(nx*ny) {}; 
     const iterator begin() { return iterator(0, *this); };
     const iterator end() {return iterator(ncells, *this);};
+    const iterator rbegin() { return iterator(ncells-1, *this); };
+    const iterator rend() {return iterator(-1, *this);};
 };
 
 #endif

@@ -1,7 +1,7 @@
 #include "GL/freeglut.h"
 #include "GL/gl.h"
 #include "stokes.h"
-StokesSolver stokes(1.0, 1.0, 100,100);
+StokesSolver stokes(2.0, 1.0, 100,100);
 
 /* display function - code from:
      http://fly.cc.fer.hr/~unreal/theredbook/chapter01.html
@@ -13,8 +13,10 @@ void renderFunction()
   if(i%10 == 0)
     stokes.solve_stokes();
   stokes.upwind_advect();
+  stokes.diffuse_temperature();
   stokes.draw();
   ++i;
+  std::cout<<"Step "<<i<<std::endl;
   glutPostRedisplay();
 }
 
