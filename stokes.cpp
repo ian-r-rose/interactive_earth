@@ -4,6 +4,7 @@
 #include <Epetra_CrsMatrix.h>
 #include <Amesos.h>
 #include <AztecOO.h>
+#include <Teuchos_TimeMonitor.hpp>
 
 #include "stokes.h"
 #include <vector>
@@ -11,9 +12,14 @@
 #include <fstream>
 
 
+Teuchos::RCP<Teuchos::Time> Diffusion = Teuchos::TimeMonitor::getNewCounter("Diffusion time");
+Teuchos::RCP<Teuchos::Time> Advection = Teuchos::TimeMonitor::getNewCounter("Advection time");
+Teuchos::RCP<Teuchos::Time> Stokes = Teuchos::TimeMonitor::getNewCounter("Stokes time");
+Teuchos::RCP<Teuchos::Time> Draw = Teuchos::TimeMonitor::getNewCounter("Draw time");
+
 StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
-                          nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e6),
-                          grid(lx, ly, nx, ny), dt(1.e-6),
+                          nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e7),
+                          grid(lx, ly, nx, ny), dt(5.e-7),
                           map(ncells, 0, Comm),
                           T(map), vorticity(map), stream(map), dTdx(map), 
                           u(map), v(map), scratch1(map), scratch2(map),
@@ -31,6 +37,7 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
   aztec_solver.SetProblem(poisson_problem);
   aztec_solver.SetAztecOption(AZ_solver, AZ_gmres);
 //  aztec_solver.SetAztecOption(AZ_precond, AZ_Jacobi);
+  aztec_solver.SetAztecOption(AZ_output, AZ_none);
   aztec_solver.SetAztecOption(AZ_keep_info, 1);
   aztec_solver.Iterate(100, 1.e-2);
   poisson_problem.SetLHS(&stream);
@@ -45,8 +52,9 @@ double StokesSolver::initial_temperature(const Point &p)
 {
 //  return -std::exp( (-(0.5-p.x)*(0.5-p.x) - (0.5-p.y)*(0.5-p.y) )/.05);
 //  return ( std::sqrt( (0.5-p.x)*(0.5-p.x)+(0.5-p.y)*(0.5-p.y)) < 0.15 ? 1.0 : 0.0);
-  double temp = 1.0-p.y/grid.ly + 0.1*std::sin( 2.0*3.14159*p.x/grid.lx )*(p.y)*(p.y-grid.ly)/grid.ly/grid.ly;
-  return (temp > 0.0 ? ( temp < 1.0 ? temp : 1.0 ) : 0.0);
+//  double temp = 1.0-p.y/grid.ly + 0.1*std::sin( 2.0*3.14159*p.x/grid.lx )*(p.y)*(p.y-grid.ly)/grid.ly/grid.ly;
+  return 0.5;
+//  return (temp > 0.0 ? ( temp < 1.0 ? temp : 1.0 ) : 0.0);
 }
 
 void StokesSolver::initialize_temperature()
@@ -64,6 +72,8 @@ int StokesSolver::cell_id(const Point&p)
 
 void StokesSolver::upwind_advect()
 {
+  Teuchos::TimeMonitor LocalTimer(*Advection);
+ 
   double dTdx;
   double dTdy;
   double vx, vy;
@@ -114,6 +124,7 @@ void StokesSolver::upwind_advect()
 }
 void StokesSolver::diffuse_temperature()
 {
+  Teuchos::TimeMonitor LocalTimer(*Diffusion);
 
   diffusion_ud_problem.SetRHS(&T);
   diffusion_ud_problem.SetLHS(&scratch1);
@@ -257,6 +268,7 @@ void StokesSolver::assemble_dTdx_vector()
  
 void StokesSolver::solve_stokes()
 {  
+  Teuchos::TimeMonitor LocalTimer(*Stokes);
   
   assemble_dTdx_vector();
   poisson_problem.SetLHS(&vorticity);
@@ -288,6 +300,7 @@ void StokesSolver::solve_stokes()
 
 void StokesSolver::draw()
 {
+  Teuchos::TimeMonitor LocalTimer(*Draw);
   double DX = 2.0/grid.nx;
   double DY = 2.0/grid.ny;
 
@@ -298,18 +311,18 @@ void StokesSolver::draw()
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     if( cell->at_right_boundary() == false && cell->at_top_boundary() == false)
     {
-      glColor3f(T[cell->self()], 0.0, 1.0-T[cell->self()]);
+      glColor3f(T[cell->self()], .5, 1.0-T[cell->self()]);
       glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
-      glColor3f(T[cell->upright()], 0.0, 1.0-T[cell->upright()]);
+      glColor3f(T[cell->upright()], .5, 1.0-T[cell->upright()]);
       glVertex2f((cell->xindex()+1)*DX-1.0, (cell->yindex()+1)*DY-1.0);
-      glColor3f(T[cell->up()], 0.0, 1.0-T[cell->up()]);
+      glColor3f(T[cell->up()], .5, 1.0-T[cell->up()]);
       glVertex2f((cell->xindex())*DX-1.0, (cell->yindex()+1)*DY-1.0);
 
-      glColor3f(T[cell->self()], 0.0, 1.0-T[cell->self()]);
+      glColor3f(T[cell->self()], .5, 1.0-T[cell->self()]);
       glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
-      glColor3f(T[cell->right()], 0.0, 1.0-T[cell->right()]);
+      glColor3f(T[cell->right()], .5, 1.0-T[cell->right()]);
       glVertex2f((cell->xindex()+1)*DX-1.0, cell->yindex()*DY-1.0);
-      glColor3f(T[cell->upright()], 0.0, 1.0-T[cell->upright()]);
+      glColor3f(T[cell->upright()], .5, 1.0-T[cell->upright()]);
       glVertex2f((cell->xindex()+1)*DX-1.0, (cell->yindex()+1)*DY-1.0);
 
     }
