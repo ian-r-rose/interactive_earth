@@ -68,11 +68,11 @@ class StokesSolver
     double initial_temperature(const Point&);
     double temperature(const Point&);
     Point velocity(const Point&);
-    int cell_id(const Point&);
 
   public:
     StokesSolver( double lx, double ly, int nx, int ny);
     void upwind_advect();
+    void semi_lagrangian_advect();
     void diffuse_temperature();
     void solve_stokes();
     void draw();

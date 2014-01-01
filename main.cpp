@@ -7,19 +7,16 @@ const unsigned int nx = 200;
 const unsigned int ny = 100;
 StokesSolver* handle = NULL;
 
-/* display function - code from:
-     http://fly.cc.fer.hr/~unreal/theredbook/chapter01.html
-This is the actual usage of the OpenGL library. 
-The following code is the same for any platform */
 void renderFunction()
 {
   static int i=0;
-  if(i%10== 0)
-    handle->solve_stokes();
-  handle->upwind_advect();
-  handle->diffuse_temperature();
-  if(i%10==0)
+  if(i%1==0)
     handle->draw();
+  if(i%1== 0)
+    handle->solve_stokes();
+//  handle->upwind_advect();
+  handle->semi_lagrangian_advect();
+  handle->diffuse_temperature();
   ++i;
   std::cout<<"Step "<<i<<std::endl;
   glutPostRedisplay();
@@ -42,8 +39,8 @@ int main(int argc, char** argv)
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_SINGLE);
     glutInitWindowSize(5*nx,5*ny);
-    glutInitWindowPosition(50,50);
-    glutCreateWindow("OpenGL - First window demo");
+    glutInitWindowPosition(10,10);
+    glutCreateWindow("Convection");
     glutDisplayFunc(renderFunction);
     glutMainLoop();    
     return 0;

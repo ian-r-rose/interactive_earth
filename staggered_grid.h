@@ -9,6 +9,7 @@ calculations
 
 #include <iterator>
 #include <iostream>
+#include <cmath>
 
 #ifndef STAGGERED_GRID_H
 #define STAGGERED_GRID_H
@@ -61,6 +62,7 @@ class StaggeredGrid
         Point corner() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy;  return p;};
         Point hface() { Point p; p.x = xindex()*grid.dx + grid.dx/2.0; p.y = yindex()*grid.dy;  return p;};
         Point vface() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy + grid.dy/2.0;  return p;};
+
         
       private:
         const StaggeredGrid& grid;
@@ -116,6 +118,27 @@ class StaggeredGrid
     const iterator end() {return iterator(ncells, *this);};
     const iterator rbegin() { return iterator(ncells-1, *this); };
     const iterator rend() {return iterator(-1, *this);};
+
+    //Get handles to cell id and cell iterators at a point
+    int cell_id( const Point &p) { int xindex = (p.x/dx); int yindex=(p.y/dy); 
+                                 return nx*(yindex < 0 ? 0 : (yindex >= ny ? ny-1: yindex))
+                                      + (xindex < 0 ? 0 : (xindex >= nx ? nx-1 : xindex)); };
+    iterator cell_at_point( const Point &p) { return iterator(cell_id(p), *this); };
 };
+
+
+inline double lagrange_interp_2d( double x, double y, double ul, double u, double ur,
+                                  double l, double c, double r, double dl, double d, double dr)
+{
+  return   ul*(x)*(x-1.0)*(y)*(y+1.0)/4.0 
+         - u*(x-1.0)*(x+1.0)*(y)*(y+1.0)/2.0 
+         + ur*(x+1.0)*(x)*(y)*(y+1.0)/4.0
+         - l*(x)*(x-1.0)*(y-1.0)*(y+1.0)/2.0
+         + c*(x-1.0)*(x+1.0)*(y-1.0)*(y+1.0)
+         - r*(x+1.0)*(x)*(y-1.0)*(y+1.0)/2.0
+         + dl*(x)*(x-1.0)*(y)*(y-1.0)/4.0
+         - d*(x-1.0)*(x+1.0)*(y)*(y-1.0)/2.0
+         + dr*(x)*(x+1.0)*(y)*(y-1.0)/4.0;
+}
 
 #endif

@@ -22,7 +22,7 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
                           Comm(MPI_COMM_WORLD),
 #endif
                           nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e7),
-                          grid(lx, ly, nx, ny), dt(4.e-7),
+                          grid(lx, ly, nx, ny), dt(4.e-6),
                           map(ncells, 0, Comm),
                           T(map), vorticity(map), stream(map), dTdx(map), 
                           u(map), v(map), scratch1(map), scratch2(map),
@@ -65,11 +65,111 @@ void StokesSolver::initialize_temperature()
     T[cell->self()] = initial_temperature(cell->center());
 }
 
-int StokesSolver::cell_id(const Point&p)
+//interpolate the velocity onto an arbitrary point
+//Kind of a mess...
+Point StokesSolver::velocity(const Point &p)
 {
-  int xindex = p.x/grid.dx;
-  int yindex = p.y/grid.dy;
-  return nx*yindex + xindex;
+  Point vel;
+  StaggeredGrid::iterator x_cell = grid.cell_at_point(p); 
+  StaggeredGrid::iterator y_cell = grid.cell_at_point(p); 
+
+  double vx_local_x = (p.x - x_cell->vface().x)/grid.dx;
+  double vx_local_y = (p.y - x_cell->vface().y)/grid.dy;
+
+  if(x_cell->at_top_boundary())
+    vel.x = lagrange_interp_2d( vx_local_x, vx_local_y, u[x_cell->left()],
+                                u[x_cell->self()], u[x_cell->right()], u[x_cell->left()],
+                                u[x_cell->self()], u[x_cell->right()], u[x_cell->downleft()],
+                                u[x_cell->down()], u[x_cell->downright()]);
+  else if(x_cell->at_bottom_boundary())
+    vel.x = lagrange_interp_2d( vx_local_x, vx_local_y, u[x_cell->upleft()],
+                                u[x_cell->up()], u[x_cell->upright()], u[x_cell->left()],
+                                u[x_cell->self()], u[x_cell->right()], u[x_cell->left()],
+                                u[x_cell->self()], u[x_cell->right()]);
+  else
+    vel.x = lagrange_interp_2d( vx_local_x, vx_local_y, u[x_cell->upleft()],
+                                u[x_cell->up()], u[x_cell->upright()], u[x_cell->left()],
+                                u[x_cell->self()], u[x_cell->right()], u[x_cell->downleft()],
+                                u[x_cell->down()], u[x_cell->downright()]);
+
+  double vy_local_x = (p.x - y_cell->hface().x)/grid.dx;
+  double vy_local_y = (p.y - y_cell->hface().y)/grid.dy;
+
+  if(y_cell->at_top_boundary())
+    vel.y = lagrange_interp_2d( vy_local_x, vy_local_y, v[y_cell->left()],
+                                v[y_cell->self()], v[y_cell->right()], v[y_cell->left()],
+                                v[y_cell->self()], v[y_cell->right()], v[y_cell->downleft()],
+                                v[y_cell->down()], v[y_cell->downright()]);
+  else if (y_cell->at_bottom_boundary())
+    vel.y = lagrange_interp_2d( vy_local_x, vy_local_y, v[y_cell->upleft()],
+                                v[y_cell->up()], v[y_cell->upright()], v[y_cell->left()],
+                                v[y_cell->self()], v[y_cell->right()], v[y_cell->left()],
+                                v[y_cell->self()], v[y_cell->right()]);
+  else
+    vel.y = lagrange_interp_2d( vy_local_x, vy_local_y, v[y_cell->upleft()],
+                                v[y_cell->up()], v[y_cell->upright()], v[y_cell->left()],
+                                v[y_cell->self()], v[y_cell->right()], v[y_cell->downleft()],
+                                v[y_cell->down()], v[y_cell->downright()]);
+  return vel;
+} 
+
+double StokesSolver::temperature(const Point &p)
+{
+  double temp;
+  StaggeredGrid::iterator cell = grid.cell_at_point(p); 
+  double local_x = (p.x - cell->center().x)/grid.dx;
+  double local_y = (p.y - cell->center().y)/grid.dy;
+
+  if(cell->self() >= grid.ncells) std::cout<<"T:  "<<cell->self()<<"\t"<<p.x<<"\t"<<p.y<<std::endl;
+
+  if (cell->at_top_boundary())
+    temp = lagrange_interp_2d( local_x, local_y, 0.0, 0.0, 0.0,
+                               T[cell->left()], T[cell->self()], T[cell->right()],
+                               T[cell->downleft()], T[cell->down()], T[cell->downright()]);
+  else if (cell->at_bottom_boundary())
+    temp = lagrange_interp_2d( local_x, local_y, T[cell->upleft()], T[cell->up()],
+                               T[cell->upright()], T[cell->left()], T[cell->self()], T[cell->right()],
+                               1.0, 1.0, 1.0);
+  else
+    temp = lagrange_interp_2d( local_x, local_y, T[cell->upleft()], T[cell->up()],
+                               T[cell->upright()], T[cell->left()], T[cell->self()], T[cell->right()],
+                               T[cell->downleft()], T[cell->down()], T[cell->downright()]);
+
+  return temp;
+}
+  
+
+void StokesSolver::semi_lagrangian_advect()
+{
+  Teuchos::TimeMonitor LocalTimer(*Advection);
+
+  Point vel_final;
+  Point vel_takeoff;
+  Point takeoff_point;
+  Point final_point;
+  scratch1.PutScalar(0.0);
+
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    vel_final.x = (u[cell->self()]+u[cell->right()])/2.0;
+    vel_final.y = (v[cell->up()]+v[cell->self()])/2.0;
+    final_point = cell->center();
+  
+    takeoff_point.x = final_point.x - vel_final.x*dt;
+    takeoff_point.y = final_point.y - vel_final.y*dt;
+    for(unsigned int i=0; i<2; ++i)
+    {
+      vel_takeoff = velocity(takeoff_point);
+      takeoff_point.x = final_point.x - (vel_final.x + vel_takeoff.x)*dt/2.0;
+      takeoff_point.y = final_point.y - (vel_final.y + vel_takeoff.y)*dt/2.0;
+      takeoff_point.x = (takeoff_point.x < 0.0 ? takeoff_point.x+grid.lx : 
+                        (takeoff_point.x >= grid.lx ? takeoff_point.x-grid.lx : takeoff_point.x));
+      takeoff_point.y = (takeoff_point.y < 0.0 ? takeoff_point.y+grid.ly : 
+                        (takeoff_point.y >= grid.ly ? takeoff_point.y-grid.ly : takeoff_point.y));
+    } 
+    scratch1[cell->self()] = temperature(takeoff_point);
+  }
+  T = scratch1;
 }
 
 void StokesSolver::upwind_advect()
@@ -79,7 +179,7 @@ void StokesSolver::upwind_advect()
   double dTdx;
   double dTdy;
   double vx, vy;
-  scratch1.PutScalar(1.0);
+  scratch1.PutScalar(0.0);
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -284,7 +384,7 @@ void StokesSolver::draw()
       color c_u = hot(T[cell->up()]);
       color c_r = hot(T[cell->right()]);
       color c_ur = hot(T[cell->upright()]);
-
+     
       glColor3f(c_s.R, c_s.G, c_s.B);
       glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
       glColor3f(c_ur.R, c_ur.G, c_ur.B);
