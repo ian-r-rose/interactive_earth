@@ -6,6 +6,7 @@
 #include <Teuchos_TimeMonitor.hpp>
 
 #include "stokes.h"
+#include "color.h"
 #include <vector>
 #include <cmath>
 #include <fstream>
@@ -52,7 +53,7 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
 double StokesSolver::initial_temperature(const Point &p)
 {
 //  return -std::exp( (-(0.5-p.x)*(0.5-p.x) - (0.5-p.y)*(0.5-p.y) )/.05);
-  return ( std::sqrt( (0.05-p.x)*(0.05-p.x)+(0.5-p.y)*(0.5-p.y)) < 0.05 ? 1.0 : 0.5);
+  return ( std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y)) < 0.05 ? 1.0 : 0.5);
 //  double temp = 1.0-p.y/grid.ly + 0.1*std::sin( 2.0*3.14159*p.x/grid.lx )*(p.y)*(p.y-grid.ly)/grid.ly/grid.ly;
 //  return 0.5;
 //  return (temp > 0.0 ? ( temp < 1.0 ? temp : 1.0 ) : 0.0);
@@ -279,18 +280,23 @@ void StokesSolver::draw()
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     if( cell->at_right_boundary() == false && cell->at_top_boundary() == false)
     {
-      glColor3f(T[cell->self()], .5, 1.0-T[cell->self()]);
+      color c_s = hot(T[cell->self()]);
+      color c_u = hot(T[cell->up()]);
+      color c_r = hot(T[cell->right()]);
+      color c_ur = hot(T[cell->upright()]);
+
+      glColor3f(c_s.R, c_s.G, c_s.B);
       glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
-      glColor3f(T[cell->upright()], .5, 1.0-T[cell->upright()]);
+      glColor3f(c_ur.R, c_ur.G, c_ur.B);
       glVertex2f((cell->xindex()+1)*DX-1.0, (cell->yindex()+1)*DY-1.0);
-      glColor3f(T[cell->up()], .5, 1.0-T[cell->up()]);
+      glColor3f(c_u.R, c_u.G, c_u.B);
       glVertex2f((cell->xindex())*DX-1.0, (cell->yindex()+1)*DY-1.0);
 
-      glColor3f(T[cell->self()], .5, 1.0-T[cell->self()]);
+      glColor3f(c_s.R, c_s.G, c_s.B);
       glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
-      glColor3f(T[cell->right()], .5, 1.0-T[cell->right()]);
+      glColor3f(c_r.R, c_r.G, c_r.B);
       glVertex2f((cell->xindex()+1)*DX-1.0, cell->yindex()*DY-1.0);
-      glColor3f(T[cell->upright()], .5, 1.0-T[cell->upright()]);
+      glColor3f(c_ur.R, c_ur.G, c_ur.B);
       glVertex2f((cell->xindex()+1)*DX-1.0, (cell->yindex()+1)*DY-1.0);
 
     }
