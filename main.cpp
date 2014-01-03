@@ -12,7 +12,7 @@ void renderFunction()
   static int i=0;
   if(i%1==0)
     handle->draw();
-  if(i%1== 0)
+  if(i%2== 0)
     handle->solve_stokes();
 //  handle->upwind_advect();
   handle->semi_lagrangian_advect();

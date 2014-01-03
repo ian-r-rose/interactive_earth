@@ -16,7 +16,6 @@ Teuchos::RCP<Teuchos::Time> Diffusion = Teuchos::TimeMonitor::getNewCounter("Dif
 Teuchos::RCP<Teuchos::Time> Advection = Teuchos::TimeMonitor::getNewCounter("Advection time");
 Teuchos::RCP<Teuchos::Time> Stokes = Teuchos::TimeMonitor::getNewCounter("Stokes time");
 Teuchos::RCP<Teuchos::Time> Draw = Teuchos::TimeMonitor::getNewCounter("Draw time");
-Teuchos::RCP<Teuchos::Time> Interp = Teuchos::TimeMonitor::getNewCounter("Interpolation");
 
 StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
 #ifdef EPETRA_MPI
@@ -70,72 +69,55 @@ void StokesSolver::initialize_temperature()
 //Kind of a mess...
 Point StokesSolver::velocity(const Point &p)
 {
-  Teuchos::TimeMonitor LocalTimer(*Interp);
+//  Teuchos::TimeMonitor LocalTimer(*VInterp);
   Point vel;
-  StaggeredGrid::iterator x_cell = grid.cell_at_point(p); 
-  StaggeredGrid::iterator y_cell = grid.cell_at_point(p); 
+  StaggeredGrid::iterator x_cell = grid.lower_left_vface_cell(p); 
+  StaggeredGrid::iterator y_cell = grid.lower_left_hface_cell(p); 
 
   double vx_local_x = (p.x - x_cell->vface().x)/grid.dx;
   double vx_local_y = (p.y - x_cell->vface().y)/grid.dy;
 
-  if(x_cell->at_top_boundary())
-    vel.x = lagrange_interp_2d( vx_local_x, vx_local_y, u[x_cell->left()],
-                                u[x_cell->self()], u[x_cell->right()], u[x_cell->left()],
-                                u[x_cell->self()], u[x_cell->right()], u[x_cell->downleft()],
-                                u[x_cell->down()], u[x_cell->downright()]);
-  else if(x_cell->at_bottom_boundary())
-    vel.x = lagrange_interp_2d( vx_local_x, vx_local_y, u[x_cell->upleft()],
-                                u[x_cell->up()], u[x_cell->upright()], u[x_cell->left()],
-                                u[x_cell->self()], u[x_cell->right()], u[x_cell->left()],
-                                u[x_cell->self()], u[x_cell->right()]);
-  else
-    vel.x = lagrange_interp_2d( vx_local_x, vx_local_y, u[x_cell->upleft()],
-                                u[x_cell->up()], u[x_cell->upright()], u[x_cell->left()],
-                                u[x_cell->self()], u[x_cell->right()], u[x_cell->downleft()],
-                                u[x_cell->down()], u[x_cell->downright()]);
-
   double vy_local_x = (p.x - y_cell->hface().x)/grid.dx;
   double vy_local_y = (p.y - y_cell->hface().y)/grid.dy;
 
-  if(y_cell->at_top_boundary())
-    vel.y = lagrange_interp_2d( vy_local_x, vy_local_y, v[y_cell->left()],
-                                v[y_cell->self()], v[y_cell->right()], v[y_cell->left()],
-                                v[y_cell->self()], v[y_cell->right()], v[y_cell->downleft()],
-                                v[y_cell->down()], v[y_cell->downright()]);
-  else if (y_cell->at_bottom_boundary())
-    vel.y = lagrange_interp_2d( vy_local_x, vy_local_y, v[y_cell->upleft()],
-                                v[y_cell->up()], v[y_cell->upright()], v[y_cell->left()],
-                                v[y_cell->self()], v[y_cell->right()], v[y_cell->left()],
-                                v[y_cell->self()], v[y_cell->right()]);
+  //get interpolated vx
+  if(x_cell->at_top_boundary())
+    vel.x = linear_interp_2d (vx_local_x, vx_local_y, u[x_cell->self()], 
+                              u[x_cell->right()], u[x_cell->self()], u[x_cell->right()]);
+  else if(x_cell->at_bottom_boundary() && vx_local_x < 0.0)
+    vel.x = linear_interp_2d (vx_local_x, vx_local_y, u[x_cell->self()], 
+                              u[x_cell->right()], u[x_cell->self()], u[x_cell->right()]);
   else
-    vel.y = lagrange_interp_2d( vy_local_x, vy_local_y, v[y_cell->upleft()],
-                                v[y_cell->up()], v[y_cell->upright()], v[y_cell->left()],
-                                v[y_cell->self()], v[y_cell->right()], v[y_cell->downleft()],
-                                v[y_cell->down()], v[y_cell->downright()]);
+    vel.x = linear_interp_2d (vx_local_x, vx_local_y, u[x_cell->up()], u[x_cell->upright()],
+                              u[x_cell->self()], u[x_cell->right()]);
+
+  //get interpolated vy
+  if(y_cell->at_top_boundary())
+    vel.y = linear_interp_2d (vy_local_x, vy_local_y, v[y_cell->self()], 
+                              v[y_cell->right()], v[y_cell->self()], v[y_cell->right()]);
+  else
+    vel.y = linear_interp_2d (vy_local_x, vy_local_y, v[y_cell->up()], v[y_cell->upright()],
+                              v[y_cell->self()], v[y_cell->right()]);
+
   return vel;
 } 
 
-double StokesSolver::temperature(const Point &p)
+inline double StokesSolver::temperature(const Point &p)
 {
-  Teuchos::TimeMonitor LocalTimer(*Interp);
   double temp;
-  StaggeredGrid::iterator cell = grid.cell_at_point(p); 
+  StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
   double local_x = (p.x - cell->center().x)/grid.dx;
   double local_y = (p.y - cell->center().y)/grid.dy;
 
-  if (cell->at_top_boundary())
-    temp = lagrange_interp_2d( local_x, local_y, 0.0, 0.0, 0.0,
-                               T[cell->left()], T[cell->self()], T[cell->right()],
-                               T[cell->downleft()], T[cell->down()], T[cell->downright()]);
-  else if (cell->at_bottom_boundary())
-    temp = lagrange_interp_2d( local_x, local_y, T[cell->upleft()], T[cell->up()],
-                               T[cell->upright()], T[cell->left()], T[cell->self()], T[cell->right()],
-                               1.0, 1.0, 1.0);
+  if (cell->at_top_boundary() )
+    temp = linear_interp_2d( local_x, local_y, 0.0, 0.0,  
+                             T[cell->self()], T[cell->right()]);
+  else if (cell->at_bottom_boundary() && local_y < 0.0)
+    temp = linear_interp_2d( local_x, local_y-grid.dy, 
+                             T[cell->self()], T[cell->right()], 1.0, 1.0);
   else
-    temp = lagrange_interp_2d( local_x, local_y, T[cell->upleft()], T[cell->up()],
-                               T[cell->upright()], T[cell->left()], T[cell->self()], T[cell->right()],
-                               T[cell->downleft()], T[cell->down()], T[cell->downright()]);
-
+    temp = linear_interp_2d( local_x, local_y, T[cell->up()], T[cell->upright()],
+                             T[cell->self()], T[cell->right()]);
   return temp;
 }
   

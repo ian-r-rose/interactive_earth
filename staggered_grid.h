@@ -120,11 +120,17 @@ class StaggeredGrid
     const iterator rend() {return iterator(-1, *this);};
 
     //Get handles to cell id and cell iterators at a point
-    int cell_id( const Point &p) { int xindex = (p.x/dx); int yindex=(p.y/dy); 
-                                 return nx*(yindex < 0 ? 0 : (yindex >= ny ? ny-1: yindex))
-                                      + (xindex < 0 ? 0 : (xindex >= nx ? nx-1 : xindex)); };
+    inline int cell_id( const Point &p) { int xindex = (p.x/dx); int yindex=(p.y/dy);
+                                   return keep_in_domain(xindex, yindex); };
+    inline int keep_in_domain( int xindex, int yindex) { return nx*(yindex < 0 ? 0 : (yindex >= ny ? ny-1: yindex))
+                              + (xindex < 0 ? 0 : (xindex >= nx ? nx-1 : xindex)); };
     iterator cell_at_point( const Point &p) { return iterator(cell_id(p), *this); };
 
+    iterator lower_left_corner_cell( const Point &p) { return cell_at_point(p); };
+    iterator lower_left_hface_cell( const Point &p) { Point p2 = p; p2.x-= dx*0.5; return cell_at_point(p2); }; 
+    iterator lower_left_vface_cell( const Point &p) { Point p2 = p; p2.y-= dy*0.5; return cell_at_point(p2); }; 
+    iterator lower_left_center_cell( const Point &p) { Point p2 = p; p2.y-= dy*0.5; p2.x-= dx/2.0; return cell_at_point(p2); }; 
+   
 };
 
 
