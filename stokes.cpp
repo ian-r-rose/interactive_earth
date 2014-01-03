@@ -21,8 +21,8 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
 #ifdef EPETRA_MPI
                           Comm(MPI_COMM_WORLD),
 #endif
-                          nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e6),
-                          grid(lx, ly, nx, ny), dt(2.e-5),
+                          nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e7),
+                          grid(lx, ly, nx, ny), dt(4.e-6),
                           map(ncells, 0, Comm),
                           T(map), vorticity(map), stream(map), dTdx(map), 
                           u(map), v(map), scratch1(map), scratch2(map),
@@ -359,31 +359,25 @@ void StokesSolver::draw()
   glClearColor(0.0, 0.0, 0.0, 0.0);
   glClear(GL_COLOR_BUFFER_BIT);
   glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
-  glBegin(GL_TRIANGLES);
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    if( cell->at_right_boundary() == false && cell->at_top_boundary() == false)
+  glBegin(GL_TRIANGLE_STRIP);
+  for( StaggeredGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
+  {
+    if (cell->at_left_boundary())
+      glBegin(GL_TRIANGLE_STRIP);
+
+    if( !cell->at_right_boundary() )
     {
       color c_s = hot(T[cell->self()]);
       color c_u = hot(T[cell->up()]);
-      color c_r = hot(T[cell->right()]);
-      color c_ur = hot(T[cell->upright()]);
-     
+
       glColor3f(c_s.R, c_s.G, c_s.B);
       glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
-      glColor3f(c_ur.R, c_ur.G, c_ur.B);
-      glVertex2f((cell->xindex()+1)*DX-1.0, (cell->yindex()+1)*DY-1.0);
       glColor3f(c_u.R, c_u.G, c_u.B);
       glVertex2f((cell->xindex())*DX-1.0, (cell->yindex()+1)*DY-1.0);
-
-      glColor3f(c_s.R, c_s.G, c_s.B);
-      glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
-      glColor3f(c_r.R, c_r.G, c_r.B);
-      glVertex2f((cell->xindex()+1)*DX-1.0, cell->yindex()*DY-1.0);
-      glColor3f(c_ur.R, c_ur.G, c_ur.B);
-      glVertex2f((cell->xindex()+1)*DX-1.0, (cell->yindex()+1)*DY-1.0);
-
     }
-  glEnd();
+    else
+      glEnd();
+  }
   glFlush();
 }
   
