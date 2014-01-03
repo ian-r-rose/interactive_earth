@@ -3,8 +3,8 @@
 #include "stokes.h"
 #include <Teuchos_TimeMonitor.hpp>
 
-const unsigned int nx = 200;
-const unsigned int ny = 100;
+const unsigned int nx = 150;
+const unsigned int ny = 75;
 StokesSolver* handle = NULL;
 
 void renderFunction()

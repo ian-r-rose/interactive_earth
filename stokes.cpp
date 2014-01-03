@@ -16,13 +16,14 @@ Teuchos::RCP<Teuchos::Time> Diffusion = Teuchos::TimeMonitor::getNewCounter("Dif
 Teuchos::RCP<Teuchos::Time> Advection = Teuchos::TimeMonitor::getNewCounter("Advection time");
 Teuchos::RCP<Teuchos::Time> Stokes = Teuchos::TimeMonitor::getNewCounter("Stokes time");
 Teuchos::RCP<Teuchos::Time> Draw = Teuchos::TimeMonitor::getNewCounter("Draw time");
+Teuchos::RCP<Teuchos::Time> Interp = Teuchos::TimeMonitor::getNewCounter("Interpolation");
 
 StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
 #ifdef EPETRA_MPI
                           Comm(MPI_COMM_WORLD),
 #endif
-                          nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e7),
-                          grid(lx, ly, nx, ny), dt(4.e-6),
+                          nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e6),
+                          grid(lx, ly, nx, ny), dt(2.e-5),
                           map(ncells, 0, Comm),
                           T(map), vorticity(map), stream(map), dTdx(map), 
                           u(map), v(map), scratch1(map), scratch2(map),
@@ -69,6 +70,7 @@ void StokesSolver::initialize_temperature()
 //Kind of a mess...
 Point StokesSolver::velocity(const Point &p)
 {
+  Teuchos::TimeMonitor LocalTimer(*Interp);
   Point vel;
   StaggeredGrid::iterator x_cell = grid.cell_at_point(p); 
   StaggeredGrid::iterator y_cell = grid.cell_at_point(p); 
@@ -115,12 +117,11 @@ Point StokesSolver::velocity(const Point &p)
 
 double StokesSolver::temperature(const Point &p)
 {
+  Teuchos::TimeMonitor LocalTimer(*Interp);
   double temp;
   StaggeredGrid::iterator cell = grid.cell_at_point(p); 
   double local_x = (p.x - cell->center().x)/grid.dx;
   double local_y = (p.y - cell->center().y)/grid.dy;
-
-  if(cell->self() >= grid.ncells) std::cout<<"T:  "<<cell->self()<<"\t"<<p.x<<"\t"<<p.y<<std::endl;
 
   if (cell->at_top_boundary())
     temp = lagrange_interp_2d( local_x, local_y, 0.0, 0.0, 0.0,
@@ -157,7 +158,7 @@ void StokesSolver::semi_lagrangian_advect()
   
     takeoff_point.x = final_point.x - vel_final.x*dt;
     takeoff_point.y = final_point.y - vel_final.y*dt;
-    for(unsigned int i=0; i<2; ++i)
+    for(unsigned int i=0; i<1; ++i)
     {
       vel_takeoff = velocity(takeoff_point);
       takeoff_point.x = final_point.x - (vel_final.x + vel_takeoff.x)*dt/2.0;
