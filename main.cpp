@@ -3,8 +3,8 @@
 #include "stokes.h"
 #include <Teuchos_TimeMonitor.hpp>
 
-const unsigned int nx = 150;
-const unsigned int ny = 75;
+const unsigned int nx = 200;
+const unsigned int ny = 100;
 StokesSolver* handle = NULL;
 
 void renderFunction()
@@ -14,7 +14,6 @@ void renderFunction()
     handle->draw();
   if(i%2== 0)
     handle->solve_stokes();
-//  handle->upwind_advect();
   handle->semi_lagrangian_advect();
   handle->diffuse_temperature();
   ++i;

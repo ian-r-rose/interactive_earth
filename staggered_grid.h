@@ -49,7 +49,7 @@ class StaggeredGrid
         int downleft() { return id + (id-grid.nx < 0 ? grid.nx*(grid.ny-1) : -grid.nx) + ( id%grid.nx == 0 ? grid.nx-1 : -1); }
         int downright() { return id + (id+grid.nx <0 ? grid.nx*(grid.ny-1) : -grid.nx) + ( (id+1)%grid.nx == 0 ? -grid.nx+1 : 1); }
         int self() { return id; };
- 
+
         //query for boundary information
         bool at_top_boundary() {return (id + grid.nx >= grid.ncells);};
         bool at_bottom_boundary() {return (id-grid.nx < 0);};
@@ -137,19 +137,7 @@ class StaggeredGrid
 inline double lagrange_interp_2d( double x, double y, double ul, double u, double ur,
                                   double l, double c, double r, double dl, double d, double dr)
 {
-  double x2 = x*x; double y2 = y*y; double xy = x*y; 
-  double x2y2 = x2*y2; double xy2 = x*y2; double x2y = x2*y;
-  return   ul * (x2y2 + x2y - xy2 -xy)*0.25
-         - u * (x2y2 + x2y - y2 - y)*0.5
-         + ur * (x2y2 + x2y + xy2 + xy)*0.25
-         - l * (x2y2 - x2 - xy2 + x )*0.5
-         + c * (x2y2 - x2 - y2 + 1.0)
-         - r * (x2y2 + -x2 + xy2 - x)*0.5
-         + dl * (x2y2 - x2y - xy2 + xy)*0.25
-         - d * (x2y2 - x2y - y2 + y )*0.5
-         + dr * (x2y2 - x2y + xy2 -xy )*0.25;
-
-/*  return   ul*(x)*(x-1.0)*(y)*(y+1.0)/4.0 
+  return   ul*(x)*(x-1.0)*(y)*(y+1.0)/4.0 
          - u*(x-1.0)*(x+1.0)*(y)*(y+1.0)/2.0 
          + ur*(x+1.0)*(x)*(y)*(y+1.0)/4.0
          - l*(x)*(x-1.0)*(y-1.0)*(y+1.0)/2.0
@@ -157,7 +145,7 @@ inline double lagrange_interp_2d( double x, double y, double ul, double u, doubl
          - r*(x+1.0)*(x)*(y-1.0)*(y+1.0)/2.0
          + dl*(x)*(x-1.0)*(y)*(y-1.0)/4.0
          - d*(x-1.0)*(x+1.0)*(y)*(y-1.0)/2.0
-         + dr*(x)*(x+1.0)*(y)*(y-1.0)/4.0;*/
+         + dr*(x)*(x+1.0)*(y)*(y-1.0)/4.0;
 }
 
 inline double linear_interp_2d(double x, double y, double ul, double ur, double dl, double dr)

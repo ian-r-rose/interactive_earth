@@ -34,17 +34,27 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
   assemble_stokes_matrix();
   poisson_problem.SetOperator(&poisson_matrix);
 
-  poisson_problem.SetLHS(&vorticity);
-  poisson_problem.SetRHS(&dTdx);
-  aztec_solver.SetProblem(poisson_problem);
+  MLPrec = new ML_Epetra::MultiLevelPreconditioner(poisson_matrix, true);
+  ifpack_precon = new Ifpack_ILUT(&poisson_matrix);
+  ifpack_precon->Compute();
+  preconditioner = MLPrec;
+
+  
   aztec_solver.SetAztecOption(AZ_solver, AZ_gmres);
-//  aztec_solver.SetAztecOption(AZ_precond, AZ_Jacobi);
   aztec_solver.SetAztecOption(AZ_output, AZ_none);
   aztec_solver.SetAztecOption(AZ_keep_info, 1);
+
+  poisson_problem.SetLHS(&vorticity);
+  poisson_problem.SetRHS(&dTdx);
+  //aztec_solver.SetPrecOperator(preconditioner);
+  aztec_solver.SetProblem(poisson_problem);
+
   aztec_solver.Iterate(100, 1.e-2);
+
   poisson_problem.SetLHS(&stream);
   poisson_problem.SetRHS(&vorticity);
   aztec_solver.SetProblem(poisson_problem);
+  //aztec_solver.SetPrecOperator(preconditioner);
   aztec_solver.Iterate(100, 1.e-2);
 
   assemble_diffusion_matrix();
@@ -140,6 +150,10 @@ void StokesSolver::semi_lagrangian_advect()
   
     takeoff_point.x = final_point.x - vel_final.x*dt;
     takeoff_point.y = final_point.y - vel_final.y*dt;
+    takeoff_point.x = (takeoff_point.x < 0.0 ? takeoff_point.x+grid.lx : 
+                      (takeoff_point.x >= grid.lx ? takeoff_point.x-grid.lx : takeoff_point.x));
+    takeoff_point.y = (takeoff_point.y < 0.0 ? takeoff_point.y+grid.ly : 
+                      (takeoff_point.y >= grid.ly ? takeoff_point.y-grid.ly : takeoff_point.y));
     for(unsigned int i=0; i<1; ++i)
     {
       vel_takeoff = velocity(takeoff_point);
@@ -279,8 +293,12 @@ void StokesSolver::assemble_stokes_matrix()
   //Assemble poisson matrix 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
+    StaggeredGrid::iterator up_cell(cell->up(), grid);
+    StaggeredGrid::iterator down_cell(cell->down(), grid);
+
     indices.clear();
     values.clear();
+
     if(cell->at_top_boundary() || cell->at_bottom_boundary())
     {
       indices.push_back(cell->self());
@@ -288,19 +306,17 @@ void StokesSolver::assemble_stokes_matrix()
     }
     else
     {
-      indices.push_back(cell->self()); values.push_back(-4.0/grid.dx/grid.dy);
-      indices.push_back( cell->left() ); values.push_back(1.0/grid.dx/grid.dy);
-      indices.push_back( cell->right() ); values.push_back(1.0/grid.dx/grid.dy);
-      indices.push_back( cell->up() ); values.push_back(1.0/grid.dx/grid.dy);
-      indices.push_back( cell->down() ); values.push_back(1.0/grid.dx/grid.dy);
+      indices.push_back(cell->self()); values.push_back(4.0/grid.dx/grid.dy);
+      indices.push_back( cell->left() ); values.push_back(-1.0/grid.dx/grid.dy);
+      indices.push_back( cell->right() ); values.push_back(-1.0/grid.dx/grid.dy);
+      if(!up_cell->at_top_boundary())
+        {indices.push_back( cell->up() ); values.push_back(-1.0/grid.dx/grid.dy);}
+      if(!down_cell->at_bottom_boundary())
+        {indices.push_back( cell->down() ); values.push_back(-1.0/grid.dx/grid.dy);}
     }
-
     int ierr =  poisson_matrix.InsertGlobalValues(cell->self(), indices.size(), &values[0], &indices[0]);
   }
   poisson_matrix.FillComplete();
-//  new ML_Epetra::MultiLevelPreconditioner(poisson_matrix, true);
-//  if(!MLPrec) std::cout<<"ERROR"<<std::endl;
-//  aztec_solver.SetPrecOperator(MLPrec);
 
 }
 
@@ -311,6 +327,9 @@ void StokesSolver::assemble_dTdx_vector()
   //Assemble dTdx vector
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
+    StaggeredGrid::iterator up_cell(cell->up(), grid);
+    StaggeredGrid::iterator down_cell(cell->down(), grid);
+
     if(cell->at_top_boundary() || cell->at_bottom_boundary())
       dTdx[cell->self()] = 0.0;
     else
@@ -328,11 +347,13 @@ void StokesSolver::solve_stokes()
   poisson_problem.SetLHS(&vorticity);
   poisson_problem.SetRHS(&dTdx);
   aztec_solver.SetProblem(poisson_problem);
+//  aztec_solver.SetPrecOperator(preconditioner);
   aztec_solver.SetAztecOption(AZ_pre_calc, AZ_reuse);
   aztec_solver.Iterate(100, 1.e-1);
   poisson_problem.SetLHS(&stream);
   poisson_problem.SetRHS(&vorticity);
   aztec_solver.SetProblem(poisson_problem);
+//  aztec_solver.SetPrecOperator(preconditioner);
   aztec_solver.SetAztecOption(AZ_pre_calc, AZ_reuse);
   aztec_solver.Iterate(100, 1.e-1);
 

@@ -1,8 +1,13 @@
 #include <AztecOO.h>
 #include <Amesos.h>
 #include <Epetra_Map.h>
+#include <Epetra_Operator.h>
 #include <Epetra_Vector.h>
 #include <Epetra_CrsMatrix.h>
+#include <Ifpack_ICT.h>
+#include <Ifpack.h>
+#include <Ifpack_ILU.h>
+#include <Ifpack_ILUT.h>
 #include <ml_MultiLevelPreconditioner.h>
 
 #ifdef EPETRA_MPI
@@ -55,6 +60,8 @@ class StokesSolver
     Epetra_CrsMatrix diffusion_leftright;
     
     ML_Epetra::MultiLevelPreconditioner * MLPrec;
+    Ifpack_Preconditioner *ifpack_precon;
+    Epetra_Operator *preconditioner;
 
  
     //workhorse functions
