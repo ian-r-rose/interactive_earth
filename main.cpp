@@ -7,7 +7,7 @@ const unsigned int nx = 200;
 const unsigned int ny = 100;
 StokesSolver* handle = NULL;
 
-void renderFunction()
+void renderFunction( int ms)
 {
   static int i=0;
   if(i%1==0)
@@ -18,7 +18,10 @@ void renderFunction()
   handle->diffuse_temperature();
   ++i;
   std::cout<<"Step "<<i<<std::endl;
+
+  glutTimerFunc(ms, renderFunction, 0);
   glutPostRedisplay();
+
   if (i%100 == 0)
     Teuchos::TimeMonitor::summarize();
 }
@@ -40,7 +43,8 @@ int main(int argc, char** argv)
     glutInitWindowSize(5*nx,5*ny);
     glutInitWindowPosition(10,10);
     glutCreateWindow("Convection");
-    glutDisplayFunc(renderFunction);
+//    glutDisplayFunc(renderFunction);
+    glutTimerFunc(100, renderFunction, 0);
     glutMainLoop();    
     return 0;
 }
