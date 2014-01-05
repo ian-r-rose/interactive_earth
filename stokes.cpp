@@ -169,7 +169,6 @@ void StokesSolver::semi_lagrangian_advect()
     scratch1[cell->self()] = temperature(takeoff_point);
   }
   T = scratch1;
-  theta = theta + dt*10000;
 }
 
 void StokesSolver::upwind_advect()
