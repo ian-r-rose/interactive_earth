@@ -169,6 +169,7 @@ void StokesSolver::semi_lagrangian_advect()
     scratch1[cell->self()] = temperature(takeoff_point);
   }
   T = scratch1;
+  theta = theta + dt*10000;
 }
 
 void StokesSolver::upwind_advect()
@@ -329,11 +330,13 @@ void StokesSolver::assemble_curl_T_vector()
   //Assemble curl_T vector
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    if(cell->at_bottom_boundary() || cell->at_top_boundary())
+    if(cell->at_bottom_boundary())
+      curl_T[cell->self()] = 0.0; 
+    else if (cell->at_top_boundary())
       curl_T[cell->self()] = 0.0; 
     else
       curl_T[cell->self()] = Ra*std::cos(theta*M_PI/180.0)*(T[cell->self()] - T[cell->left()]
-                            + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx;
+                            + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx
                             - Ra*std::sin(theta*M_PI/180.0)*(T[cell->left()] - T[cell->downleft()]
                             + T[cell->self()] - T[cell->down()])/2.0/grid.dy;
   }
