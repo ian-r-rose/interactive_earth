@@ -22,15 +22,15 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
                           Comm(MPI_COMM_WORLD),
 #endif
                           nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e7),
-                          grid(lx, ly, nx, ny), dt(4.e-6),
-                          map(ncells, 0, Comm),
-                          T(map), vorticity(map), stream(map), dTdx(map), 
+                          grid(lx, ly, nx, ny), dt(1.e-5),
+                          map(ncells, 0, Comm), theta(0.0),
+                          T(map), vorticity(map), stream(map), curl_T(map), 
                           u(map), v(map), scratch1(map), scratch2(map),
                           poisson_matrix(Copy, map, 5),
                           diffusion_updown(Copy, map, 3), diffusion_leftright(Copy,map,3)
 {
   initialize_temperature();
-  assemble_dTdx_vector();
+  assemble_curl_T_vector();
   assemble_stokes_matrix();
   poisson_problem.SetOperator(&poisson_matrix);
 
@@ -45,8 +45,8 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
   aztec_solver.SetAztecOption(AZ_keep_info, 1);
 
   poisson_problem.SetLHS(&vorticity);
-  poisson_problem.SetRHS(&dTdx);
-  //aztec_solver.SetPrecOperator(preconditioner);
+  poisson_problem.SetRHS(&curl_T);
+//  aztec_solver.SetPrecOperator(preconditioner);
   aztec_solver.SetProblem(poisson_problem);
 
   aztec_solver.Iterate(100, 1.e-2);
@@ -54,7 +54,7 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
   poisson_problem.SetLHS(&stream);
   poisson_problem.SetRHS(&vorticity);
   aztec_solver.SetProblem(poisson_problem);
-  //aztec_solver.SetPrecOperator(preconditioner);
+//  aztec_solver.SetPrecOperator(preconditioner);
   aztec_solver.Iterate(100, 1.e-2);
 
   assemble_diffusion_matrix();
@@ -63,7 +63,9 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
 double StokesSolver::initial_temperature(const Point &p)
 {
 //  return -std::exp( (-(0.5-p.x)*(0.5-p.x) - (0.5-p.y)*(0.5-p.y) )/.05);
-  return ( std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y)) < 0.05 ? 1.0 : 0.5);
+  if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
+  else if (std::sqrt( (1.65-p.x)*(1.65-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 0.0;
+  else return 0.5;
 //  double temp = 1.0-p.y/grid.ly + 0.1*std::sin( 2.0*3.14159*p.x/grid.lx )*(p.y)*(p.y-grid.ly)/grid.ly/grid.ly;
 //  return 0.5;
 //  return (temp > 0.0 ? ( temp < 1.0 ? temp : 1.0 ) : 0.0);
@@ -322,19 +324,18 @@ void StokesSolver::assemble_stokes_matrix()
 
   
 
-void StokesSolver::assemble_dTdx_vector()
+void StokesSolver::assemble_curl_T_vector()
 {
-  //Assemble dTdx vector
+  //Assemble curl_T vector
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    StaggeredGrid::iterator up_cell(cell->up(), grid);
-    StaggeredGrid::iterator down_cell(cell->down(), grid);
-
-    if(cell->at_top_boundary() || cell->at_bottom_boundary())
-      dTdx[cell->self()] = 0.0;
+    if(cell->at_bottom_boundary() || cell->at_top_boundary())
+      curl_T[cell->self()] = 0.0; 
     else
-      dTdx[cell->self()] = Ra*(T[cell->self()] - T[cell->left()]
+      curl_T[cell->self()] = Ra*std::cos(theta*M_PI/180.0)*(T[cell->self()] - T[cell->left()]
                             + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx;
+                            - Ra*std::sin(theta*M_PI/180.0)*(T[cell->left()] - T[cell->downleft()]
+                            + T[cell->self()] - T[cell->down()])/2.0/grid.dy;
   }
 }
 
@@ -343,9 +344,9 @@ void StokesSolver::solve_stokes()
 {  
   Teuchos::TimeMonitor LocalTimer(*Stokes);
   
-  assemble_dTdx_vector();
+  assemble_curl_T_vector();
   poisson_problem.SetLHS(&vorticity);
-  poisson_problem.SetRHS(&dTdx);
+  poisson_problem.SetRHS(&curl_T);
   aztec_solver.SetProblem(poisson_problem);
 //  aztec_solver.SetPrecOperator(preconditioner);
   aztec_solver.SetAztecOption(AZ_pre_calc, AZ_reuse);

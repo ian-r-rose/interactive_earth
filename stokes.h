@@ -31,6 +31,7 @@ class StokesSolver
     int ncells;
     double Ra;
     double dt;
+    double theta;
 
     StaggeredGrid grid;
     AztecOO aztec_solver;
@@ -51,7 +52,7 @@ class StokesSolver
     Epetra_Vector scratch1, scratch2;
     Epetra_Vector vorticity;
     Epetra_Vector stream;
-    Epetra_Vector dTdx;
+    Epetra_Vector curl_T;
     Epetra_Vector u;
     Epetra_Vector v;
 
@@ -69,7 +70,7 @@ class StokesSolver
     void assemble_stokes_matrix();
     void assemble_diffusion_rhs();
     void assemble_diffusion_matrix();
-    void assemble_dTdx_vector();
+    void assemble_curl_T_vector();
    
     //functions for evaluating field at points
     double initial_temperature(const Point&);
