@@ -12,6 +12,7 @@
 #include <fstream>
 
 
+
 Teuchos::RCP<Teuchos::Time> Diffusion = Teuchos::TimeMonitor::getNewCounter("Diffusion time");
 Teuchos::RCP<Teuchos::Time> Advection = Teuchos::TimeMonitor::getNewCounter("Advection time");
 Teuchos::RCP<Teuchos::Time> Stokes = Teuchos::TimeMonitor::getNewCounter("Stokes time");
@@ -21,11 +22,11 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
 #ifdef EPETRA_MPI
                           Comm(MPI_COMM_WORLD),
 #endif
-                          nx(nx), ny(ny), ncells(nx*ny), Ra(0.0e7),
-                          grid(lx, ly, nx, ny), dt(1.e-5),
+                          nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e7),
+                          grid(lx, ly, nx, ny), dt(.7e-5),
                           map(ncells, 0, Comm), theta(0.0),
                           T(map), vorticity(map), stream(map), curl_T(map), 
-                          u(map), v(map), g(map), 
+                          u(map), v(map), g(map), lux(map), luy(map), freqs(map),
                           scratch1(map), scratch2(map), scratch3(map), scratch4(map),
                           poisson_matrix(Copy, map, 5),
                           diffusion_updown(Copy, map, 3), diffusion_leftright(Copy,map,3)
@@ -208,34 +209,26 @@ void StokesSolver::upwind_advect()
   }
   T = scratch1;
 }
-/*void StokesSolver::diffuse_temperature()
+
+
+void StokesSolver::diffuse_temperature()
 {
   Teuchos::TimeMonitor LocalTimer(*Diffusion);
 
   //First do diffusion in the y direction
   double eta_y = dt/grid.dy/grid.dy;
-  double c = -eta_y;
-  double b = (1.0 + 2.0*eta_y);
+  double alpha_y = -eta_y;
+  double lambda_y = (1.0 + 2.0*eta_y);
   scratch1.PutScalar(0.0);
-  scratch2.PutScalar(0.0);
   //Forward sweep
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     if(cell->at_bottom_boundary())
-    {
-      scratch1[cell->self()] = 0.0;
-      scratch2[cell->self()] = 1.0;
-    }
+      scratch1[cell->self()] = 1.0;
     else if (cell->at_top_boundary())
-    {
       scratch1[cell->self()] = 0.0;
-      scratch2[cell->self()] = 0.0;
-    }
     else
-    {
-      scratch1[cell->self()] = c/(b - scratch1[cell->down()]*c);
-      scratch2[cell->self()] = (T[cell->self()] - scratch2[cell->down()]*c)/(b-scratch1[cell->down()]*c);
-    }
+      scratch1[cell->self()] = (T[cell->self()] - scratch1[cell->down()]*alpha_y)/(lambda_y-luy[cell->down()]*alpha_y);
   }
   //Do reverse sweep for y direction
   for( StaggeredGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
@@ -245,36 +238,26 @@ void StokesSolver::upwind_advect()
     if(cell->at_bottom_boundary())
       T[cell->self()] = 1.0;
     else
-      T[cell->self()] = scratch2[cell->self()] - scratch1[cell->self()]*T[cell->up()];
+      T[cell->self()] = scratch1[cell->self()] - luy[cell->self()]*T[cell->up()];
   }
 
 
   //Now do the x direction, which is more complicated due to the periodicity.
   double eta_x = dt/grid.dx/grid.dx;
-  double alpha = -eta_x;
-  double lambda = (1.0 + 2.0*eta_x);
+  double alpha_x = -eta_x;
+  double lambda_x = (1.0 + 2.0*eta_x);
   scratch1.PutScalar(0.0); //c prime
   scratch2.PutScalar(0.0); //d prime
-  scratch3.PutScalar(0.0); //d prime
 
   //First sweep!
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     if(cell->at_left_boundary())
-    {
-      scratch1[cell->self()] = alpha/lambda;
-      scratch2[cell->self()] = T[cell->self()]/lambda;
-    }
+      scratch1[cell->self()] = T[cell->self()]/lambda_x;
     else if (cell->at_right_boundary())
-    {
-      scratch1[cell->self()] = 0.0; scratch1[cell->left()] = 0.0; //solving condensed system, so no last DOF
-      scratch2[cell->self()] = 0.0; 
-    }
+      scratch1[cell->self()] = 0.0; 
     else
-    {
-      scratch1[cell->self()] = alpha/(lambda - scratch1[cell->left()]*alpha);
-      scratch2[cell->self()] = (T[cell->self()]-scratch2[cell->left()]*alpha)/(lambda-scratch1[cell->left()]*alpha);
-    }
+      scratch1[cell->self()] = (T[cell->self()]-scratch1[cell->left()]*alpha_x)/(lambda_x-lux[cell->left()]*alpha_x);
   }
   //Do reverse sweep for x direction
   StaggeredGrid::reverse_iterator trailer = grid.rbegin();
@@ -283,23 +266,23 @@ void StokesSolver::upwind_advect()
     if(cell->at_right_boundary())
     {
       ++cell;
-      scratch3[cell->self()] = scratch2[cell->self()];
+      scratch2[cell->self()] = scratch1[cell->self()];
     }
     else
-      scratch3[cell->self()] = scratch2[cell->self()] - scratch1[cell->self()]*scratch3[cell->right()];
+      scratch2[cell->self()] = scratch1[cell->self()] - lux[cell->self()]*scratch2[cell->right()];
  
     if(cell->at_left_boundary())
     {
-      double xn = (T[trailer->self()] - alpha*(scratch3[cell->self()] + scratch3[trailer->self()-1]))/(lambda-gamma);
+      double xn = (T[trailer->self()] - alpha_x*(scratch2[cell->self()] + scratch2[trailer->self()-1]))/(lambda_x-gamma);
       T[trailer->self()] = xn;
       ++trailer;
       for(; (trailer->at_right_boundary()==false && trailer != grid.rend()); ++trailer)
-        T[trailer->self()] = scratch3[trailer->self()] - xn*g[trailer->self()];
+        T[trailer->self()] = scratch2[trailer->self()] - xn*g[trailer->self()];
     }
   }
-}*/
+}
 
-void StokesSolver::diffuse_temperature()
+/*void StokesSolver::diffuse_temperature()
 {
   Teuchos::TimeMonitor LocalTimer(*Diffusion);
 
@@ -317,10 +300,10 @@ void StokesSolver::diffuse_temperature()
       T[cell->self()] = 0.0;
     else if(cell->at_bottom_boundary())
       T[cell->self()] = 1.0;
-}
+}*/
    
   
-void StokesSolver::assemble_diffusion_matrix()
+/*void StokesSolver::assemble_diffusion_matrix()
 {
   std::vector<double> values;
   std::vector<int> indices; //5 point stencil
@@ -372,32 +355,50 @@ void StokesSolver::assemble_diffusion_matrix()
   amesos_ud_solver->NumericFactorization();
   amesos_lr_solver->SymbolicFactorization();
   amesos_lr_solver->NumericFactorization();
+}*/
+
+void StokesSolver::assemble_diffusion_matrix()
+{
 
   double eta_x = dt/grid.dx/grid.dx;
-  double alpha = -eta_x;
-  double lambda = (1.0 + 2.0*eta_x);
+  double eta_y = dt/grid.dy/grid.dy;
+  double alpha_x = -eta_x;
+  double lambda_x = (1.0 + 2.0*eta_x);
+  double alpha_y = -eta_y;
+  double lambda_y = (1.0 + 2.0*eta_y);
   g.PutScalar(0.0);
+  lux.PutScalar(0.0);
+  luy.PutScalar(0.0);
   scratch1.PutScalar(0.0); //c prime
   scratch2.PutScalar(0.0); //d prime
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
+    //assemble condensed lux vector
     if(cell->at_left_boundary())
     {
-      scratch1[cell->self()] = alpha/lambda;
-      scratch2[cell->self()] = alpha/lambda;
+      lux[cell->self()] = alpha_x/lambda_x;
+      scratch2[cell->self()] = alpha_x/lambda_x;
     }
     else if (cell->at_right_boundary())
     {
-      scratch1[cell->self()] = 0.0; scratch1[cell->left()] = 0.0; //solving condensed system, so no last DOF
+      lux[cell->self()] = 0.0; lux[cell->left()] = 0.0; //solving condensed system, so no last DOF
       scratch2[cell->self()] = 0.0; 
-      scratch2[cell->left()] = (alpha-scratch2[cell->left()-1]*alpha)/(lambda-scratch1[cell->left()-1]*alpha);
+      scratch2[cell->left()] = (alpha_x-scratch2[cell->left()-1]*alpha_x)/(lambda_x-lux[cell->left()-1]*alpha_x);
     }
     else
     {
-      scratch1[cell->self()] = alpha/(lambda - scratch1[cell->left()]*alpha);
-      scratch2[cell->self()] = (-scratch2[cell->left()]*alpha)/(lambda-scratch1[cell->left()]*alpha);
+      lux[cell->self()] = alpha_x/(lambda_x - lux[cell->left()]*alpha_x);
+      scratch2[cell->self()] = (-scratch2[cell->left()]*alpha_x)/(lambda_x-lux[cell->left()]*alpha_x);
     }
+
+    //Assemble luy vector
+    if(cell->at_bottom_boundary())
+      luy[cell->self()] = 0.0;
+    else if (cell->at_top_boundary())
+      luy[cell->self()] = 0.0;
+    else
+      luy[cell->self()] = alpha_y/(lambda_y - luy[cell->down()]*alpha_y);
   }
   //Do reverse sweep for x direction
   for( StaggeredGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
@@ -408,12 +409,10 @@ void StokesSolver::assemble_diffusion_matrix()
       g[cell->self()] = scratch2[cell->self()];
     }
     else
-      g[cell->self()] = scratch2[cell->self()] - scratch1[cell->self()]*g[cell->right()];
+      g[cell->self()] = scratch2[cell->self()] - lux[cell->self()]*g[cell->right()];
  
     if(cell->at_left_boundary())
-    {
-      gamma = alpha*(g[cell->self()] + g[cell->left()-1]);
-    }
+      gamma = alpha_x*(g[cell->self()] + g[cell->left()-1]);
   }
 }
 
@@ -450,6 +449,35 @@ void StokesSolver::assemble_stokes_matrix()
   }
   poisson_matrix.FillComplete();
 
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    int l = cell->xindex();
+    int m = cell->yindex()+1;
+    double factor = 1.0/(4.0*M_PI*M_PI*l*l/grid.lx/grid.lx + M_PI*M_PI*m*m/grid.ly/grid.ly);
+    factor = factor*factor;
+    freqs[cell->self()]=factor;
+  }
+  int n[1];
+  int stride, dist, howmany;
+
+  curl_T_spectral = new fftw_complex[ncells];
+
+  //transform in the y direction with a dst
+  n[0] = grid.ny; stride = grid.nx; dist = 1; howmany = grid.nx; 
+  fftw_r2r_kind f[1] = {FFTW_RODFT00};
+  dst = fftw_plan_many_r2r(1, n, howmany, curl_T.Values(), NULL, stride, dist,
+                                     scratch1.Values(), NULL, stride, dist,
+                                     f, FFTW_ESTIMATE);
+  idst = fftw_plan_many_r2r(1, n, howmany, scratch1.Values(), NULL, stride, dist,
+                                     scratch2.Values(), NULL, stride, dist,
+                                     f, FFTW_ESTIMATE);
+
+  //transform in the x direction with a full dft
+  n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny; 
+  dft = fftw_plan_many_dft_r2c(1, n, howmany, scratch1.Values(), NULL, stride, dist,
+                     curl_T_spectral, NULL, stride, dist, FFTW_ESTIMATE);
+  idft = fftw_plan_many_dft_c2r(1, n, howmany, curl_T_spectral, NULL, stride, dist,
+                     scratch1.Values(), NULL, stride, dist, FFTW_ESTIMATE);
 }
 
   
@@ -471,12 +499,49 @@ void StokesSolver::assemble_curl_T_vector()
   }
 }
 
- 
 void StokesSolver::solve_stokes()
+{ 
+  Teuchos::TimeMonitor LocalTimer(*Stokes);
+  
+  assemble_curl_T_vector();
+
+
+  fftw_execute(dst);
+  fftw_execute(dft);
+
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    curl_T_spectral[cell->self()][0]*=freqs[cell->self()];
+    curl_T_spectral[cell->self()][1]*=freqs[cell->self()];
+  }
+
+  fftw_execute(idft);
+  fftw_execute(idst);
+
+  
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    stream[cell->self()] = scratch2[cell->self()]/(grid.ny+1)/2.0/grid.nx;
+
+  //Come up with the velocities
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    if( cell->at_top_boundary() == false)
+      u[cell->self()] = (stream[cell->up()] - stream[cell->self()])/grid.dy;
+    else
+      u[cell->self()] = (stream[cell->self()] - stream[cell->down()])/grid.dy;
+
+    v[cell->self()] = -(stream[cell->right()] - stream[cell->self()])/grid.dx;
+  }
+
+
+}
+
+/*void StokesSolver::solve_stokes()
 {  
   Teuchos::TimeMonitor LocalTimer(*Stokes);
   
   assemble_curl_T_vector();
+
   poisson_problem.SetLHS(&vorticity);
   poisson_problem.SetRHS(&curl_T);
   aztec_solver.SetProblem(poisson_problem);
@@ -490,6 +555,7 @@ void StokesSolver::solve_stokes()
   aztec_solver.SetAztecOption(AZ_pre_calc, AZ_reuse);
   aztec_solver.Iterate(100, 1.e-1);
 
+
   //Come up with the velocities
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -501,7 +567,7 @@ void StokesSolver::solve_stokes()
     v[cell->self()] = -(stream[cell->right()] - stream[cell->self()])/grid.dx;
   }
 
-} 
+} */
 
 
 void StokesSolver::draw()

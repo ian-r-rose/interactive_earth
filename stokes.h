@@ -9,6 +9,7 @@
 #include <Ifpack_ILU.h>
 #include <Ifpack_ILUT.h>
 #include <ml_MultiLevelPreconditioner.h>
+#include <fftw3.h>
 
 #ifdef EPETRA_MPI
 #  include <mpi.h>
@@ -51,7 +52,8 @@ class StokesSolver
 
     Epetra_Vector T;
     Epetra_Vector scratch1, scratch2, scratch3, scratch4;
-    Epetra_Vector g;
+    Epetra_Vector g, lux, luy;
+    Epetra_Vector freqs;
     Epetra_Vector vorticity;
     Epetra_Vector stream;
     Epetra_Vector curl_T;
@@ -65,6 +67,9 @@ class StokesSolver
     ML_Epetra::MultiLevelPreconditioner * MLPrec;
     Ifpack_Preconditioner *ifpack_precon;
     Epetra_Operator *preconditioner;
+
+    fftw_plan dst, idst, dft, idft;
+    fftw_complex* curl_T_spectral;
 
  
     //workhorse functions
