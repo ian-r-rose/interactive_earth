@@ -116,8 +116,8 @@ class StaggeredGrid
                   : lx(lenx), ly(leny), nx(numx), ny(numy), dx(lx/nx), dy(ly/ny), ncells(nx*ny) {}; 
     const iterator begin() { return iterator(0, *this); };
     const iterator end() {return iterator(ncells, *this);};
-    const iterator rbegin() { return iterator(ncells-1, *this); };
-    const iterator rend() {return iterator(-1, *this);};
+    const reverse_iterator rbegin() { return reverse_iterator(ncells-1, *this); };
+    const reverse_iterator rend() {return reverse_iterator(-1, *this);};
 
     //Get handles to cell id and cell iterators at a point
     inline int cell_id( const Point &p) { int xindex = (p.x/dx); int yindex=(p.y/dy);

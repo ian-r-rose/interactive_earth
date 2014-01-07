@@ -32,6 +32,7 @@ class StokesSolver
     double Ra;
     double dt;
     double theta;
+    double gamma;
 
     StaggeredGrid grid;
     AztecOO aztec_solver;
@@ -49,7 +50,8 @@ class StokesSolver
     Epetra_Map map;
 
     Epetra_Vector T;
-    Epetra_Vector scratch1, scratch2;
+    Epetra_Vector scratch1, scratch2, scratch3, scratch4;
+    Epetra_Vector g;
     Epetra_Vector vorticity;
     Epetra_Vector stream;
     Epetra_Vector curl_T;
