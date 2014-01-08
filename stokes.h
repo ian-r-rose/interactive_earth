@@ -35,6 +35,7 @@ class StokesSolver
  
     //workhorse functions
     void initialize_temperature();
+    double heat(const Point&, const Point&);
     void setup_stokes_problem();
     void setup_diffusion_problem();
     void assemble_curl_T_vector();
@@ -46,7 +47,7 @@ class StokesSolver
 
   public:
     StokesSolver( double lx, double ly, int nx, int ny);
-    void upwind_advect();
+    void add_heat(double x, double y);
     void semi_lagrangian_advect();
     void diffuse_temperature();
     void solve_stokes();

@@ -41,6 +41,23 @@ void StokesSolver::initialize_temperature()
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = initial_temperature(cell->center());
 }
+ 
+inline double StokesSolver::heat(const Point &p1, const Point &p2 )
+{
+  const double rsq = (p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y);
+  const double sigma = grid.lx/20.0;
+  return 2000.0*std::exp( -rsq/2.0/sigma/sigma );
+}
+
+void StokesSolver::add_heat(double x, double y)
+{
+  Point p; p.x = x; p.y=y;
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    T[cell->self()] = T[cell->self()] + heat(p, cell->center())*dt;
+}
+  
+
+
 
 //interpolate the velocity onto an arbitrary point
 //Kind of a mess...

@@ -4,21 +4,51 @@
 
 const unsigned int nx = 200;
 const unsigned int ny = 100;
+const double lx = 2.0;
+const double ly = 1.0;
+const unsigned int scale = 5;
+
+const unsigned int xpix = nx*scale;
+const unsigned int ypix = ny*scale;
+
+bool heat_on = false;
+double hx, hy;
+
 StokesSolver* handle = NULL;
 
-void renderFunction( int ms)
+void motionFunction( int x, int y)
+{
+  hx = lx*(double(x)/double(xpix));
+  hy = ly*(1.0-double(y)/double(ypix));
+}
+
+void mouseFunction(int button, int state, int x, int y)
+{
+  if(button == GLUT_LEFT_BUTTON && state==GLUT_DOWN)
+  {
+     heat_on = true;
+     hx = lx*(double(x)/double(xpix));
+     hy = ly*(1.0-double(y)/double(ypix));
+  }
+  else heat_on = false;
+}
+
+void renderFunction(/* int ms*/)
 {
   static int i=0;
   if(i%1==0)
     handle->draw();
   if(i%2== 0)
     handle->solve_stokes();
+
+  if(heat_on) handle->add_heat(hx, hy);
   handle->semi_lagrangian_advect();
   handle->diffuse_temperature();
+
   ++i;
   std::cout<<"Step "<<i<<std::endl;
 
-  glutTimerFunc(ms, renderFunction, 0);
+//  glutTimerFunc(ms, renderFunction, 0);
   glutPostRedisplay();
 
 }
@@ -28,16 +58,18 @@ the freeglut library does the window creation work for us,
 regardless of the platform. */
 int main(int argc, char** argv)
 {
-    StokesSolver stokes(2.0, 1.0, nx,ny);
+    StokesSolver stokes(lx, ly, nx,ny);
     handle = &stokes;
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_SINGLE);
-    glutInitWindowSize(5*nx,5*ny);
+    glutInitWindowSize(scale*nx,scale*ny);
     glutInitWindowPosition(10,10);
     glutCreateWindow("Convection");
-//    glutDisplayFunc(renderFunction);
-    glutTimerFunc(50, renderFunction, 0);
+    glutDisplayFunc(renderFunction);
+    glutMotionFunc(motionFunction);
+    glutMouseFunc(mouseFunction);
+//    glutTimerFunc(50, renderFunction, 0);
     glutMainLoop();    
     return 0;
 }
