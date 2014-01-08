@@ -64,7 +64,7 @@ the freeglut library does the window creation work for us,
 regardless of the platform. */
 int main(int argc, char** argv)
 {
-    StokesSolver stokes(lx, ly, nx,ny);
+    StokesSolver stokes(lx, ly, nx,ny, 1.e8);
     handle = &stokes;
 
     glutInit(&argc, argv);

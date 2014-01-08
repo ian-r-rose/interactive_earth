@@ -16,6 +16,9 @@ class StokesSolver
     double theta;
     double gamma;
 
+    double heat_source_radius;
+    double heat_source;
+
     StaggeredGrid grid;
     
 
@@ -46,7 +49,7 @@ class StokesSolver
     Point velocity(const Point&);
 
   public:
-    StokesSolver( double lx, double ly, int nx, int ny);
+    StokesSolver( double lx, double ly, int nx, int ny, double Rayleigh);
     ~StokesSolver();
     void add_heat(double x, double y);
     void semi_lagrangian_advect();

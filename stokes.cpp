@@ -2,9 +2,9 @@
 #include "color.h"
 #include <cmath>
 
-StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
-                          nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e7),
-                          grid(lx, ly, nx, ny), dt(.7e-5),
+StokesSolver::StokesSolver( double lx, double ly, int nx, int ny, double Rayleigh):
+                          nx(nx), ny(ny), ncells(nx*ny), Ra(Rayleigh),
+                          grid(lx, ly, nx, ny), 
                           theta(0.0)
 {
   T = new double[ncells];
@@ -21,6 +21,10 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
   scratch2 = new double[ncells];
 
   curl_T_spectral = new fftw_complex[(nx/2+1)*ny];
+
+  dt = ly/ny * std::pow(Ra,-2./3.) * 10.0;
+  heat_source_radius = std::pow(Ra, -1./3.)*ly*1.0e1;
+  heat_source = std::pow(Ra, 2./3.)/ly*1.e0;
   
   initialize_temperature();
   assemble_curl_T_vector();
@@ -68,8 +72,7 @@ void StokesSolver::initialize_temperature()
 inline double StokesSolver::heat(const Point &p1, const Point &p2 )
 {
   const double rsq = (p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y);
-  const double sigma = grid.lx/20.0;
-  return 2000.0*std::exp( -rsq/2.0/sigma/sigma );
+  return heat_source*std::exp( -rsq/2.0/heat_source_radius/heat_source_radius );
 }
 
 void StokesSolver::add_heat(double x, double y)
