@@ -2,8 +2,8 @@
 #include <GL/gl.h>
 #include "stokes.h"
 
-const unsigned int nx = 200;
-const unsigned int ny = 100;
+const unsigned int nx = 256;
+const unsigned int ny = 128;
 const double lx = 2.0;
 const double ly = 1.0;
 const unsigned int scale = 5;
@@ -64,7 +64,7 @@ the freeglut library does the window creation work for us,
 regardless of the platform. */
 int main(int argc, char** argv)
 {
-    StokesSolver stokes(lx, ly, nx,ny, 1.e8);
+    StokesSolver stokes(lx, ly, nx,ny, 1.e6);
     handle = &stokes;
 
     glutInit(&argc, argv);
