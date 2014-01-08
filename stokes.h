@@ -47,6 +47,7 @@ class StokesSolver
 
   public:
     StokesSolver( double lx, double ly, int nx, int ny);
+    ~StokesSolver();
     void add_heat(double x, double y);
     void semi_lagrangian_advect();
     void diffuse_temperature();

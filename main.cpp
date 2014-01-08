@@ -16,6 +16,12 @@ double hx, hy;
 
 StokesSolver* handle = NULL;
 
+void keyboardFunction(unsigned char key, int x, int y)
+{
+  if(key == 27)
+    exit(0);
+}
+
 void motionFunction( int x, int y)
 {
   hx = lx*(double(x)/double(xpix));
@@ -66,9 +72,12 @@ int main(int argc, char** argv)
     glutInitWindowSize(scale*nx,scale*ny);
     glutInitWindowPosition(10,10);
     glutCreateWindow("Convection");
+
     glutDisplayFunc(renderFunction);
     glutMotionFunc(motionFunction);
     glutMouseFunc(mouseFunction);
+    glutKeyboardFunc(keyboardFunction); 
+
 //    glutTimerFunc(50, renderFunction, 0);
     glutMainLoop();    
     return 0;

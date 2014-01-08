@@ -29,6 +29,29 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
 
 }
 
+StokesSolver::~StokesSolver()
+{
+  delete[] T;
+  delete[] vorticity;
+  delete[] stream;
+  delete[] curl_T;
+  delete[] lux;
+  delete[] luy;
+  delete[] u;
+  delete[] v;
+  delete[] g;
+  delete[] freqs;
+  delete[] scratch1;
+  delete[] scratch2;
+  delete[] curl_T_spectral;
+ 
+  fftw_destroy_plan(dst);
+  fftw_destroy_plan(idst);
+  fftw_destroy_plan(dft);
+  fftw_destroy_plan(idft);
+}
+ 
+
 double StokesSolver::initial_temperature(const Point &p)
 {
   if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
@@ -336,8 +359,11 @@ void StokesSolver::solve_stokes()
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    curl_T_spectral[cell->self()][0]*=freqs[cell->self()];
-    curl_T_spectral[cell->self()][1]*=freqs[cell->self()];
+    if(cell->xindex() <= grid.nx/2)
+    {
+      curl_T_spectral[cell->self()][0]*=freqs[cell->self()];
+      curl_T_spectral[cell->self()][1]*=freqs[cell->self()];
+    }
   }
 
   fftw_execute(idft);
