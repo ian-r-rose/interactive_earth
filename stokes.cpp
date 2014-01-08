@@ -1,65 +1,31 @@
-#include <Epetra_Map.h>
-#include <Epetra_Vector.h>
-#include <Epetra_CrsMatrix.h>
-#include <Amesos.h>
-#include <AztecOO.h>
-#include <Teuchos_TimeMonitor.hpp>
-
 #include "stokes.h"
 #include "color.h"
-#include <vector>
 #include <cmath>
-#include <fstream>
-
-
-
-Teuchos::RCP<Teuchos::Time> Diffusion = Teuchos::TimeMonitor::getNewCounter("Diffusion time");
-Teuchos::RCP<Teuchos::Time> Advection = Teuchos::TimeMonitor::getNewCounter("Advection time");
-Teuchos::RCP<Teuchos::Time> Stokes = Teuchos::TimeMonitor::getNewCounter("Stokes time");
-Teuchos::RCP<Teuchos::Time> Draw = Teuchos::TimeMonitor::getNewCounter("Draw time");
 
 StokesSolver::StokesSolver( double lx, double ly, int nx, int ny):
-#ifdef EPETRA_MPI
-                          Comm(MPI_COMM_WORLD),
-#endif
                           nx(nx), ny(ny), ncells(nx*ny), Ra(1.0e7),
                           grid(lx, ly, nx, ny), dt(.7e-5),
-                          map(ncells, 0, Comm), theta(0.0),
-                          T(map), vorticity(map), stream(map), curl_T(map), 
-                          u(map), v(map), g(map), lux(map), luy(map), freqs(map),
-                          scratch1(map), scratch2(map), scratch3(map), scratch4(map),
-                          poisson_matrix(Copy, map, 5),
-                          diffusion_updown(Copy, map, 3), diffusion_leftright(Copy,map,3)
+                          theta(0.0)
 {
+  T = new double[ncells];
+  vorticity = new double[ncells];
+  stream = new double[ncells];
+  curl_T = new double[ncells];
+  lux = new double[ncells];
+  luy = new double[ncells];
+  u = new double[ncells];
+  v = new double[ncells];
+  g = new double[ncells];
+  freqs = new double[ncells];
+  scratch1 = new double[ncells];
+  scratch2 = new double[ncells];
+
+  curl_T_spectral = new fftw_complex[(nx/2+1)*ny];
+  
   initialize_temperature();
   assemble_curl_T_vector();
-  assemble_stokes_matrix();
-  poisson_problem.SetOperator(&poisson_matrix);
-
-  MLPrec = new ML_Epetra::MultiLevelPreconditioner(poisson_matrix, true);
-  ifpack_precon = new Ifpack_ILUT(&poisson_matrix);
-  ifpack_precon->Compute();
-  preconditioner = MLPrec;
-
-  
-  aztec_solver.SetAztecOption(AZ_solver, AZ_gmres);
-  aztec_solver.SetAztecOption(AZ_output, AZ_none);
-  aztec_solver.SetAztecOption(AZ_keep_info, 1);
-
-  poisson_problem.SetLHS(&vorticity);
-  poisson_problem.SetRHS(&curl_T);
-//  aztec_solver.SetPrecOperator(preconditioner);
-  aztec_solver.SetProblem(poisson_problem);
-
-  aztec_solver.Iterate(100, 1.e-2);
-
-  poisson_problem.SetLHS(&stream);
-  poisson_problem.SetRHS(&vorticity);
-  aztec_solver.SetProblem(poisson_problem);
-//  aztec_solver.SetPrecOperator(preconditioner);
-  aztec_solver.Iterate(100, 1.e-2);
-
-  assemble_diffusion_matrix();
+  setup_stokes_problem();
+  setup_diffusion_problem();
 
 }
 
@@ -80,7 +46,6 @@ void StokesSolver::initialize_temperature()
 //Kind of a mess...
 Point StokesSolver::velocity(const Point &p)
 {
-//  Teuchos::TimeMonitor LocalTimer(*VInterp);
   Point vel;
   StaggeredGrid::iterator x_cell = grid.lower_left_vface_cell(p); 
   StaggeredGrid::iterator y_cell = grid.lower_left_hface_cell(p); 
@@ -135,13 +100,11 @@ inline double StokesSolver::temperature(const Point &p)
 
 void StokesSolver::semi_lagrangian_advect()
 {
-  Teuchos::TimeMonitor LocalTimer(*Advection);
 
   Point vel_final;
   Point vel_takeoff;
   Point takeoff_point;
   Point final_point;
-  scratch1.PutScalar(0.0);
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -167,59 +130,18 @@ void StokesSolver::semi_lagrangian_advect()
     } 
     scratch1[cell->self()] = temperature(takeoff_point);
   }
-  T = scratch1;
-}
-
-void StokesSolver::upwind_advect()
-{
-  Teuchos::TimeMonitor LocalTimer(*Advection);
- 
-  double dTdx;
-  double dTdy;
-  double vx, vy;
-  scratch1.PutScalar(0.0);
-
+  
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    vx = (u[cell->self()]+u[cell->right()])/2.0;
-    if (vx <= 0.0) 
-      dTdx = (T[cell->right()]-T[cell->self()])/grid.dx;
-    else
-      dTdx = (T[cell->self()]-T[cell->left()])/grid.dx;
-    if( cell->at_top_boundary())
-    {
-      vy = 0;
-      dTdy = (0.0 - T[cell->self()])/grid.dy/2.0;
-    }
-    else if (cell->at_bottom_boundary())
-    {
-      vy = 0;
-      dTdy = (T[cell->self()] - 1.0)/grid.dy/2.0;
-    }
-    else
-    {
-      vy = (v[cell->up()]+v[cell->self()])/2.0;
-      if (vy <= 0.0) 
-        dTdy = (T[cell->up()]-T[cell->self()])/grid.dy;
-      else
-        dTdy = (T[cell->self()]-T[cell->down()])/grid.dy;
-    }
-    
-    scratch1[cell->self()] = T[cell->self()] - dt*(vx*dTdx+vy*dTdy);
-  }
-  T = scratch1;
+    T[cell->self()] = scratch1[cell->self()];
 }
-
 
 void StokesSolver::diffuse_temperature()
 {
-  Teuchos::TimeMonitor LocalTimer(*Diffusion);
 
   //First do diffusion in the y direction
   double eta_y = dt/grid.dy/grid.dy;
   double alpha_y = -eta_y;
   double lambda_y = (1.0 + 2.0*eta_y);
-  scratch1.PutScalar(0.0);
   //Forward sweep
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -246,8 +168,6 @@ void StokesSolver::diffuse_temperature()
   double eta_x = dt/grid.dx/grid.dx;
   double alpha_x = -eta_x;
   double lambda_x = (1.0 + 2.0*eta_x);
-  scratch1.PutScalar(0.0); //c prime
-  scratch2.PutScalar(0.0); //d prime
 
   //First sweep!
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
@@ -282,82 +202,8 @@ void StokesSolver::diffuse_temperature()
   }
 }
 
-/*void StokesSolver::diffuse_temperature()
-{
-  Teuchos::TimeMonitor LocalTimer(*Diffusion);
-
-  diffusion_ud_problem.SetRHS(&T);
-  diffusion_ud_problem.SetLHS(&scratch1);
-  amesos_ud_solver->Solve();
- 
-  diffusion_lr_problem.SetRHS(&scratch1);
-  diffusion_lr_problem.SetLHS(&T);
-  amesos_lr_solver->Solve();
   
-  //enforce top and bottom bcs
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    if(cell->at_top_boundary())
-      T[cell->self()] = 0.0;
-    else if(cell->at_bottom_boundary())
-      T[cell->self()] = 1.0;
-}*/
-   
-  
-/*void StokesSolver::assemble_diffusion_matrix()
-{
-  std::vector<double> values;
-  std::vector<int> indices; //5 point stencil
-
-  //Assemble poisson matrix 
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    // Do the up/down diffusion matrix
-    indices.clear();
-    values.clear();
-    if(cell->at_top_boundary() || cell->at_bottom_boundary())
-    {
-      indices.push_back(cell->self());
-      values.push_back(1.0);
-    }
-    else
-    {
-      indices.push_back(cell->self()); values.push_back(1.0+dt*2.0/grid.dx/grid.dx);
-      indices.push_back( cell->up() ); values.push_back(-dt*1.0/grid.dx/grid.dx);
-      indices.push_back( cell->down() ); values.push_back(-dt*1.0/grid.dx/grid.dx);
-    }
-    int ierr =  diffusion_updown.InsertGlobalValues(cell->self(), indices.size(), &values[0], &indices[0]);
-    // Do the left/right diffusion matrix
-    indices.clear();
-    values.clear();
-    if(cell->at_top_boundary() || cell->at_bottom_boundary())
-    {
-      indices.push_back(cell->self());
-      values.push_back(1.0);
-    }
-    else
-    {
-      indices.push_back(cell->self()); values.push_back(1.0+dt*2.0/grid.dx/grid.dx);
-      indices.push_back( cell->left() ); values.push_back(-dt*1.0/grid.dx/grid.dx);
-      indices.push_back( cell->right() ); values.push_back(-dt*1.0/grid.dx/grid.dx);
-    }
-    ierr =  diffusion_leftright.InsertGlobalValues(cell->self(), indices.size(), &values[0], &indices[0]);
-  }
-  diffusion_updown.FillComplete();
-  diffusion_leftright.FillComplete();
-  diffusion_ud_problem.SetOperator(&diffusion_updown);
-  diffusion_lr_problem.SetOperator(&diffusion_leftright);
-
-  Amesos Amesos_Factory;
-  amesos_ud_solver = Amesos_Factory.Create("Amesos_Klu", diffusion_ud_problem);
-  amesos_lr_solver = Amesos_Factory.Create("Amesos_Klu", diffusion_lr_problem);
-  
-  amesos_ud_solver->SymbolicFactorization();
-  amesos_ud_solver->NumericFactorization();
-  amesos_lr_solver->SymbolicFactorization();
-  amesos_lr_solver->NumericFactorization();
-}*/
-
-void StokesSolver::assemble_diffusion_matrix()
+void StokesSolver::setup_diffusion_problem()
 {
 
   double eta_x = dt/grid.dx/grid.dx;
@@ -366,11 +212,6 @@ void StokesSolver::assemble_diffusion_matrix()
   double lambda_x = (1.0 + 2.0*eta_x);
   double alpha_y = -eta_y;
   double lambda_y = (1.0 + 2.0*eta_y);
-  g.PutScalar(0.0);
-  lux.PutScalar(0.0);
-  luy.PutScalar(0.0);
-  scratch1.PutScalar(0.0); //c prime
-  scratch2.PutScalar(0.0); //d prime
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -416,38 +257,8 @@ void StokesSolver::assemble_diffusion_matrix()
   }
 }
 
-void StokesSolver::assemble_stokes_matrix()
+void StokesSolver::setup_stokes_problem()
 {
-  std::vector<double> values;
-  std::vector<int> indices; //5 point stencil
-
-  //Assemble poisson matrix 
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    StaggeredGrid::iterator up_cell(cell->up(), grid);
-    StaggeredGrid::iterator down_cell(cell->down(), grid);
-
-    indices.clear();
-    values.clear();
-
-    if(cell->at_top_boundary() || cell->at_bottom_boundary())
-    {
-      indices.push_back(cell->self());
-      values.push_back(1.0);
-    }
-    else
-    {
-      indices.push_back(cell->self()); values.push_back(4.0/grid.dx/grid.dy);
-      indices.push_back( cell->left() ); values.push_back(-1.0/grid.dx/grid.dy);
-      indices.push_back( cell->right() ); values.push_back(-1.0/grid.dx/grid.dy);
-      if(!up_cell->at_top_boundary())
-        {indices.push_back( cell->up() ); values.push_back(-1.0/grid.dx/grid.dy);}
-      if(!down_cell->at_bottom_boundary())
-        {indices.push_back( cell->down() ); values.push_back(-1.0/grid.dx/grid.dy);}
-    }
-    int ierr =  poisson_matrix.InsertGlobalValues(cell->self(), indices.size(), &values[0], &indices[0]);
-  }
-  poisson_matrix.FillComplete();
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -457,27 +268,27 @@ void StokesSolver::assemble_stokes_matrix()
     factor = factor*factor;
     freqs[cell->self()]=factor;
   }
+
   int n[1];
   int stride, dist, howmany;
-
-  curl_T_spectral = new fftw_complex[ncells];
 
   //transform in the y direction with a dst
   n[0] = grid.ny; stride = grid.nx; dist = 1; howmany = grid.nx; 
   fftw_r2r_kind f[1] = {FFTW_RODFT00};
-  dst = fftw_plan_many_r2r(1, n, howmany, curl_T.Values(), NULL, stride, dist,
-                                     scratch1.Values(), NULL, stride, dist,
+  dst = fftw_plan_many_r2r(1, n, howmany, curl_T, NULL, stride, dist,
+                                     scratch1, NULL, stride, dist,
                                      f, FFTW_ESTIMATE);
-  idst = fftw_plan_many_r2r(1, n, howmany, scratch1.Values(), NULL, stride, dist,
-                                     scratch2.Values(), NULL, stride, dist,
+  idst = fftw_plan_many_r2r(1, n, howmany, scratch1, NULL, stride, dist,
+                                     scratch2, NULL, stride, dist,
                                      f, FFTW_ESTIMATE);
 
   //transform in the x direction with a full dft
   n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny; 
-  dft = fftw_plan_many_dft_r2c(1, n, howmany, scratch1.Values(), NULL, stride, dist,
+  dft = fftw_plan_many_dft_r2c(1, n, howmany, scratch1, NULL, stride, dist,
                      curl_T_spectral, NULL, stride, dist, FFTW_ESTIMATE);
   idft = fftw_plan_many_dft_c2r(1, n, howmany, curl_T_spectral, NULL, stride, dist,
-                     scratch1.Values(), NULL, stride, dist, FFTW_ESTIMATE);
+                     scratch1, NULL, stride, dist, FFTW_ESTIMATE);
+
 }
 
   
@@ -501,10 +312,7 @@ void StokesSolver::assemble_curl_T_vector()
 
 void StokesSolver::solve_stokes()
 { 
-  Teuchos::TimeMonitor LocalTimer(*Stokes);
-  
   assemble_curl_T_vector();
-
 
   fftw_execute(dst);
   fftw_execute(dft);
@@ -536,43 +344,8 @@ void StokesSolver::solve_stokes()
 
 }
 
-/*void StokesSolver::solve_stokes()
-{  
-  Teuchos::TimeMonitor LocalTimer(*Stokes);
-  
-  assemble_curl_T_vector();
-
-  poisson_problem.SetLHS(&vorticity);
-  poisson_problem.SetRHS(&curl_T);
-  aztec_solver.SetProblem(poisson_problem);
-//  aztec_solver.SetPrecOperator(preconditioner);
-  aztec_solver.SetAztecOption(AZ_pre_calc, AZ_reuse);
-  aztec_solver.Iterate(100, 1.e-1);
-  poisson_problem.SetLHS(&stream);
-  poisson_problem.SetRHS(&vorticity);
-  aztec_solver.SetProblem(poisson_problem);
-//  aztec_solver.SetPrecOperator(preconditioner);
-  aztec_solver.SetAztecOption(AZ_pre_calc, AZ_reuse);
-  aztec_solver.Iterate(100, 1.e-1);
-
-
-  //Come up with the velocities
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    if( cell->at_top_boundary() == false)
-      u[cell->self()] = (stream[cell->up()] - stream[cell->self()])/grid.dy;
-    else
-      u[cell->self()] = (stream[cell->self()] - stream[cell->down()])/grid.dy;
-
-    v[cell->self()] = -(stream[cell->right()] - stream[cell->self()])/grid.dx;
-  }
-
-} */
-
-
 void StokesSolver::draw()
 {
-  Teuchos::TimeMonitor LocalTimer(*Draw);
   double DX = 2.0/grid.nx;
   double DY = 2.0/grid.ny;
 

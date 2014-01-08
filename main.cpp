@@ -1,7 +1,6 @@
 #include <GL/freeglut.h>
 #include <GL/gl.h>
 #include "stokes.h"
-#include <Teuchos_TimeMonitor.hpp>
 
 const unsigned int nx = 200;
 const unsigned int ny = 100;
@@ -22,8 +21,6 @@ void renderFunction( int ms)
   glutTimerFunc(ms, renderFunction, 0);
   glutPostRedisplay();
 
-  if (i%100 == 0)
-    Teuchos::TimeMonitor::summarize();
 }
 
 /* Main method - main entry point of application
@@ -31,10 +28,6 @@ the freeglut library does the window creation work for us,
 regardless of the platform. */
 int main(int argc, char** argv)
 {
-#ifdef EPETRA_MPI
-    MPI_Init(&argc,&argv);
-#endif
-
     StokesSolver stokes(2.0, 1.0, nx,ny);
     handle = &stokes;
 
@@ -44,7 +37,7 @@ int main(int argc, char** argv)
     glutInitWindowPosition(10,10);
     glutCreateWindow("Convection");
 //    glutDisplayFunc(renderFunction);
-    glutTimerFunc(100, renderFunction, 0);
+    glutTimerFunc(50, renderFunction, 0);
     glutMainLoop();    
     return 0;
 }
