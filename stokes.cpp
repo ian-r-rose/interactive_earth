@@ -22,9 +22,9 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny, double Rayleig
 
   curl_T_spectral = new fftw_complex[(nx/2+1)*ny];
 
-  dt = ly/ny * std::pow(Ra,-2./3.) * 20.0;
-  heat_source_radius = std::pow(Ra, -1./3.)*ly*1.0e1;
-  heat_source = std::pow(Ra, 2./3.)/ly*1.e0;
+  dt = ly/ny * std::pow(Ra,-2./3.) * 20.0; //Roughly 20x CFL, thanks to semi-lagrangian
+  heat_source_radius = std::pow(Ra, -1./3.)*ly*1.0e1;  //Radius of order the boundary layer thickness
+  heat_source = std::pow(Ra, 2./3.)/ly*1.e0; //Heat a blob of order the ascent time for thta blob
   
   initialize_temperature();
   assemble_curl_T_vector();
