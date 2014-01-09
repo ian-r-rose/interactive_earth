@@ -1,13 +1,12 @@
-#include <SDL2/SDL_opengl.h>
-#include <SDL2/SDL.h>
-#include <GL/gl.h>
+#include "SDL2/SDL_opengl.h"
+#include "SDL2/SDL.h"
 #include "stokes.h"
 
 const unsigned int nx = 200;
 const unsigned int ny = 100;
 const double lx = 2.0;
 const double ly = 1.0;
-const double Ra = 1.e5;
+const double Ra = 1.e7;
 const unsigned int scale = 5;
 
 const unsigned int xpix = nx*scale;
