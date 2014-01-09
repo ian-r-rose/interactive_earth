@@ -1,11 +1,13 @@
-#include <GL/freeglut.h>
+#include <SDL2/SDL_opengl.h>
+#include <SDL2/SDL.h>
 #include <GL/gl.h>
 #include "stokes.h"
 
-const unsigned int nx = 350;
-const unsigned int ny = 175;
+const unsigned int nx = 200;
+const unsigned int ny = 100;
 const double lx = 2.0;
 const double ly = 1.0;
+const double Ra = 1.e5;
 const unsigned int scale = 5;
 
 const unsigned int xpix = nx*scale;
@@ -16,33 +18,31 @@ double hx, hy;
 
 StokesSolver* handle = NULL;
 
-void keyboardFunction(unsigned char key, int x, int y)
+SDL_GLContext context;
+SDL_Window *window=NULL;
+
+inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 {
-  if(key == 27)
-    exit(0);
+  hx = lx*(double(event->x)/double(xpix));
+  hy = ly*(1.0-double(event->y)/double(ypix));
 }
 
-void motionFunction( int x, int y)
-{
-  hx = lx*(double(x)/double(xpix));
-  hy = ly*(1.0-double(y)/double(ypix));
-}
 
-void mouseFunction(int button, int state, int x, int y)
+inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 {
-  if(state==GLUT_DOWN)
+  if(event->state==SDL_PRESSED)
   {
-     if(button == GLUT_LEFT_BUTTON)
+     if(event->button == SDL_BUTTON_LEFT)
        heat_state = 1;
-     if(button == GLUT_RIGHT_BUTTON)
+     if(event->button == SDL_BUTTON_RIGHT)
        heat_state = -1;
-     hx = lx*(double(x)/double(xpix));
-     hy = ly*(1.0-double(y)/double(ypix));
+     hx = lx*(double(event->x)/double(xpix));
+     hy = ly*(1.0-double(event->y)/double(ypix));
   }
   else heat_state=0;
 }
 
-void renderFunction(/* int ms*/)
+void timestep()
 {
   static int i=0;
   if(i%1==0)
@@ -56,32 +56,62 @@ void renderFunction(/* int ms*/)
 
   ++i;
   std::cout<<"Step "<<i<<std::endl;
-
-//  glutTimerFunc(ms, renderFunction, 0);
-  glutPostRedisplay();
-
 }
 
-/* Main method - main entry point of application
-the freeglut library does the window creation work for us, 
-regardless of the platform. */
+
+void init()
+{
+    SDL_Init(SDL_INIT_VIDEO);
+
+    window = SDL_CreateWindow(
+       "Convection", 10, 10, scale*nx, scale*ny, 
+        SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
+    context = SDL_GL_CreateContext(window);
+    if (!context)
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext(): %s\n", SDL_GetError());
+}
+
+void quit()
+{
+    SDL_GL_DeleteContext(context);
+    SDL_Quit();
+    exit(0);
+}
+
 int main(int argc, char** argv)
 {
-    StokesSolver stokes(lx, ly, nx,ny, 1.e7);
+    SDL_Event event;
+    StokesSolver stokes(lx, ly, nx,ny, Ra);
     handle = &stokes;
+ 
+    init();
 
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_SINGLE);
-    glutInitWindowSize(scale*nx,scale*ny);
-    glutInitWindowPosition(10,10);
-    glutCreateWindow("Convection");
+    while(true)
+    {
+      SDL_Delay(1);
+      while(SDL_PollEvent(&event))
+      {
+        switch(event.type)
+        {
+          case SDL_QUIT:
+            quit();
+          case SDL_KEYDOWN:
+            if(event.key.keysym.sym == SDLK_ESCAPE)
+              quit();
+          case SDL_MOUSEBUTTONDOWN:
+          case SDL_MOUSEBUTTONUP:
+            handle_mouse_button(&event.button);
+            break;
+          case SDL_MOUSEMOTION:
+            handle_mouse_motion(&event.motion);
+          default:
+            break;
+        }
+      }
+      timestep();
+      SDL_GL_SwapWindow(window);
+    }
 
-    glutDisplayFunc(renderFunction);
-    glutMotionFunc(motionFunction);
-    glutMouseFunc(mouseFunction);
-    glutKeyboardFunc(keyboardFunction); 
-
-//    glutTimerFunc(50, renderFunction, 0);
-    glutMainLoop();    
+    quit();
     return 0;
 }

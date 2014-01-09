@@ -1,6 +1,8 @@
 #include <fftw3.h>
-#include <GL/gl.h>
 #include "staggered_grid.h"
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
+#include <GL/gl.h>
 
 #ifndef STOKES_H
 #define STOKES_H

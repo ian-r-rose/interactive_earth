@@ -23,7 +23,7 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny, double Rayleig
   curl_T_spectral = new fftw_complex[(nx/2+1)*ny];
 
   dt = ly/ny * std::pow(Ra,-2./3.) * 20.0; //Roughly 20x CFL, thanks to semi-lagrangian
-  heat_source_radius = std::pow(Ra, -1./3.)*ly*1.0e1;  //Radius of order the boundary layer thickness
+  heat_source_radius = std::pow(Ra, -1./3.)*ly*0.5e1;  //Radius of order the boundary layer thickness
   heat_source = std::pow(Ra, 2./3.)/ly*1.e0; //Heat a blob of order the ascent time for thta blob
   
   initialize_temperature();
@@ -58,10 +58,10 @@ StokesSolver::~StokesSolver()
 
 double StokesSolver::initial_temperature(const Point &p)
 {
-//  if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
-//  else if (std::sqrt( (1.65-p.x)*(1.65-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 0.0;
-//  else return 0.5;
-  return 0.5;
+  if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
+  else if (std::sqrt( (1.65-p.x)*(1.65-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 0.0;
+  else return 0.5;
+//  return 0.5;
 }
 
 void StokesSolver::initialize_temperature()
