@@ -11,7 +11,7 @@ const unsigned int scale = 5;
 const unsigned int xpix = nx*scale;
 const unsigned int ypix = ny*scale;
 
-bool heat_on = false;
+int heat_state = 0;
 double hx, hy;
 
 StokesSolver* handle = NULL;
@@ -30,13 +30,16 @@ void motionFunction( int x, int y)
 
 void mouseFunction(int button, int state, int x, int y)
 {
-  if(button == GLUT_LEFT_BUTTON && state==GLUT_DOWN)
+  if(state==GLUT_DOWN)
   {
-     heat_on = true;
+     if(button == GLUT_LEFT_BUTTON)
+       heat_state = 1;
+     if(button == GLUT_RIGHT_BUTTON)
+       heat_state = -1;
      hx = lx*(double(x)/double(xpix));
      hy = ly*(1.0-double(y)/double(ypix));
   }
-  else heat_on = false;
+  else heat_state=0;
 }
 
 void renderFunction(/* int ms*/)
@@ -47,7 +50,7 @@ void renderFunction(/* int ms*/)
   if(i%2== 0)
     handle->solve_stokes();
 
-  if(heat_on) handle->add_heat(hx, hy);
+  if(heat_state != 0) handle->add_heat(hx, hy, (heat_state==1 ? true : false));
   handle->semi_lagrangian_advect();
   handle->diffuse_temperature();
 
@@ -64,7 +67,7 @@ the freeglut library does the window creation work for us,
 regardless of the platform. */
 int main(int argc, char** argv)
 {
-    StokesSolver stokes(lx, ly, nx,ny, 1.e8);
+    StokesSolver stokes(lx, ly, nx,ny, 1.e7);
     handle = &stokes;
 
     glutInit(&argc, argv);

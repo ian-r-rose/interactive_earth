@@ -51,7 +51,7 @@ class StokesSolver
   public:
     StokesSolver( double lx, double ly, int nx, int ny, double Rayleigh);
     ~StokesSolver();
-    void add_heat(double x, double y);
+    void add_heat(double x, double y, bool hot);
     void semi_lagrangian_advect();
     void diffuse_temperature();
     void solve_stokes();

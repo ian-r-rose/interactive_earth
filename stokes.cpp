@@ -76,11 +76,11 @@ inline double StokesSolver::heat(const Point &p1, const Point &p2 )
   return heat_source*std::exp( -rsq/2.0/heat_source_radius/heat_source_radius );
 }
 
-void StokesSolver::add_heat(double x, double y)
+void StokesSolver::add_heat(double x, double y, bool hot)
 {
   Point p; p.x = x; p.y=y;
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    T[cell->self()] = T[cell->self()] + heat(p, cell->center())*dt;
+    T[cell->self()] = T[cell->self()] + (hot ? 1.0 : -1.0)*heat(p, cell->center())*dt;
 }
   
 
@@ -119,6 +119,7 @@ Point StokesSolver::velocity(const Point &p)
     vel.y = linear_interp_2d (vy_local_x, vy_local_y, v[y_cell->up()], v[y_cell->upright()],
                               v[y_cell->self()], v[y_cell->right()]);
 
+
   return vel;
 } 
 
@@ -138,6 +139,7 @@ inline double StokesSolver::temperature(const Point &p)
   else
     temp = linear_interp_2d( local_x, local_y, T[cell->up()], T[cell->upright()],
                              T[cell->self()], T[cell->right()]);
+
   return temp;
 }
   
