@@ -8,8 +8,6 @@ calculations
 / ***********************/
 
 #include <iterator>
-#include <iostream>
-#include <cmath>
 
 #ifndef STAGGERED_GRID_H
 #define STAGGERED_GRID_H

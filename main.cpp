@@ -54,7 +54,6 @@ void timestep()
   handle->diffuse_temperature();
 
   ++i;
-  std::cout<<"Step "<<i<<std::endl;
 }
 
 
