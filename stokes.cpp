@@ -58,10 +58,10 @@ StokesSolver::~StokesSolver()
 
 double StokesSolver::initial_temperature(const Point &p)
 {
-  if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
-  else if (std::sqrt( (1.65-p.x)*(1.65-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 0.0;
-  else return 0.5;
-//  return 0.5;
+//  if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
+//  else if (std::sqrt( (1.65-p.x)*(1.65-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 0.0;
+//  else return 0.5;
+  return 0.5;
 }
 
 void StokesSolver::initialize_temperature()
