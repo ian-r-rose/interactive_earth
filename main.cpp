@@ -2,8 +2,8 @@
 #include "SDL2/SDL.h"
 #include "stokes.h"
 
-const unsigned int nx = 200;
-const unsigned int ny = 100;
+const unsigned int nx = 256;
+const unsigned int ny = 128;
 const double lx = 2.0;
 const double ly = 1.0;
 const double Ra = 1.e7;
@@ -14,6 +14,7 @@ const unsigned int ypix = ny*scale;
 
 int heat_state = 0;
 double hx, hy;
+bool solve_stokes = true;
 
 StokesSolver* handle = NULL;
 
@@ -46,7 +47,8 @@ void timestep()
   static int i=0;
   if(i%1==0)
     handle->draw();
-  if(i%2== 0)
+ // if(i%200== 0)
+  if(solve_stokes && i%2==0)
     handle->solve_stokes();
 
   if(heat_state != 0) handle->add_heat(hx, hy, (heat_state==1 ? true : false));
@@ -96,6 +98,8 @@ int main(int argc, char** argv)
           case SDL_KEYDOWN:
             if(event.key.keysym.sym == SDLK_ESCAPE)
               quit();
+            else if(event.key.keysym.sym == SDLK_SPACE)
+              solve_stokes = !solve_stokes;
           case SDL_MOUSEBUTTONDOWN:
           case SDL_MOUSEBUTTONUP:
             handle_mouse_button(&event.button);
