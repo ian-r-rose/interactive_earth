@@ -57,6 +57,7 @@ class StokesSolver
     void diffuse_temperature();
     void solve_stokes();
     void draw();
+    void setup_opengl();
 };
 
 #endif

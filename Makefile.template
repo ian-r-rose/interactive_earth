@@ -12,14 +12,17 @@ LINK_FLAGS=
 
 
 
-stokes: stokes.o main.o
-	$(CXX) $(CXX_FLAGS) stokes.o main.o -o stokes $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
+stokes: stokes.o main.o rendering.o
+	$(CXX) $(CXX_FLAGS) stokes.o rendering.o main.o -o stokes $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
 main.o: main.cpp stokes.h
 	$(CXX) $(CXX_FLAGS) -c main.cpp  $(LINK_FLAGS) $(INCLUDE_DIRS) $(DEFINES) 
 
 stokes.o: stokes.cpp stokes.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) stokes.cpp
+
+rendering.o: rendering.cpp stokes.h
+	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) rendering.cpp
 
 .PHONY: clean
 clean:
