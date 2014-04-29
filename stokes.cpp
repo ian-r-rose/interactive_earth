@@ -21,9 +21,7 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny, double Rayleig
 
   curl_T_spectral = new fftw_complex[(nx/2+1)*ny];
 
-  dt = ly/ny * std::pow(Ra,-2./3.) * 20.0; //Roughly 20x CFL, thanks to semi-lagrangian
-  heat_source_radius = std::pow(Ra, -1./3.)*ly*0.5e1;  //Radius of order the boundary layer thickness
-  heat_source = std::pow(Ra, 2./3.)/ly*1.e0; //Heat a blob of order the ascent time for thta blob
+  update_state(Rayleigh, theta);
   
   initialize_temperature();
   assemble_curl_T_vector();
@@ -392,3 +390,25 @@ void StokesSolver::solve_stokes()
 
 }
 
+
+void StokesSolver::update_state(double rayleigh, double gravity_angle)
+{
+  theta = gravity_angle;
+  double length_scale = std::pow(rayleigh, -1./3.)*grid.ly;  //calculate a provisional length scale
+
+  if (length_scale < grid.ly/grid.ny/2.0) Ra = std::pow( grid.ny*2.0, 3.0);
+  else Ra = rayleigh;
+
+  dt = grid.ly/grid.ny * std::pow(Ra,-2./3.) * 20.0; //Roughly 20x CFL, thanks to semi-lagrangian
+  heat_source_radius = length_scale*5.0;  //Radius of order the boundary layer thickness
+  heat_source = std::pow(Ra, 2./3.)/grid.ly*1.e0; //Heat a blob of order the ascent time for thta blob
+
+  setup_diffusion_problem();  //need to recompute the auxiliary vectors for the diffusion problem
+
+}
+
+
+double StokesSolver::rayleigh_number() const
+{
+  return Ra;
+}

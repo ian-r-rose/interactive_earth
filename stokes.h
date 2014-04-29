@@ -52,12 +52,14 @@ class StokesSolver
   public:
     StokesSolver( double lx, double ly, int nx, int ny, double Rayleigh);
     ~StokesSolver();
+    double rayleigh_number() const;
     void add_heat(double x, double y, bool hot);
     void semi_lagrangian_advect();
     void diffuse_temperature();
     void solve_stokes();
     void draw();
     void setup_opengl();
+    void update_state(double rayleigh, double gravity_angle = 0);
 };
 
 #endif

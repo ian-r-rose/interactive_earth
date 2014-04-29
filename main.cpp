@@ -1,6 +1,7 @@
 #include "SDL2/SDL_opengl.h"
 #include "SDL2/SDL.h"
 #include "stokes.h"
+#include <cmath>
 
 const unsigned int nx = 256;
 const unsigned int ny = 128;
@@ -27,6 +28,12 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
   hy = ly*(1.0-double(event->y)/double(ypix));
 }
 
+inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
+{
+  double rayleigh = handle->rayleigh_number();
+  handle->update_state( rayleigh * std::pow(10.0, double(event->y)/100.0) );  //One hundred tics creates a factor of 10
+}
+  
 
 inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 {
@@ -54,7 +61,7 @@ void timestep()
   if(heat_state != 0) handle->add_heat(hx, hy, (heat_state==1 ? true : false));
   handle->semi_lagrangian_advect();
   handle->diffuse_temperature();
-
+  double rayleigh = handle->rayleigh_number();
   ++i;
 }
 
@@ -106,6 +113,10 @@ int main(int argc, char** argv)
             break;
           case SDL_MOUSEMOTION:
             handle_mouse_motion(&event.motion);
+	    break;
+	  case SDL_MOUSEWHEEL:
+	    handle_mouse_wheel(&event.wheel);
+            break;
           default:
             break;
         }
