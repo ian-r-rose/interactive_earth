@@ -54,14 +54,12 @@ void timestep()
   static int i=0;
   if(i%1==0)
     handle->draw();
- // if(i%200== 0)
   if(solve_stokes && i%2==0)
     handle->solve_stokes();
 
   if(heat_state != 0) handle->add_heat(hx, hy, (heat_state==1 ? true : false));
   handle->semi_lagrangian_advect();
   handle->diffuse_temperature();
-  double rayleigh = handle->rayleigh_number();
   ++i;
 }
 
