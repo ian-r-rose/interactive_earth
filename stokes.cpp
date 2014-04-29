@@ -19,7 +19,7 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny, double Rayleig
   scratch1 = new double[ncells];
   scratch2 = new double[ncells];
 
-  curl_T_spectral = new fftw_complex[(nx/2+1)*ny];
+  curl_T_spectral = new fftw_complex[nx*ny];
 
   update_state(Rayleigh, theta);
   
