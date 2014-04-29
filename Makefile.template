@@ -6,14 +6,14 @@ C_FLAGS=
 
 INCLUDE_DIRS=
 LIBRARY_DIRS=
-LIBRARIES=-lSDL2 -lfftw3 -lGL -Wl,-rpath, -lSDL2 -lpthread
+LIBRARIES= -lfftw3 -lGL -Wl,-rpath, -lSDL2 -lpthread
 
 LINK_FLAGS=
 
 
 
 stokes: stokes.o main.o rendering.o
-	$(CXX) $(CXX_FLAGS) stokes.o rendering.o main.o -o stokes $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
+	$(CXX) $(CXX_FLAGS) stokes.o rendering.o main.o -o interactive_earth $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
 main.o: main.cpp stokes.h
 	$(CXX) $(CXX_FLAGS) -c main.cpp  $(LINK_FLAGS) $(INCLUDE_DIRS) $(DEFINES) 
@@ -26,4 +26,4 @@ rendering.o: rendering.cpp stokes.h
 
 .PHONY: clean
 clean:
-	rm -f *.o stokes
+	rm -f *.o interactive_earth

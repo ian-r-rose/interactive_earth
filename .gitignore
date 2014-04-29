@@ -1,7 +1,7 @@
 *.o
 Makefile
 *.swp
-stokes
+interactive_earth
 *.sh
 *.txt
 *.ps
