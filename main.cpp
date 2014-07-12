@@ -3,12 +3,12 @@
 #include "stokes.h"
 #include <cmath>
 
-const unsigned int nx = 256;
-const unsigned int ny = 128;
-const double lx = 2.0;
+const unsigned int nx = 400;
+const unsigned int ny = 100;
+const double lx = 4.0;
 const double ly = 1.0;
 const double Ra = 1.e7;
-const unsigned int scale = 5;
+const unsigned int scale = 4;
 
 const unsigned int xpix = nx*scale;
 const unsigned int ypix = ny*scale;
