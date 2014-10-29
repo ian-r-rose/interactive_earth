@@ -133,7 +133,7 @@ int main(int argc, char** argv)
 
 void StokesSolver::draw()
 {
-  SDL_SetRenderDrawColor( renderer, 0xFF, 0xFF, 0xFF, 0xFF );
+  SDL_SetRenderDrawColor( renderer, 0x00, 0x00, 0x00, 0x00);
   SDL_RenderClear( renderer );
 
   SDL_Rect area;
@@ -143,15 +143,12 @@ void StokesSolver::draw()
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     color c = hot(T[cell->self()]);
-    unsigned short R = c.R*255.;
-    unsigned short G = c.G*255.;
-    unsigned short B = c.B*255.;
 
     rect.x = rint(cell->corner().x/grid.dx)*scale;
     rect.y = ypix-rint(cell->corner().y/grid.dy)*scale;
     rect.w = scale;
     rect.h = scale;
-    SDL_SetRenderDrawColor( renderer, R, G, B, 0xFF );
+    SDL_SetRenderDrawColor( renderer, c.R*255.0f, c.G*255.0f, c.B*255.0f, 0xFF );
     SDL_RenderFillRect(renderer, &rect);
   }
 }
