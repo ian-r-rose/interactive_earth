@@ -1,6 +1,6 @@
-#include "SDL2/SDL_opengl.h"
 #include "SDL2/SDL.h"
 #include "stokes.h"
+#include "color.h"
 #include <cmath>
 #include <iostream>
 #include <iomanip>
@@ -21,8 +21,8 @@ bool solve_stokes = true;
 
 StokesSolver* handle = NULL;
 
-SDL_GLContext context;
 SDL_Window *window=NULL;
+SDL_Renderer* renderer=NULL;
 
 inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 {
@@ -75,15 +75,14 @@ void init()
 
     window = SDL_CreateWindow(
        "Convection", 10, 10, scale*nx, scale*ny, 
-        SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
-    context = SDL_GL_CreateContext(window);
-    if (!context)
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext(): %s\n", SDL_GetError());
+        SDL_WINDOW_SHOWN);
+    renderer = SDL_CreateRenderer( window, -1, SDL_RENDERER_ACCELERATED);
+    if (!renderer)
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateRenderer(): %s\n", SDL_GetError());
 }
 
 void quit()
 {
-    SDL_GL_DeleteContext(context);
     SDL_Quit();
     exit(0);
 }
@@ -125,9 +124,35 @@ int main(int argc, char** argv)
         }
       }
       timestep();
-      SDL_GL_SwapWindow(window);
+      SDL_RenderPresent(renderer);
     }
 
     quit();
     return 0;
 }
+
+void StokesSolver::draw()
+{
+  SDL_SetRenderDrawColor( renderer, 0xFF, 0xFF, 0xFF, 0xFF );
+  SDL_RenderClear( renderer );
+
+  SDL_Rect area;
+  SDL_Rect rect;
+  SDL_RenderGetViewport(renderer, &area);
+
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    color c = hot(T[cell->self()]);
+    unsigned short R = c.R*255.;
+    unsigned short G = c.G*255.;
+    unsigned short B = c.B*255.;
+
+    rect.x = rint(cell->corner().x/grid.dx)*scale;
+    rect.y = ypix-rint(cell->corner().y/grid.dy)*scale;
+    rect.w = scale;
+    rect.h = scale;
+    SDL_SetRenderDrawColor( renderer, R, G, B, 0xFF );
+    SDL_RenderFillRect(renderer, &rect);
+  }
+}
+  
