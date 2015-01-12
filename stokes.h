@@ -58,6 +58,7 @@ class StokesSolver
     void diffuse_temperature();
     void solve_stokes();
     void draw();
+    double nusselt_number();
     void setup_opengl();
     void update_state(double rayleigh, double gravity_angle = 0);
 };

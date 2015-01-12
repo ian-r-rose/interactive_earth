@@ -2,6 +2,7 @@
 #include "SDL2/SDL.h"
 #include "stokes.h"
 #include <cmath>
+#include <iostream>
 
 const unsigned int nx = 400;
 const unsigned int ny = 100;
@@ -60,6 +61,7 @@ void timestep()
   if(heat_state != 0) handle->add_heat(hx, hy, (heat_state==1 ? true : false));
   handle->semi_lagrangian_advect();
   handle->diffuse_temperature();
+  std::cout<<"Ra: "<<handle->rayleigh_number()<<"\tNu: "<<handle->nusselt_number()<<std::endl;
   ++i;
 }
 
