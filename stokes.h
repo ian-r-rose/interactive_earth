@@ -1,4 +1,4 @@
-#include <fftw3.h>
+#include "fftw3.h"
 #include "staggered_grid.h"
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_opengl.h"

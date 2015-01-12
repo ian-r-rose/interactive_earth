@@ -5,12 +5,16 @@
 #include <iostream>
 #include <iomanip>
 
-const unsigned int nx = 400;
-const unsigned int ny = 100;
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
+const unsigned int nx = 200;
+const unsigned int ny = 50;
 const double lx = 4.0;
 const double ly = 1.0;
 const double Ra = 1.e7;
-const unsigned int scale = 4;
+const unsigned int scale = 8;
 
 const unsigned int xpix = nx*scale;
 const unsigned int ypix = ny*scale;
@@ -87,45 +91,53 @@ void quit()
     exit(0);
 }
 
+void loop()
+{
+  SDL_Event event;
+  SDL_Delay(1);
+  while(SDL_PollEvent(&event))
+  {
+    switch(event.type)
+    {
+      case SDL_QUIT:
+        quit();
+      case SDL_KEYDOWN:
+        if(event.key.keysym.sym == SDLK_ESCAPE)
+          quit();
+        else if(event.key.keysym.sym == SDLK_SPACE)
+          solve_stokes = !solve_stokes;
+      case SDL_MOUSEBUTTONDOWN:
+      case SDL_MOUSEBUTTONUP:
+        handle_mouse_button(&event.button);
+        break;
+      case SDL_MOUSEMOTION:
+        handle_mouse_motion(&event.motion);
+        break;
+      case SDL_MOUSEWHEEL:
+        handle_mouse_wheel(&event.wheel);
+        break;
+      default:
+        break;
+    }
+  }
+  timestep();
+  SDL_RenderPresent(renderer);
+}
+
 int main(int argc, char** argv)
 {
-    SDL_Event event;
     StokesSolver stokes(lx, ly, nx,ny, Ra);
     handle = &stokes;
  
     init();
 
-    while(true)
-    {
-      SDL_Delay(1);
-      while(SDL_PollEvent(&event))
-      {
-        switch(event.type)
-        {
-          case SDL_QUIT:
-            quit();
-          case SDL_KEYDOWN:
-            if(event.key.keysym.sym == SDLK_ESCAPE)
-              quit();
-            else if(event.key.keysym.sym == SDLK_SPACE)
-              solve_stokes = !solve_stokes;
-          case SDL_MOUSEBUTTONDOWN:
-          case SDL_MOUSEBUTTONUP:
-            handle_mouse_button(&event.button);
-            break;
-          case SDL_MOUSEMOTION:
-            handle_mouse_motion(&event.motion);
-	    break;
-	  case SDL_MOUSEWHEEL:
-	    handle_mouse_wheel(&event.wheel);
-            break;
-          default:
-            break;
-        }
-      }
-      timestep();
-      SDL_RenderPresent(renderer);
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(loop, 0, 1);
+#else
+    while (true) {
+        loop();
     }
+#endif
 
     quit();
     return 0;
