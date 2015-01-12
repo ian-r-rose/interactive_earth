@@ -335,6 +335,22 @@ void StokesSolver::setup_stokes_problem()
 }
 
   
+double StokesSolver::nusselt_number() 
+{
+  double heat_flux;
+
+  for ( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    if( cell->at_top_boundary() )
+    {
+      double grad_T = (T[cell->self()] - T[cell->down()])/grid.dy;
+      heat_flux += grad_T;
+    }
+  }
+  return heat_flux * grid.ly/grid.nx;
+}
+  
+      
 
 void StokesSolver::assemble_curl_T_vector()
 {
