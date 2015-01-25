@@ -347,7 +347,7 @@ double StokesSolver::nusselt_number()
       heat_flux += grad_T;
     }
   }
-  return heat_flux * grid.ly/grid.nx;
+  return -heat_flux * grid.ly/grid.nx;
 }
   
       
