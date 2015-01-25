@@ -115,9 +115,7 @@ void loop()
       case SDL_QUIT:
         quit();
       case SDL_KEYDOWN:
-        if(event.key.keysym.sym == SDLK_ESCAPE)
-          quit();
-        else if(event.key.keysym.sym == SDLK_SPACE)
+        if(event.key.keysym.sym == SDLK_SPACE)
           solve_stokes = !solve_stokes;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:
