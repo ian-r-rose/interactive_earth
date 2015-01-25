@@ -31,7 +31,8 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 {
   double rayleigh = handle->rayleigh_number();
-  handle->update_state( rayleigh * std::pow(10.0, double(event->y)/100.0) );  //One hundred tics creates a factor of 10
+  double factor = std::pow(10.0, 1./20.* (event->y < 0 ? -1. : 1.0) );
+  handle->update_state( rayleigh * factor );
 }
   
 

@@ -52,7 +52,10 @@ class StokesSolver
   public:
     StokesSolver( double lx, double ly, int nx, int ny, double Rayleigh);
     ~StokesSolver();
+
     double rayleigh_number() const;
+    double timescale() const;
+
     void add_heat(double x, double y, bool hot);
     void semi_lagrangian_advect();
     void diffuse_temperature();

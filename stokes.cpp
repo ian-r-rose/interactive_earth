@@ -412,3 +412,8 @@ double StokesSolver::rayleigh_number() const
 {
   return Ra;
 }
+
+double StokesSolver::timescale() const
+{
+  return std::pow(Ra, -2./3.) * grid.ly; //Approximately the ascent time for a plume
+}
