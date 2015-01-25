@@ -12,10 +12,10 @@ LINK_FLAGS=
 
 
 stokes: stokes.o main.o rendering.o
-	$(CXX) $(CXX_FLAGS) stokes.o rendering.o main.o libfftw3.a libSDL2.a -o interactive_earth.html $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
+	$(CXX) $(CXX_FLAGS) stokes.o rendering.o main.o libfftw3.a libSDL2.a -o interactive_earth.html --memory-init-file 0 $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
 main.o: main.cpp stokes.h
-	$(CXX) $(CXX_FLAGS) -c main.cpp  $(LINK_FLAGS) $(INCLUDE_DIRS) $(DEFINES) 
+	$(CXX) $(CXX_FLAGS) -c main.cpp $(INCLUDE_DIRS) $(DEFINES) 
 
 stokes.o: stokes.cpp stokes.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) stokes.cpp
