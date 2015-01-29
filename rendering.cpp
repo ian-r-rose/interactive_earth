@@ -90,6 +90,7 @@ void StokesSolver::setup_opengl()
   const char *vs_source =
 #ifdef GL_ES_VERSION_2_0
     "#version 100\n"  // OpenGL ES 2.0
+    "precision mediump float;"
 #else
     "#version 120\n"  // OpenGL 2.1
 #endif
@@ -113,6 +114,7 @@ void StokesSolver::setup_opengl()
   const char *fs_source =
 #ifdef GL_ES_VERSION_2_0
     "#version 100\n"  // OpenGL ES 2.0
+    "precision mediump float;"
 #else
     "#version 120\n"  // OpenGL 2.1
 #endif
