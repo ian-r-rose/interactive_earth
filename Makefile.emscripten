@@ -5,14 +5,15 @@ CXX_FLAGS=-O2
 
 INCLUDE_DIRS=
 LIBRARY_DIRS=
-LIBRARIES=
+LIBRARIES= libfftw3.a libSDL2.a
 
-LINK_FLAGS=
+DEFINES = -DGL_ES_VERSION_2_0
+LINK_FLAGS = --memory-init-file 0 -s ALLOW_MEMORY_GROWTH=0
 
 
 
 stokes: stokes.o main.o rendering.o
-	$(CXX) $(CXX_FLAGS) stokes.o rendering.o main.o libfftw3.a libSDL2.a -o interactive_earth.html --memory-init-file 0 $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
+	$(CXX) $(CXX_FLAGS) stokes.o rendering.o main.o -o interactive_earth.html $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
 main.o: main.cpp stokes.h
 	$(CXX) $(CXX_FLAGS) -c main.cpp $(INCLUDE_DIRS) $(DEFINES) 

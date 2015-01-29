@@ -117,6 +117,11 @@ void loop()
       case SDL_KEYDOWN:
         if(event.key.keysym.sym == SDLK_SPACE)
           solve_stokes = !solve_stokes;
+#ifndef __EMSCRIPTEN__
+        else if(event.key.keysym.sym == SDLK_ESCAPE)
+          quit();
+#endif
+        break;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:
         handle_mouse_button(&event.button);
