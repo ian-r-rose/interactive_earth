@@ -2,6 +2,7 @@
 #include "color.h"
 #include <iostream>
 
+#ifndef LEGACY_OPENGL
 GLuint program;
 GLuint vbo_vertices;
 GLuint vbo_colors;
@@ -31,9 +32,11 @@ void print_log(GLuint object)
   fprintf(stderr, "%s", log);
   free(log);
 }
+#endif //LEGACY_OPENGL
 
 void StokesSolver::setup_opengl()
 {
+#ifndef LEGACY_OPENGL
   //Setup the vertices, indices, and colors
   {
     GLfloat DX = 2.0/grid.nx;
@@ -154,11 +157,14 @@ void StokesSolver::setup_opengl()
     return;
   }
 
+#endif //LEGACY_OPENGL
+
   return;
 }
 
 void StokesSolver::cleanup_opengl()
 {
+#ifndef LEGACY_OPENGL
   delete[] vertices;
   delete[] vertex_colors;
   delete[] triangle_vertex_indices;
@@ -166,10 +172,14 @@ void StokesSolver::cleanup_opengl()
   glDeleteProgram(program);
   glDeleteBuffers(1, &vbo_vertices);
   glDeleteBuffers(1, &vbo_colors);
+#endif //LEGACY_OPENGL
 }
 
 void StokesSolver::draw()
 {
+
+#ifndef LEGACY_OPENGL
+
   const short triangles_per_quad = 2;
   const short vertices_per_triangle = 3;
   const short coordinates_per_vertex = 2;
@@ -245,6 +255,38 @@ void StokesSolver::draw()
 
   glDisableVertexAttribArray(attribute_coord2d);
   glDisableVertexAttribArray(attribute_v_color);
+
+#else 
+
+  double DX = 2.0/grid.nx;
+  double DY = 2.0/grid.ny;
+
+  glClearColor(0.0, 0.0, 0.0, 0.0);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+  glBegin(GL_TRIANGLE_STRIP);
+  for( StaggeredGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
+  {
+    if (cell->at_left_boundary())
+      glBegin(GL_TRIANGLE_STRIP);
+
+    if( !cell->at_right_boundary() )
+    {
+      color c_s = hot(T[cell->self()]);
+      color c_u = hot(T[cell->up()]);
+
+      glColor3f(c_s.R, c_s.G, c_s.B);
+      glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
+      glColor3f(c_u.R, c_u.G, c_u.B);
+      glVertex2f((cell->xindex())*DX-1.0, (cell->yindex()+1)*DY-1.0);
+    }
+    else
+      glEnd();
+  }
+  glFlush();
+  std::cout<<"LEGACY"<<std::endl;
+
+#endif //LEGACY_OPENGL
 
 }
   

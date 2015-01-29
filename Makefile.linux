@@ -7,7 +7,7 @@ C_FLAGS=
 INCLUDE_DIRS=
 LIBRARY_DIRS=
 LIBRARIES= -lfftw3 -lGL -lGLEW -Wl,-rpath, -lSDL2 -lpthread
-
+DEFINES=
 LINK_FLAGS=
 
 
