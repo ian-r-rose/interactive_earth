@@ -10,12 +10,12 @@
 #include <emscripten/emscripten.h>
 #endif
 
-const unsigned int nx = 200;
-const unsigned int ny = 50;
+const unsigned int nx = 400;
+const unsigned int ny = 100;
 const double lx = 4.0;
 const double ly = 1.0;
 const double Ra = 1.e7;
-const unsigned int scale = 8;
+const unsigned int scale = 3;
 
 const unsigned int xpix = nx*scale;
 const unsigned int ypix = ny*scale;
@@ -132,7 +132,7 @@ void loop()
     }
   }
   timestep();
-  SDL_RenderPresent(renderer);
+  SDL_GL_SwapWindow(window);
 }
 
 int main(int argc, char** argv)
