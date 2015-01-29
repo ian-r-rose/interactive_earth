@@ -1,3 +1,4 @@
+#include "GL/glew.h"
 #include "SDL2/SDL_opengl.h"
 #include "SDL2/SDL.h"
 #include "stokes.h"
@@ -5,12 +6,12 @@
 #include <iostream>
 #include <iomanip>
 
-const unsigned int nx = 400;
-const unsigned int ny = 100;
+const unsigned int nx = 800;
+const unsigned int ny = 200;
 const double lx = 4.0;
 const double ly = 1.0;
 const double Ra = 1.e7;
-const unsigned int scale = 4;
+const unsigned int scale = 1;
 
 const unsigned int xpix = nx*scale;
 const unsigned int ypix = ny*scale;
@@ -73,12 +74,22 @@ void init()
 {
     SDL_Init(SDL_INIT_VIDEO);
 
+
     window = SDL_CreateWindow(
        "Convection", 10, 10, scale*nx, scale*ny, 
         SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
     context = SDL_GL_CreateContext(window);
     if (!context)
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext(): %s\n", SDL_GetError());
+
+    glewExperimental=GL_TRUE;
+    GLenum glew_status = glewInit();
+    if (glew_status != GLEW_OK) {
+      fprintf(stderr, "Error: %s\n", glewGetErrorString(glew_status));
+    }
+
+
+    handle->setup_opengl();
 }
 
 void quit()

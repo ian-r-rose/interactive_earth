@@ -1,5 +1,6 @@
 #include <fftw3.h>
 #include "staggered_grid.h"
+#include "GL/glew.h"
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_opengl.h"
 
@@ -36,7 +37,10 @@ class StokesSolver
     fftw_plan dst, idst, dft, idft;
     fftw_complex* curl_T_spectral;
 
- 
+    GLfloat* triangle_vertices;  
+    GLfloat* vertex_colors;
+    GLint* vertex_indices;
+
     //workhorse functions
     void initialize_temperature();
     double heat(const Point&, const Point&);
@@ -62,8 +66,9 @@ class StokesSolver
     void solve_stokes();
     void draw();
     double nusselt_number();
-    void setup_opengl();
     void update_state(double rayleigh, double gravity_angle = 0);
+    int setup_opengl();
+    int cleanup_opengl();
 };
 
 #endif
