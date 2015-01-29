@@ -37,9 +37,9 @@ class StokesSolver
     fftw_plan dst, idst, dft, idft;
     fftw_complex* curl_T_spectral;
 
-    GLfloat* triangle_vertices;  
+    GLfloat* vertices;  
     GLfloat* vertex_colors;
-    GLint* vertex_indices;
+    GLint* triangle_vertex_indices;
 
     //workhorse functions
     void initialize_temperature();
@@ -67,8 +67,9 @@ class StokesSolver
     void draw();
     double nusselt_number();
     void update_state(double rayleigh, double gravity_angle = 0);
-    int setup_opengl();
-    int cleanup_opengl();
+
+    void setup_opengl();
+    void cleanup_opengl();
 };
 
 #endif

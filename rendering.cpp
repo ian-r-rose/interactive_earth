@@ -3,8 +3,9 @@
 #include <iostream>
 
 GLuint program;
-GLuint vbo_triangle;
-GLuint vbo_triangle_colors;
+GLuint vbo_vertices;
+GLuint vbo_colors;
+GLuint vbo_triangle_vertex_indices;
 GLint attribute_coord2d;
 GLint attribute_v_color;
 
@@ -31,7 +32,7 @@ void print_log(GLuint object)
   free(log);
 }
 
-int StokesSolver::setup_opengl()
+void StokesSolver::setup_opengl()
 {
   //Setup the vertices, indices, and colors
   {
@@ -44,42 +45,42 @@ int StokesSolver::setup_opengl()
     const unsigned long n_triangles = grid.nx * (grid.ny-1) * triangles_per_quad;
     
 
-    triangle_vertices = new GLfloat[ n_triangles * vertices_per_triangle * coordinates_per_vertex ];
+    vertices = new GLfloat[ n_triangles * vertices_per_triangle * coordinates_per_vertex ];
     vertex_colors = new GLfloat[ n_triangles * vertices_per_triangle * colors_per_vertex ];
-//    vertex_indices = new GLint[ n_triangles * vertices_per_triangle ];
+    triangle_vertex_indices = new GLint[ n_triangles * vertices_per_triangle ];
     
     unsigned long i=0;
     for( StaggeredGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
     {
       //Triangle 1, vertex 1
-      triangle_vertices[i + 0] = cell->xindex()*DX-1.0f;
-      triangle_vertices[i + 1] = cell->yindex()*DY-1.0f;
+      vertices[i + 0] = cell->xindex()*DX-1.0f;
+      vertices[i + 1] = cell->yindex()*DY-1.0f;
       //Triangle 1, vertex 2
-      triangle_vertices[i + 2] = cell->xindex()*DX-1.0f;
-      triangle_vertices[i + 3] = (cell->yindex()+1)*DY-1.0f;
+      vertices[i + 2] = cell->xindex()*DX-1.0f;
+      vertices[i + 3] = (cell->yindex()+1)*DY-1.0f;
       //Triangle 1, vertex 3
-      triangle_vertices[i + 4] = (cell->xindex()+1)*DX-1.0f;
-      triangle_vertices[i + 5] = cell->yindex()*DY-1.0f;
+      vertices[i + 4] = (cell->xindex()+1)*DX-1.0f;
+      vertices[i + 5] = cell->yindex()*DY-1.0f;
 
       //Triangle 2, vertex 1
-      triangle_vertices[i + 6] = (cell->xindex()+1)*DX-1.0f;
-      triangle_vertices[i + 7] = cell->yindex()*DY-1.0f;
+      vertices[i + 6] = (cell->xindex()+1)*DX-1.0f;
+      vertices[i + 7] = cell->yindex()*DY-1.0f;
       //Triangle 2, vertex 2
-      triangle_vertices[i + 8] = cell->xindex()*DX-1.0f;
-      triangle_vertices[i + 9] = (cell->yindex()+1)*DY-1.0f;
+      vertices[i + 8] = cell->xindex()*DX-1.0f;
+      vertices[i + 9] = (cell->yindex()+1)*DY-1.0f;
       //Triangle 2, vertex 3
-      triangle_vertices[i + 10] = (cell->xindex()+1)*DX-1.0f;
-      triangle_vertices[i + 11] = (cell->yindex()+1)*DY-1.0f;
+      vertices[i + 10] = (cell->xindex()+1)*DX-1.0f;
+      vertices[i + 11] = (cell->yindex()+1)*DY-1.0f;
    
       i+=triangles_per_quad * vertices_per_triangle * coordinates_per_vertex;
     }
 
-    glGenBuffers(1, &vbo_triangle);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_triangle);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_triangles*vertices_per_triangle*coordinates_per_vertex, triangle_vertices, GL_STATIC_DRAW);
+    glGenBuffers(1, &vbo_vertices);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_triangles*vertices_per_triangle*coordinates_per_vertex, vertices, GL_STATIC_DRAW);
 
-    glGenBuffers(1, &vbo_triangle_colors);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_triangle_colors);
+    glGenBuffers(1, &vbo_colors);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_colors), vertex_colors, GL_STATIC_DRAW);
   }
 
@@ -105,7 +106,7 @@ int StokesSolver::setup_opengl()
   glGetShaderiv(vs, GL_COMPILE_STATUS, &compile_ok);
   if (!compile_ok) {
     fprintf(stderr, "Error in vertex shader\n");
-    return 0;
+    return;
   }
 
   GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
@@ -124,7 +125,7 @@ int StokesSolver::setup_opengl()
   glGetShaderiv(fs, GL_COMPILE_STATUS, &compile_ok);
   if (!compile_ok) {
     fprintf(stderr, "Error in fragment shader\n");
-    return 0;
+    return;
   }
 
   program = glCreateProgram();
@@ -135,23 +136,34 @@ int StokesSolver::setup_opengl()
   if (!link_ok) {
     fprintf(stderr, "glLinkProgram:");
     print_log(program);
-    return 0;
+    return;
   }
 
   const char* attribute_name = "coord2d";
   attribute_coord2d = glGetAttribLocation(program, attribute_name);
   if (attribute_coord2d == -1) {
     fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-    return 0;
+    return;
   }
   attribute_name = "v_color";
   attribute_v_color = glGetAttribLocation(program, attribute_name);
   if (attribute_v_color == -1) {
     fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-    return 0;
+    return;
   }
 
-  return 1;
+  return;
+}
+
+void StokesSolver::cleanup_opengl()
+{
+  delete[] vertices;
+  delete[] vertex_colors;
+  delete[] triangle_vertex_indices;
+
+  glDeleteProgram(program);
+  glDeleteBuffers(1, &vbo_vertices);
+  glDeleteBuffers(1, &vbo_colors);
 }
 
 void StokesSolver::draw()
@@ -204,7 +216,7 @@ void StokesSolver::draw()
   glUseProgram(program);
   glEnableVertexAttribArray(attribute_coord2d);
   /* Describe our vertices array to OpenGL (it can't guess its format automatically) */
-  glBindBuffer(GL_ARRAY_BUFFER, vbo_triangle);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
   glVertexAttribPointer(
     attribute_coord2d, // attribute
     2,                 // number of elements per vertex, here (x,y)
@@ -216,7 +228,7 @@ void StokesSolver::draw()
 
   glEnableVertexAttribArray(attribute_v_color);
   /* Describe our vertices array to OpenGL (it can't guess its format automatically) */
-  glBindBuffer(GL_ARRAY_BUFFER, vbo_triangle_colors);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
   glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_triangles*vertices_per_triangle*colors_per_vertex, vertex_colors, GL_STATIC_DRAW);
   glVertexAttribPointer(
     attribute_v_color, // attribute

@@ -94,6 +94,7 @@ void init()
 
 void quit()
 {
+    handle->cleanup_opengl();
     SDL_GL_DeleteContext(context);
     SDL_Quit();
     exit(0);
