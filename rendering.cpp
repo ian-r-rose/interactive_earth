@@ -8,29 +8,6 @@ GLuint vbo_colors;
 GLuint vbo_triangle_vertex_indices;
 GLint attribute_coord2d;
 GLint attribute_v_color;
-
-void print_log(GLuint object)
-{
-  GLint log_length = 0;
-  if (glIsShader(object))
-    glGetShaderiv(object, GL_INFO_LOG_LENGTH, &log_length);
-  else if (glIsProgram(object))
-    glGetProgramiv(object, GL_INFO_LOG_LENGTH, &log_length);
-  else {
-    fprintf(stderr, "printlog: Not a shader or a program\n");
-    return;
-  }
-
-  char* log = (char*)malloc(log_length);
-
-  if (glIsShader(object))
-    glGetShaderInfoLog(object, log_length, NULL, log);
-  else if (glIsProgram(object))
-    glGetProgramInfoLog(object, log_length, NULL, log);
-
-  fprintf(stderr, "%s", log);
-  free(log);
-}
 #endif //LEGACY_OPENGL
 
 void StokesSolver::setup_opengl()
@@ -139,7 +116,6 @@ void StokesSolver::setup_opengl()
   glGetProgramiv(program, GL_LINK_STATUS, &link_ok);
   if (!link_ok) {
     fprintf(stderr, "glLinkProgram:");
-    print_log(program);
     return;
   }
 
