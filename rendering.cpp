@@ -1,6 +1,5 @@
 #include "stokes.h"
 #include "color.h"
-#include <iostream>
 
 #ifndef LEGACY_OPENGL
 GLuint program;
@@ -284,7 +283,6 @@ void StokesSolver::draw()
       glEnd();
   }
   glFlush();
-  std::cout<<"LEGACY"<<std::endl;
 
 #endif //LEGACY_OPENGL
 
