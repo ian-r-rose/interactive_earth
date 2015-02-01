@@ -10,43 +10,52 @@
 class StokesSolver
 {
   private:
-    
+   
+    //Information about the grid
     int nx,ny;
     int ncells;
-    double Ra;
-    double dt;
-    double theta;
-    double gamma;
+   
+    //Current model parameters
+    double Ra;  //Rayleigh number
+    double dt;  //timestep
+    double theta;  //Direction of gravity
 
+    //Info about how to add heat on clicking
     double heat_source_radius;
     double heat_source;
 
+    //The full grid, which knows how to iterate,
+    //get geometric information, etc.
     StaggeredGrid grid;
     
+    //Vectors which are used in the solve
+    double *T;  //Temperature
+    double *scratch1, *scratch2;  //Scratch vectors for storing temporary information
+    double *freqs;  //Frequencies in spectral space for the stokes solve
+    double *stream;  //Stream function solution
+    double *curl_T; //Curl of temperature for the stream function solution
+    double *u; //velocity in the x direction
+    double *v; //Velocity in the y direction
 
-    double *T;
-    double *scratch1, *scratch2;
+    //Auxiliary vectors used in solving the diffusion equation
     double *g, *lux, *luy;
-    double *freqs;
-    double *vorticity;
-    double *stream;
-    double *curl_T;
-    double *u;
-    double *v;
+    double gamma; //Auxiliary constant for solving the diffusion equation. 
 
-    fftw_plan dst, idst, dft, idft;
-    fftw_complex* curl_T_spectral;
+    //FFTW stuff
+    fftw_plan dst, idst, dft, idft; //FFTW plans for doing the forward and inverse transforms
+    fftw_complex* curl_T_spectral;  //Curl of temperature in spectral space
 
+    //Data for rendering with OpenGL
     GLfloat* vertices;  
     GLfloat* vertex_colors;
     GLint* triangle_vertex_indices;
 
     //workhorse functions
-    void initialize_temperature();
-    double heat(const Point&, const Point&);
-    void setup_stokes_problem();
-    void setup_diffusion_problem();
-    void assemble_curl_T_vector();
+    void initialize_temperature();  //just like it says
+    double heat(const Point&, const Point&);  //heating term at a point, given where the click has happened
+    void setup_stokes_problem();  //Setup for spectral solve
+    void setup_diffusion_problem(); //Setup for diffusion solve (needs to be called every time the Ra is changed)
+    void assemble_curl_T_vector(); //Assembling RHS for spectral solve.  Called every timestep
    
     //functions for evaluating field at points
     double initial_temperature(const Point&);
@@ -54,22 +63,24 @@ class StokesSolver
     Point velocity(const Point&);
 
   public:
+    //Constructor and destructor
     StokesSolver( double lx, double ly, int nx, int ny, double Rayleigh);
     ~StokesSolver();
 
-    double rayleigh_number() const;
-    double timescale() const;
+    //Querying physics information about the solver
+    double rayleigh_number() const;  //return Ra
+    double timescale() const;  //Characteristic timescale, which is scaled to plume ascent time
+    double nusselt_number(); //Calculate nusselt number at a timestep
 
-    void add_heat(double x, double y, bool hot);
-    void semi_lagrangian_advect();
-    void diffuse_temperature();
-    void solve_stokes();
-    void draw();
-    double nusselt_number();
-    void update_state(double rayleigh, double gravity_angle = 0);
+    void add_heat(double x, double y, bool hot); //Add heat at a point, with the bool indicating whether it is hot or cold
+    void semi_lagrangian_advect();  //Advect temperature through the velocity field
+    void diffuse_temperature(); //Diffuse temperature
+    void solve_stokes(); //Solve for velocity field
+    void draw();  //Render using OpenGL
+    void update_state(double rayleigh, double gravity_angle = 0);  //Update the state of the solver
 
-    void setup_opengl();
-    void cleanup_opengl();
+    void setup_opengl();  //Setup OpenGL data structures
+    void cleanup_opengl(); //Cleanup OpenGL data structures
 };
 
 #endif

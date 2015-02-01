@@ -25,6 +25,8 @@ class StaggeredGrid
     class iterator;
     class reverse_iterator;
 
+    //Basic cell data type, which knows its own index, 
+    //geometric properties, and how to access its neighbors.
     class Cell 
     {
       public:
@@ -55,22 +57,25 @@ class StaggeredGrid
         bool at_right_boundary() {return (id+1)%grid.nx == 0;};
         bool at_boundary() {return at_top_boundary() || at_bottom_boundary() || at_left_boundary() || at_right_boundary(); }
 
-        //Get some location information
-        Point center() { Point p; p.x = xindex()*grid.dx + grid.dx/2.0; p.y = yindex()*grid.dy + grid.dy/2.0;  return p;};
-        Point corner() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy;  return p;};
-        Point hface() { Point p; p.x = xindex()*grid.dx + grid.dx/2.0; p.y = yindex()*grid.dy;  return p;};
-        Point vface() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy + grid.dy/2.0;  return p;};
+        //Get some location information.  This is more complicated than a nonstaggered grid,
+        //as different of the properties will be found on different parts of the cell.
+        Point center() { Point p; p.x = xindex()*grid.dx + grid.dx/2.0; p.y = yindex()*grid.dy + grid.dy/2.0;  return p;}; //center of cell
+        Point corner() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy;  return p;}; //lower left
+        Point hface() { Point p; p.x = xindex()*grid.dx + grid.dx/2.0; p.y = yindex()*grid.dy;  return p;}; //horizontal (bottom) face of cell
+        Point vface() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy + grid.dy/2.0;  return p;}; //vertical (left) face of cell
 
         
       private:
-        const StaggeredGrid& grid;
-        int id;
+        const StaggeredGrid& grid;  //Const reference to the grid
+        int id; //id of the cell, which will correspond to its index in vectors
 
       friend class StaggeredGrid::iterator;
       friend class StaggeredGrid::reverse_iterator;
 
     };
 
+    //Lightweight iterator that starts at the first grid cell
+    //(bottom left), and iterates over all the cells.
     class iterator : public std::iterator<std::input_iterator_tag, Cell>
     {
       private:
@@ -87,6 +92,8 @@ class StaggeredGrid
         Cell &operator*() {return c;}
         Cell* operator->() {return &c;}
     };
+    //Lightweight iterator that starts at the last grid cell (top right),
+    //and iterates backwards over all the cells.
     class reverse_iterator : public std::iterator<std::input_iterator_tag, Cell>
     {
       private:
@@ -107,8 +114,8 @@ class StaggeredGrid
     //const members so we can query directly
     const double lx, ly; //Length in x,y directions
     const int nx, ny; //Number of cells in x,y directions
-    const double dx, dy; //Number of cells in x,y directions
-    const int ncells;
+    const double dx, dy; //grid cell spacing in x,y directions
+    const int ncells; //Total number of cells
 
     StaggeredGrid(const double lenx, const double leny, const unsigned int numx, const unsigned int numy)
                   : lx(lenx), ly(leny), nx(numx), ny(numy), dx(lx/nx), dy(ly/ny), ncells(nx*ny) {}; 
@@ -132,7 +139,10 @@ class StaggeredGrid
 };
 
 
-inline double lagrange_interp_2d( double x, double y, double ul, double u, double ur,
+//Cubic lagrange interpolation at an arbitrary point, given the values of the 
+//function at a nine-point stencil around it.  I am currently using linear
+//rather than cubic interpolation for performance reasons.
+inline double cubic_interp_2d( double x, double y, double ul, double u, double ur,
                                   double l, double c, double r, double dl, double d, double dr)
 {
   return   ul*(x)*(x-1.0)*(y)*(y+1.0)/4.0 
@@ -146,6 +156,8 @@ inline double lagrange_interp_2d( double x, double y, double ul, double u, doubl
          + dr*(x)*(x+1.0)*(y)*(y-1.0)/4.0;
 }
 
+//Linear interpolation at a point, given the values at a four-point stencil
+//around it.
 inline double linear_interp_2d(double x, double y, double ul, double ur, double dl, double dr)
 {
   return - ul * (x-1.0) * (y)
