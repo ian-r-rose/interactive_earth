@@ -7,7 +7,7 @@
 #ifndef STOKES_H
 #define STOKES_H
 
-class StokesSolver
+class ConvectionSimulator
 {
   private:
    
@@ -64,8 +64,8 @@ class StokesSolver
 
   public:
     //Constructor and destructor
-    StokesSolver( double lx, double ly, int nx, int ny, double Rayleigh);
-    ~StokesSolver();
+    ConvectionSimulator( double lx, double ly, int nx, int ny, double Rayleigh);
+    ~ConvectionSimulator();
 
     //Querying physics information about the solver
     double rayleigh_number() const;  //return Ra

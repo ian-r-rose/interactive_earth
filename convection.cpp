@@ -1,4 +1,4 @@
-#include "stokes.h"
+#include "convection.h"
 #include <cmath>
 
 
@@ -9,7 +9,7 @@
   ny : number of cells  in y direction
   Rayleigh : initial Rayleigh number
 */
-StokesSolver::StokesSolver( double lx, double ly, int nx, int ny, double Rayleigh):
+ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, double Rayleigh):
                           nx(nx), ny(ny), ncells(nx*ny), Ra(Rayleigh),
                           grid(lx, ly, nx, ny), 
                           theta(0.0)
@@ -43,7 +43,7 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny, double Rayleig
 }
 
 /* Destructor for the solver.*/
-StokesSolver::~StokesSolver()
+ConvectionSimulator::~ConvectionSimulator()
 {
   delete[] T;
   delete[] stream;
@@ -66,7 +66,7 @@ StokesSolver::~StokesSolver()
  
 /* Functional form of initial temperature field.  
    Just start with a constant value of one half.*/
-double StokesSolver::initial_temperature(const Point &p)
+double ConvectionSimulator::initial_temperature(const Point &p)
 {
 //  if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
 //  else if (std::sqrt( (1.65-p.x)*(1.65-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 0.0;
@@ -75,7 +75,7 @@ double StokesSolver::initial_temperature(const Point &p)
 }
 
 /* Loop over all the cells and set the initial temperature */
-void StokesSolver::initialize_temperature()
+void ConvectionSimulator::initialize_temperature()
 {
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = initial_temperature(cell->center());
@@ -83,7 +83,7 @@ void StokesSolver::initialize_temperature()
  
 /* Given a heat source centered on p1, calculate the heating at
    point p2, using a simple Gaussian source term */ 
-inline double StokesSolver::heat(const Point &p1, const Point &p2 )
+inline double ConvectionSimulator::heat(const Point &p1, const Point &p2 )
 {
   const double rsq = (p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y);
   return heat_source*std::exp( -rsq/2.0/heat_source_radius/heat_source_radius );
@@ -91,7 +91,7 @@ inline double StokesSolver::heat(const Point &p1, const Point &p2 )
 
 /* Loop over all the cells and add heat according to where the current heat
    source is. */
-void StokesSolver::add_heat(double x, double y, bool hot)
+void ConvectionSimulator::add_heat(double x, double y, bool hot)
 {
   Point p; p.x = x; p.y=y;
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
@@ -103,7 +103,7 @@ void StokesSolver::add_heat(double x, double y, bool hot)
 
 /* Interpolate the velocity onto an arbitrary point
    A bit complicated due to the staggered nature of the grid */
-Point StokesSolver::velocity(const Point &p)
+Point ConvectionSimulator::velocity(const Point &p)
 {
   Point vel;
 
@@ -143,7 +143,7 @@ Point StokesSolver::velocity(const Point &p)
 } 
 
 /* Interpolate the temperature onto an arbitrary point. */
-inline double StokesSolver::temperature(const Point &p)
+inline double ConvectionSimulator::temperature(const Point &p)
 {
   double temp;
   StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
@@ -169,7 +169,7 @@ inline double StokesSolver::temperature(const Point &p)
    is kind of slow.  Here I do it in a very coarse way to make up for
    that.  A more accurate implementation would use better-than-linear
    interpolation and use more iterations. */
-void StokesSolver::semi_lagrangian_advect()
+void ConvectionSimulator::semi_lagrangian_advect()
 {
   //The goal is to find the temperature at the Lagrangian point which will 
   //be advected to the current grid point in one time step.  In general,
@@ -235,7 +235,7 @@ void StokesSolver::semi_lagrangian_advect()
    non-tridiagonal parts.  This is kind of complicated and needs 
    to be better documented.  The good news is that it is fast and
    unconditionally stable.  */
-void StokesSolver::diffuse_temperature()
+void ConvectionSimulator::diffuse_temperature()
 {
 
   //First do diffusion in the y direction
@@ -303,7 +303,7 @@ void StokesSolver::diffuse_temperature()
 }
 
   
-void StokesSolver::setup_diffusion_problem()
+void ConvectionSimulator::setup_diffusion_problem()
 {
 
   double eta_x = dt/grid.dx/grid.dx;
@@ -360,7 +360,7 @@ void StokesSolver::setup_diffusion_problem()
 /* Setup the stokes solve with the stream function formulation.
    We assemble the vector that stores the frequencies of the
    eigenmodes, as well as tell FFTW how to do the transforms */
-void StokesSolver::setup_stokes_problem()
+void ConvectionSimulator::setup_stokes_problem()
 {
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
@@ -399,7 +399,7 @@ void StokesSolver::setup_stokes_problem()
   In principle I could calculate the heat flux through the bottom
   boundary as well, and take the average, but as it is, I am only
   doing the heat flux through the top boundary*/
-double StokesSolver::nusselt_number() 
+double ConvectionSimulator::nusselt_number() 
 {
   double heat_flux;
 
@@ -417,7 +417,7 @@ double StokesSolver::nusselt_number()
       
 //The curl of the temperature is what is relevant for the stream
 //function calculation.  This calculates that curl.
-void StokesSolver::assemble_curl_T_vector()
+void ConvectionSimulator::assemble_curl_T_vector()
 {
   //Assemble curl_T vector
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
@@ -436,7 +436,7 @@ void StokesSolver::assemble_curl_T_vector()
 
 
 /* Actually solve the biharmonic equation for the Stokes system.*/
-void StokesSolver::solve_stokes()
+void ConvectionSimulator::solve_stokes()
 { 
   //Come up with the RHS of the spectral solve
   assemble_curl_T_vector();
@@ -480,7 +480,7 @@ void StokesSolver::solve_stokes()
 }
 
 
-void StokesSolver::update_state(double rayleigh, double gravity_angle)
+void ConvectionSimulator::update_state(double rayleigh, double gravity_angle)
 {
   theta = gravity_angle; //update the angle of gravity
   double length_scale = std::pow(rayleigh, -1./3.)*grid.ly;  //calculate a provisional length scale
@@ -500,12 +500,12 @@ void StokesSolver::update_state(double rayleigh, double gravity_angle)
 }
 
 
-double StokesSolver::rayleigh_number() const
+double ConvectionSimulator::rayleigh_number() const
 {
   return Ra;
 }
 
-double StokesSolver::timescale() const
+double ConvectionSimulator::timescale() const
 {
   return std::pow(Ra, -2./3.) * grid.ly; //Approximately the ascent time for a plume
 }

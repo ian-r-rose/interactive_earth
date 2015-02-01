@@ -12,16 +12,16 @@ LINK_FLAGS = --memory-init-file 0 -s ALLOW_MEMORY_GROWTH=0
 
 
 
-stokes: stokes.o main.o rendering.o
-	$(CXX) $(CXX_FLAGS) stokes.o rendering.o main.o -o interactive_earth.html $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
+convection: convection.o main.o rendering.o
+	$(CXX) $(CXX_FLAGS) convection.o rendering.o main.o -o interactive_earth.html $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
-main.o: main.cpp stokes.h
+main.o: main.cpp convection.h
 	$(CXX) $(CXX_FLAGS) -c main.cpp $(INCLUDE_DIRS) $(DEFINES) 
 
-stokes.o: stokes.cpp stokes.h
-	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) stokes.cpp
+convection.o: convection.cpp convection.h
+	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) convection.cpp
 
-rendering.o: rendering.cpp stokes.h
+rendering.o: rendering.cpp convection.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) rendering.cpp
 
 .PHONY: clean

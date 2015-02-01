@@ -1,7 +1,7 @@
 #include "GL/glew.h"
 #include "SDL2/SDL_opengl.h"
 #include "SDL2/SDL.h"
-#include "stokes.h"
+#include "convection.h"
 #include <cmath>
 #include <iostream>
 #include <iomanip>
@@ -45,7 +45,7 @@ bool solve_stokes = true;
 //Pointer for the solver so that the various event handlers
 //can access it.  Did it this way due to the way GLUT is 
 //organized, not really necessary now that I am using SDL.
-StokesSolver* handle = NULL;
+ConvectionSimulator* handle = NULL;
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -186,7 +186,7 @@ void loop()
 
 int main(int argc, char** argv)
 {
-    StokesSolver stokes(lx, ly, nx,ny, Ra);
+    ConvectionSimulator stokes(lx, ly, nx,ny, Ra);
     handle = &stokes;
  
     init();

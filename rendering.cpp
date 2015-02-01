@@ -1,4 +1,4 @@
-#include "stokes.h"
+#include "convection.h"
 #include "color.h"
 
 #ifndef LEGACY_OPENGL
@@ -10,7 +10,7 @@ GLint attribute_coord2d;
 GLint attribute_v_color;
 #endif //LEGACY_OPENGL
 
-void StokesSolver::setup_opengl()
+void ConvectionSimulator::setup_opengl()
 {
 #ifndef LEGACY_OPENGL
   //Setup the vertices, indices, and colors
@@ -137,7 +137,7 @@ void StokesSolver::setup_opengl()
   return;
 }
 
-void StokesSolver::cleanup_opengl()
+void ConvectionSimulator::cleanup_opengl()
 {
 #ifndef LEGACY_OPENGL
   delete[] vertices;
@@ -150,7 +150,7 @@ void StokesSolver::cleanup_opengl()
 #endif //LEGACY_OPENGL
 }
 
-void StokesSolver::draw()
+void ConvectionSimulator::draw()
 {
 
 #ifndef LEGACY_OPENGL
