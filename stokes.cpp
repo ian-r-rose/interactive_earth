@@ -1,13 +1,21 @@
 #include "stokes.h"
 #include <cmath>
 
+
+/*Constructor for the solver. The parameters are in order:
+  lx : domain size in x direction
+  ly : domain size in y direction
+  nx : number of cells  in x direction
+  ny : number of cells  in y direction
+  Rayleigh : initial Rayleigh number
+*/
 StokesSolver::StokesSolver( double lx, double ly, int nx, int ny, double Rayleigh):
                           nx(nx), ny(ny), ncells(nx*ny), Ra(Rayleigh),
                           grid(lx, ly, nx, ny), 
                           theta(0.0)
 {
+  //Allocate memory for data vectors
   T = new double[ncells];
-  vorticity = new double[ncells];
   stream = new double[ncells];
   curl_T = new double[ncells];
   lux = new double[ncells];
@@ -19,21 +27,25 @@ StokesSolver::StokesSolver( double lx, double ly, int nx, int ny, double Rayleig
   scratch1 = new double[ncells];
   scratch2 = new double[ncells];
 
-  curl_T_spectral = new fftw_complex[nx*ny];
+  //I actually allocate more memory than necessary for the 
+  //spectral vector, but this way it makes the indexing simpler
+  curl_T_spectral = new fftw_complex[ncells];
 
+  //Initialize the state
   update_state(Rayleigh, theta);
-  
   initialize_temperature();
-  assemble_curl_T_vector();
+
+  //Do some setup work for solving stokes and
+  //diffustion problems. 
   setup_stokes_problem();
   setup_diffusion_problem();
 
 }
 
+/* Destructor for the solver.*/
 StokesSolver::~StokesSolver()
 {
   delete[] T;
-  delete[] vorticity;
   delete[] stream;
   delete[] curl_T;
   delete[] lux;
@@ -52,7 +64,8 @@ StokesSolver::~StokesSolver()
   fftw_destroy_plan(idft);
 }
  
-
+/* Functional form of initial temperature field.  
+   Just start with a constant value of one half.*/
 double StokesSolver::initial_temperature(const Point &p)
 {
 //  if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
@@ -61,18 +74,23 @@ double StokesSolver::initial_temperature(const Point &p)
   return 0.5;
 }
 
+/* Loop over all the cells and set the initial temperature */
 void StokesSolver::initialize_temperature()
 {
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = initial_temperature(cell->center());
 }
  
+/* Given a heat source centered on p1, calculate the heating at
+   point p2, using a simple Gaussian source term */ 
 inline double StokesSolver::heat(const Point &p1, const Point &p2 )
 {
   const double rsq = (p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y);
   return heat_source*std::exp( -rsq/2.0/heat_source_radius/heat_source_radius );
 }
 
+/* Loop over all the cells and add heat according to where the current heat
+   source is. */
 void StokesSolver::add_heat(double x, double y, bool hot)
 {
   Point p; p.x = x; p.y=y;
@@ -83,17 +101,21 @@ void StokesSolver::add_heat(double x, double y, bool hot)
 
 
 
-//interpolate the velocity onto an arbitrary point
-//Kind of a mess...
+/* Interpolate the velocity onto an arbitrary point
+   A bit complicated due to the staggered nature of the grid */
 Point StokesSolver::velocity(const Point &p)
 {
   Point vel;
+
+  //Get the relevant lower-left cells for the x and y velocities
   StaggeredGrid::iterator x_cell = grid.lower_left_vface_cell(p); 
   StaggeredGrid::iterator y_cell = grid.lower_left_hface_cell(p); 
 
+  //Determine the local x and y coordinates for the x velocity
   double vx_local_x = (p.x - x_cell->vface().x)/grid.dx;
   double vx_local_y = (p.y - x_cell->vface().y)/grid.dy;
 
+  //Determine the local x and y coordinates for the y velocity
   double vy_local_x = (p.x - y_cell->hface().x)/grid.dx;
   double vy_local_y = (p.y - y_cell->hface().y)/grid.dy;
 
@@ -101,8 +123,8 @@ Point StokesSolver::velocity(const Point &p)
   if(x_cell->at_top_boundary())
     vel.x = linear_interp_2d (vx_local_x, vx_local_y, u[x_cell->self()], 
                               u[x_cell->right()], u[x_cell->self()], u[x_cell->right()]);
-  else if(x_cell->at_bottom_boundary() && vx_local_x < 0.0)
-    vel.x = linear_interp_2d (vx_local_x, vx_local_y, u[x_cell->self()], 
+  else if(x_cell->at_bottom_boundary() && vx_local_y < 0.0)
+    vel.x = linear_interp_2d (vx_local_x, 1.0+vx_local_y, u[x_cell->self()], 
                               u[x_cell->right()], u[x_cell->self()], u[x_cell->right()]);
   else
     vel.x = linear_interp_2d (vx_local_x, vx_local_y, u[x_cell->up()], u[x_cell->upright()],
@@ -120,6 +142,7 @@ Point StokesSolver::velocity(const Point &p)
   return vel;
 } 
 
+/* Interpolate the temperature onto an arbitrary point. */
 inline double StokesSolver::temperature(const Point &p)
 {
   double temp;
@@ -128,11 +151,11 @@ inline double StokesSolver::temperature(const Point &p)
   double local_y = (p.y - cell->center().y)/grid.dy;
 
   if (cell->at_top_boundary() )
-    temp = linear_interp_2d( local_x, local_y, 0.0, 0.0,  
+    temp = linear_interp_2d( local_x, local_y, -T[cell->self()], -T[cell->right()],  
                              T[cell->self()], T[cell->right()]);
   else if (cell->at_bottom_boundary() && local_y < 0.0)
     temp = linear_interp_2d( local_x, local_y-grid.dy, 
-                             T[cell->self()], T[cell->right()], 1.0, 1.0);
+                             T[cell->self()], T[cell->right()], 2.0-T[cell->self()], 2.0-T[cell->right()]);
   else
     temp = linear_interp_2d( local_x, local_y, T[cell->up()], T[cell->upright()],
                              T[cell->self()], T[cell->right()]);
@@ -140,44 +163,78 @@ inline double StokesSolver::temperature(const Point &p)
   return temp;
 }
   
-
+/* Advect the temperature field through the velocity field using
+   Semi-lagrangian advection.  This scheme is quite stable, which
+   allows me to take VERY large time steps.  The drawback is that it
+   is kind of slow.  Here I do it in a very coarse way to make up for
+   that.  A more accurate implementation would use better-than-linear
+   interpolation and use more iterations. */
 void StokesSolver::semi_lagrangian_advect()
 {
+  //The goal is to find the temperature at the Lagrangian point which will 
+  //be advected to the current grid point in one time step.  In general,
+  //this point wil not be on the grid.  I find this point using a coarse
+  //iterated predictor corrector.  
 
-  Point vel_final;
-  Point vel_takeoff;
-  Point takeoff_point;
-  Point final_point;
+  Point vel_final;  //Velocity at the grid point
+  Point vel_takeoff; //Velocity at the candidate takeoff point
+  Point takeoff_point; //Candidate takeoff point
+  Point final_point; //grid point
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
+    //These points are known, as they are the grid points in question.  They will
+    //not change for this cell.
     vel_final.x = (u[cell->self()]+u[cell->right()])/2.0;
     vel_final.y = (v[cell->up()]+v[cell->self()])/2.0;
     final_point = cell->center();
+
   
+    //Calculate the initial guess for the takeoff point using a basic predictor
+    //with a forward euler step
     takeoff_point.x = final_point.x - vel_final.x*dt;
     takeoff_point.y = final_point.y - vel_final.y*dt;
+    //Keep it in the domain
     takeoff_point.x = (takeoff_point.x < 0.0 ? takeoff_point.x+grid.lx : 
                       (takeoff_point.x >= grid.lx ? takeoff_point.x-grid.lx : takeoff_point.x));
-    takeoff_point.y = (takeoff_point.y < 0.0 ? takeoff_point.y+grid.ly : 
-                      (takeoff_point.y >= grid.ly ? takeoff_point.y-grid.ly : takeoff_point.y));
+    takeoff_point.y = (takeoff_point.y < 0.0 ? 0.0 : 
+                      (takeoff_point.y >= grid.ly ? grid.ly : takeoff_point.y));
+
+    //Iterate on the corrector.  Here I only do one iteration for
+    //performance reasons, but in principle we could do more to get
+    //a better estimate.
     for(unsigned int i=0; i<1; ++i)
     {
+      //Evaluate the velocity at the predictor
       vel_takeoff = velocity(takeoff_point);
+      //Come up with the corrector using a midpoint rule
       takeoff_point.x = final_point.x - (vel_final.x + vel_takeoff.x)*dt/2.0;
       takeoff_point.y = final_point.y - (vel_final.y + vel_takeoff.y)*dt/2.0;
+      //Keep in domain
       takeoff_point.x = (takeoff_point.x < 0.0 ? takeoff_point.x+grid.lx : 
                         (takeoff_point.x >= grid.lx ? takeoff_point.x-grid.lx : takeoff_point.x));
-      takeoff_point.y = (takeoff_point.y < 0.0 ? takeoff_point.y+grid.ly : 
-                        (takeoff_point.y >= grid.ly ? takeoff_point.y-grid.ly : takeoff_point.y));
+      takeoff_point.y = (takeoff_point.y < 0.0 ? 0.0 : 
+                        (takeoff_point.y >= grid.ly ? grid.ly : takeoff_point.y));
     } 
-    scratch1[cell->self()] = temperature(takeoff_point);
+    scratch1[cell->self()] = temperature(takeoff_point);  //Store the temperature we found
   }
-  
+   
+  //Copy the scratch vector into the temperature vector. 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = scratch1[cell->self()];
 }
 
+/* Solve the diffusion equation implicitly with reverse Euler.
+   I do the x and y direction separately, so in all cases I am
+   solving a series of tridiagonal matrix equations.  This allows
+   me to solve it in O(N).  The tridiagonal solves are done using
+   the Thomas algorithm.  The x-direction is more complicated, 
+   because the periodicity makes it not strictly tridiagonal. To
+   get around this, I condense the matrix with one step of Gaussian
+   elimination, so that it is separated into the tridiagonal and
+   non-tridiagonal parts.  This is kind of complicated and needs 
+   to be better documented.  The good news is that it is fast and
+   unconditionally stable.  */
 void StokesSolver::diffuse_temperature()
 {
 
@@ -300,6 +357,9 @@ void StokesSolver::setup_diffusion_problem()
   }
 }
 
+/* Setup the stokes solve with the stream function formulation.
+   We assemble the vector that stores the frequencies of the
+   eigenmodes, as well as tell FFTW how to do the transforms */
 void StokesSolver::setup_stokes_problem()
 {
 
@@ -335,6 +395,10 @@ void StokesSolver::setup_stokes_problem()
 }
 
   
+/*Calculate the Nusselt number for the given temperature field.
+  In principle I could calculate the heat flux through the bottom
+  boundary as well, and take the average, but as it is, I am only
+  doing the heat flux through the top boundary*/
 double StokesSolver::nusselt_number() 
 {
   double heat_flux;
@@ -351,7 +415,8 @@ double StokesSolver::nusselt_number()
 }
   
       
-
+//The curl of the temperature is what is relevant for the stream
+//function calculation.  This calculates that curl.
 void StokesSolver::assemble_curl_T_vector()
 {
   //Assemble curl_T vector
@@ -369,13 +434,18 @@ void StokesSolver::assemble_curl_T_vector()
   }
 }
 
+
+/* Actually solve the biharmonic equation for the Stokes system.*/
 void StokesSolver::solve_stokes()
 { 
+  //Come up with the RHS of the spectral solve
   assemble_curl_T_vector();
 
-  fftw_execute(dst);
-  fftw_execute(dft);
+  //Execute the forward fourier transform
+  fftw_execute(dst);  //Y direction
+  fftw_execute(dft);  //X direction
 
+  //Multiply by the relevant frequencies.
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     if(cell->xindex() <= grid.nx/2)
@@ -385,14 +455,17 @@ void StokesSolver::solve_stokes()
     }
   }
 
-  fftw_execute(idft);
-  fftw_execute(idst);
+  //Execute the inverse Fourier transform
+  fftw_execute(idft);  //Y direction
+  fftw_execute(idst);  //X direction
 
-  
+  //Renormalize
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     stream[cell->self()] = scratch2[cell->self()]/(grid.ny+1)/2.0/grid.nx;
 
-  //Come up with the velocities
+  //Come up with the velocities by taking finite differences of the stream function.
+  //I could also take these derivatives in spectral space, but that would mean 
+  //more fourier transforms, so this should be considerably cheaper.
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     if( cell->at_top_boundary() == false)
@@ -409,12 +482,15 @@ void StokesSolver::solve_stokes()
 
 void StokesSolver::update_state(double rayleigh, double gravity_angle)
 {
-  theta = gravity_angle;
+  theta = gravity_angle; //update the angle of gravity
   double length_scale = std::pow(rayleigh, -1./3.)*grid.ly;  //calculate a provisional length scale
 
+  //The resolution basically sets the maximum Ra we can use.  Estimate the minimum length scale,
+  //and if that is smaller than the resolution, cap the Rayleigh number.
   if (length_scale < grid.ly/grid.ny/2.0) Ra = std::pow( grid.ny*2.0, 3.0);
   else Ra = rayleigh;
 
+  //Estimate other state properties based on simple isoviscous scalings
   dt = grid.ly/grid.ny * std::pow(Ra,-2./3.) * 20.0; //Roughly 20x CFL, thanks to semi-lagrangian
   heat_source_radius = length_scale*5.0;  //Radius of order the boundary layer thickness
   heat_source = std::pow(Ra, 2./3.)/grid.ly*1.e0; //Heat a blob of order the ascent time for thta blob
