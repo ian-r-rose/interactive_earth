@@ -1,0 +1,219 @@
+\documentclass[a4paper,10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+
+%opening
+\title{Numerical methods for \texttt{Interactive Earth}}
+\author{Ian Rose}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+The goal of \texttt{Interactive Earth} is to provide a very fast mantle convection simulator which is interactive, allowing the user to change the vigor of convection, add hot and cold blobs, and generally mess with the simulation as it takes place. 
+It is meant to be educational, and as such it has different priorities than a research code for mantle convection. 
+Specifically, the first top priorities are good visualization, interactivity, and above all else, speed.
+
+
+Typical research simulations of mantle convection have extremely complicated geometries, rheologies, and boundary conditions, and the accuracy of the numerical methods is paramount.
+As such, these simulations routinely take days or weeks to run.
+In contrast, \texttt{Interactive Earth} makes very careful choice of methods and approximations with speed in mind, rather than accuracy.
+The inaccuracies incurred by these choices are likely not small, but for the purposes of visualization and interactivity, they do not matter.
+
+\section{Running the code}
+
+\section{Overall structure}
+
+\texttt{Interactive Earth} solves the following equations for conservation of mass, momentum, and energy:
+
+\begin{equation}
+-\nabla{P} + \nabla^2 {\bf u}  = \mathrm{Ra} T \hat{\bf y}
+\end{equation}
+
+\begin{equation}
+\nabla \cdot {\bf u} = 0
+\end{equation}
+
+\begin{equation}
+\frac{\partial T}{\partial t} + {\bf u} \cdot \nabla T = \nabla^2 T + q
+\end{equation}
+
+where ${\bf u} = (u,v)$ is velocity, $T$ is temperature, $q$ is the internal heating, $t$ is time, and $\mathrm{Ra}$ is the Rayleigh number.
+Already we have made the Boussinesq approximation with constant gravity and constant material properties.
+This will allow us to make some very useful optimizations for the numerics.
+
+The code splits the governing equations into smaller steps and solves them sequentially on a staggered grid.
+The temperature field and stream function are located at the cell centers, the x-velocity is located on the vertical faces of the cells, and the y velocity is located on the horizontal faces of the cells.
+The temperature boundary conditions are $T=0$ at the surface and $T=1$ at the bottom.
+The velocity boundary conditions are free slip.
+
+\begin{enumerate}
+\item{Solve the Stokes equations}
+\item{Add the heating terms}
+\item{Advect the temperature field}
+\item{Diffuse the temperature field}
+\item{Render the temperature field to screen}
+\end{enumerate}
+
+The following describes in some detail the methods for each of these steps.
+
+\section{Stokes solve}
+
+The essential problem in the Stokes equations is the pressure, which enforces the incompressibility constraint.
+For isoviscous, incompressible flow in 2D we may solve this by using the stream function formulation for creeping flow.
+To begin, we write out the Stokes equation in component form:
+
+\begin{equation}
+\begin{aligned}
+-\frac{\partial P}{\partial x} + \nabla^2 u &= 0 \\
+-\frac{\partial P}{\partial y} + \nabla^2 v &= \mathrm{Ra} T
+\end{aligned}
+\end{equation} 
+
+Differentiating the first equation by $x$ and the second equation by $y$, and subtracting them, we get
+
+\begin{equation}
+\begin{aligned}
+-\frac{\partial^2 P}{\partial x \partial y} + \frac{\partial^2 P}{\partial y \partial x}  + \nabla^2 \frac{\partial u}{\partial y} - \nabla^2 \frac{\partial v}{\partial x} &= \mathrm{Ra} \frac{\partial{T}}{\partial x} \\
+\nabla^2 \left[ \frac{\partial u}{\partial y} - \frac{\partial v}{\partial x} \right] &= \mathrm{Ra} \frac{\partial{T}}{\partial x}
+\end{aligned}
+\end{equation} 
+
+The pressure is now eliminated.  We can go further by introducing the stream function $\psi$ such that:
+
+\begin{equation}
+\begin{aligned}
+u &= \frac{\partial \psi}{\partial y} \\
+v &= -\frac{\partial \psi}{\partial x}
+\end{aligned}
+\end{equation}
+
+Note that by construction the stream function satisfies the incompressibility constraint.  It is essentially a 2D version of a Helmholtz decomposition of the velocity field.
+
+Plugging this into the equation above, we find:
+
+\begin{equation}
+\begin{aligned}
+\nabla^2 \left[ \frac{\partial^2 \psi}{\partial y^2} + \frac{\partial^2 \psi}{\partial x^2} \right] &= \mathrm{Ra} \frac{\partial{T}}{\partial x} \\
+\nabla^2 \nabla^2 \psi &= \mathrm{Ra} \frac{\partial{T}}{\partial x} \\
+\nabla^4 \psi &= \mathrm{Ra} \frac{\partial{T}}{\partial x} \\
+\end{aligned}
+\end{equation}
+
+This is the biharmonic equation, which is now just a scalar equation with no pressure in sight.  
+The cost of this, however, is that it is now a fourth order differential equation, so we need to supply four boundary conditions to solve it.
+The strategy for solving the biharmonic comes as treating it as two laplacians, and solving them sequentially.  We introduce $\phi = \nabla^2 \psi$:
+
+\begin{equation}
+\begin{aligned}
+\nabla^2 \phi &= \mathrm{Ra} \frac{\partial T}{\partial x} \\
+\nabla^2 \psi &= \phi
+\end{aligned}
+\end{equation}
+
+Furthermore, the quantity $\phi$ is just $\left[ \frac{\partial u}{\partial y} - \frac{\partial v}{\partial x} \right]$. 
+If we evaluate this at the top and bottom boundaries, remembering that it is free slip ($\partial u /\partial y = 0$)  and no flow can go across it ($v=0$), we find that $\phi=0$ on the top and bottom.
+
+The second Laplace solve is a bit trickier.  The essential idea is to again realize that $v=0$ on the top and bottom boundaries.  
+This means that $\partial \psi /\partial x = 0$ along the boundaries, or $\psi = \mathrm{constant}$.
+This constant will simply be differentiated away in the end, so it does not matter what we choose.
+Numerically, we will find it most convenient to chose $\psi=0$ again. 
+
+Okay, so now we have two Poisson equations to solve which are periodic in the $x$ direction and with homogeneous boundary conditions in the $y$ direction.
+This is exactly the type of problem that spectral methods are good at, and we can use the awesome FFTW library to help with the solve. 
+One of the reasons that spectral methods are great here is that we can choose to do transforms that automatically respect our boundary conditions.
+If we do a full Fourier transform in the $x$ direction it will be periodic.
+If we do sine transforms in the $y$ direction, they will automatically be homogeneous on the top and bottom.
+Couple that with the fantastic performance of FFTW and the fact that we really only need to do one set of transforms, and we have a very efficient solve for the Stokes equations.
+The expansion in the Fourier basis looks like this:
+
+\begin{equation}
+\begin{aligned}
+\psi &= \displaystyle \sum_{l=0}^{l_{\mathrm{max}}} \sum_{m=0}^{m_{\mathrm{max}}} \psi_{lm}  e^{2 \pi i l x / L_x} \sin( \pi (m+1) y/ L_y)  \\
+\mathrm{Ra} \frac{\partial T}{\partial x} &= \displaystyle \sum_{l=0}^{l_{\mathrm{max}}} \sum_{m=0}^{m_{\mathrm{max}}} C_{lm}  e^{2 \pi i l x /L_x} \sin( \pi (m+1) y/ L_y) 
+\end{aligned}
+\end{equation}
+
+Where $L_x$ and $L_y$ are the lengths of the domain in the $x$ and $y$ directions, and $l$ and $m$ are the wavenumbers for the Fourier and sine transforms.
+With this decomposition, the biharmonic equation becomes trivial to solve:
+
+\begin{equation}
+\begin{aligned}
+ &\nabla^4 \psi = \mathrm{Ra} \frac{\partial{T}}{\partial x} \\
+ &\nabla^4 \displaystyle \sum_{l=0}^{l_{\mathrm{max}}} \sum_{m=0}^{m_{\mathrm{max}}} \psi_{lm}  e^{2 \pi i l x/L_x} \sin( \pi (m+1) y/L_y)  =
+ \displaystyle \sum_{l=0}^{l_{\mathrm{max}}} \sum_{m=0}^{m_{\mathrm{max}}} C_{lm}  e^{2 \pi i l x/L_x} \sin( \pi (m+1) y/L_y)  \\
+ &{\pi^4\left(4 l^2/L_x^2 + (m+1)^2 / L_y^2 \right)^2} \psi_{lm} = C_{lm} \\
+ &\psi_{lm} =  \frac{C_{lm} }{\pi^4\left(4 l^2/L_x^2 +(m+1)^2 / L_y^2 \right)^2}
+\end{aligned}
+\label{frequencies}
+\end{equation}
+
+The solution to the Stokes equation is then done by:
+\begin{enumerate}
+\item Perform discrete Fourier transform in the $x$ direction.
+\item Perform discrete sine trasnform in the $y$ direction.
+\item Solve the biharmonic equation by dividing by the frequencies, as in ~\ref{frequencies}
+\item Perform inverse discrete sine trasnform in the $y$ direction.
+\item Perform inverse discrete Fourier transform in the $x$ direction.
+\end{enumerate}
+
+
+\section{Heating}
+
+The general strategy for the temperature equation is to break it up into smaller steps, and solve them one at a time (otherwise known as operator splitting). 
+Most codes solve the entire equation together, and thus do not incur a splitting error.  
+Since speed and simplicity are the goal here, I do not worry about it, and split away.  The first term to deal with is the heating term:
+
+\begin{equation}
+\frac{\partial T}{\partial t} = q
+\end{equation}
+
+This is just an ODE, since it involves no derivatives in space, so it is quite easy to solve with an explicit time-marching scheme:
+
+\begin{equation}
+\begin{aligned}
+\frac{ T^{n+1} - T^n}{\Delta t} &= q \\
+T^{n+1} &= T^n + q \Delta t
+\end{aligned}
+\end{equation}
+
+And that is it.
+
+\section{Advection}
+
+The advection is more difficult as it is a first-order hyperbolic equation:
+
+\begin{equation}
+\frac{\partial T}{\partial t} + {\bf u} \cdot \nabla T = 0
+\end{equation}
+
+In general, standard difference approximations to this equation will be quite unstable.
+A common approach to stabilizing it is by upwinding the solution.  
+However, upwinding schemes are known to be very diffusive, and we still have to satisfy the CFL condition $u \Delta t/\Delta x \le 1$.
+
+One of the goals for this part of the equations is to take very large timesteps, and the CFL condition makes this difficult.
+The approach I take to removing this difficulty is by using a semi-Lagrangian technique.
+The basic idea to semi-Lagrangian advection is to evaluate the $\nabla T$ along streamlines.  
+This means that $T$ does not actually vary along those lines, and we are left with the very simple equation:
+\begin{equation}
+\frac{\partial T}{\partial t} = 0
+\end{equation}
+
+which can be integrated trivially to $T=\mathrm{const}$.
+The drawback, of course, is that we have to identify the streamlines.
+In a timestepping scheme this amounts to finding the temperature at the point which will be advected to the gridpoint in question.
+This point, in general, will not be at a gridpoint itself.
+A fully Lagrangian scheme would follow a series of tracer particles at all times.  
+The semi-Lagrangian scheme is ``semi'' because at every timestep we find the new set of points which will wind up at each grid point.
+I identify the takeoff points by an iterated predictor-corrector scheme.
+
+Semi-Lagrangian schemes are typically more expensive to evaluate than grid-based schemes, as there is a lot of off-grid interpolation involved.  
+However, they are also extremely stable, to the point where I am able to take 10-20x CFL timesteps.
+I can alleviate the interpolation cost by doing very cheap and innacurate linear interpolations.
+
+\section{Diffusion}
+
+\end{document}
