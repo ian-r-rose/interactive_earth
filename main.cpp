@@ -62,7 +62,7 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 {
   double rayleigh = handle->rayleigh_number();
-  double factor = std::pow(10.0, 1./20.* (event->y < 0 ? -1. : 1.0) );
+  double factor = std::pow(10.0, 1./100.* (event->y < 0 ? -1. : 1.0) );
   handle->update_state( rayleigh * factor );
 }
   

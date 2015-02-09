@@ -483,17 +483,25 @@ void ConvectionSimulator::solve_stokes()
 void ConvectionSimulator::update_state(double rayleigh, double gravity_angle)
 {
   theta = gravity_angle; //update the angle of gravity
-  double length_scale = std::pow(rayleigh, -1./3.)*grid.ly;  //calculate a provisional length scale
+  double Ra_c = 657.;  //critical rayleigh number
+  double length_scale = std::pow(rayleigh/2./Ra_c, -1./3.)*grid.ly;  //calculate a provisional length scale
 
   //The resolution basically sets the maximum Ra we can use.  Estimate the minimum length scale,
   //and if that is smaller than the resolution, cap the Rayleigh number.
-  if (length_scale < grid.ly/grid.ny/2.0) Ra = std::pow( grid.ny*2.0, 3.0);
+  const double boundary_layer_cells = 4.;  //grid cells per boundary layer
+  if (length_scale < boundary_layer_cells *grid.dy)
+    Ra = 2.*Ra_c*std::pow( grid.ly/boundary_layer_cells/grid.dy, 3.0);
   else Ra = rayleigh;
 
+  length_scale = std::pow(Ra/2./Ra_c, -1./3.)*grid.ly;  
+  const double Nu = std::pow(Ra/Ra_c/2., 1./3.) / 2.;  //Nusselt
+  const double velocity_scale = std::sqrt( Ra * Nu );
+  const double cfl = grid.dy/velocity_scale;
+
   //Estimate other state properties based on simple isoviscous scalings
-  dt = grid.ly/grid.ny * std::pow(Ra,-2./3.) * 20.0; //Roughly 20x CFL, thanks to semi-lagrangian
-  heat_source_radius = length_scale*5.0;  //Radius of order the boundary layer thickness
-  heat_source = std::pow(Ra, 2./3.)/grid.ly*1.e0; //Heat a blob of order the ascent time for thta blob
+  dt = cfl * 10.0; //Roughly 10x CFL, thanks to semi-lagrangian
+  heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
+  heat_source = velocity_scale/grid.ly*2.; //Heat a blob of order the ascent time for thta blob
 
   setup_diffusion_problem();  //need to recompute the auxiliary vectors for the diffusion problem
 
@@ -507,5 +515,8 @@ double ConvectionSimulator::rayleigh_number() const
 
 double ConvectionSimulator::timescale() const
 {
-  return std::pow(Ra, -2./3.) * grid.ly; //Approximately the ascent time for a plume
+  double Ra_c = 657.;  //critical rayleigh number
+  const double Nu = std::pow(Ra/Ra_c/2., 1./3.) / 2.;  //Nusselt
+  const double velocity_scale = std::sqrt( Ra * Nu );
+  return grid.ly/velocity_scale; //Approximately the ascent time for a plume
 }
