@@ -118,8 +118,10 @@ void init()
 
 
     window = SDL_CreateWindow(
-       "Convection", 10, 10, scale*nx, scale*ny, 
-        SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
+       "Convection", 
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
+        scale*nx, scale*ny, 
+        SDL_WINDOW_OPENGL);
     context = SDL_GL_CreateContext(window);
     if (!context)
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext(): %s\n", SDL_GetError());
