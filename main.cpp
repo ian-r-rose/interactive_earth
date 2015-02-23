@@ -28,7 +28,7 @@ const double Ra = 1.e7;
 
 //Factor for how much to blow up the rendered 
 //triangles so that they are bigger on screen
-const unsigned int scale = 3;
+const unsigned int scale = 2;
 
 //Total number of pixels in x and y directions
 const unsigned int xpix = nx*scale;
@@ -41,6 +41,7 @@ double hx, hy;
 
 //Whether to solve the stokes equation for a given timestep.
 bool solve_stokes = true;
+bool draw_composition = false;
 
 //Pointer for the solver so that the various event handlers
 //can access it.  Did it this way due to the way GLUT is 
@@ -86,7 +87,7 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 void timestep()
 {
   static int i=0;  //Keep track of timestep number
-  handle->draw();  //Draw to screen
+  handle->draw( draw_composition );  //Draw to screen
 
   //The stokes solve is typically the most expensive part.  I have found
   //That it usually looks okay if we only update the velocity solution 
@@ -168,6 +169,8 @@ void loop()
         else if(event.key.keysym.sym == SDLK_ESCAPE)
           quit();
 #endif
+        else if(event.key.keysym.sym == SDLK_TAB)
+          draw_composition = ! draw_composition;
         break;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:

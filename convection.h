@@ -86,7 +86,7 @@ class ConvectionSimulator
     void semi_lagrangian_advect_composition();  //Advect composition through the velocity field
     void diffuse_temperature(); //Diffuse temperature
     void solve_stokes(); //Solve for velocity field
-    void draw();  //Render using OpenGL
+    void draw( bool );  //Render using OpenGL
     void update_state(double rayleigh, double gravity_angle = 0);  //Update the state of the solver
 
     void setup_opengl();  //Setup OpenGL data structures

@@ -155,7 +155,7 @@ void ConvectionSimulator::cleanup_opengl()
 #endif //LEGACY_OPENGL
 }
 
-void ConvectionSimulator::draw()
+void ConvectionSimulator::draw( bool draw_composition)
 {
 
 #ifndef LEGACY_OPENGL
@@ -168,7 +168,11 @@ void ConvectionSimulator::draw()
   unsigned long v=0;
   for( StaggeredGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
   {
-    color c = hot(T[cell->self()]);
+    color c;
+    if(draw_composition)
+      c = hot(C[cell->self()]);
+    else
+      c = hot(T[cell->self()]);
 
     vertex_colors[v + 0] = c.R;
     vertex_colors[v + 1] = c.G;

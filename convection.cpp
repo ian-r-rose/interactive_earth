@@ -37,7 +37,7 @@ ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, 
   curl_density_spectral = new fftw_complex[ncells];
 
   //Initialize the state
-  buoyancy_number = 100.0;
+  buoyancy_number = 1.0;
   update_state(Rayleigh, theta);
   initialize_temperature();
 
@@ -188,6 +188,8 @@ inline double ConvectionSimulator::evaluate_temperature(const Point &p)
 /* Interpolate the temperature onto an arbitrary point. */
 inline double ConvectionSimulator::evaluate_composition(const Point &p)
 {
+  if (p.y < 0.0 || p.y > 1.0 ) return 0.0;
+
   double value;
   StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
   double local_x = (p.x - cell->center().x)/grid.dx;
@@ -198,7 +200,7 @@ inline double ConvectionSimulator::evaluate_composition(const Point &p)
                              C[cell->self()], C[cell->right()]);
   else if (cell->at_bottom_boundary() && local_y < 0.0)
    value = linear_interp_2d( local_x, local_y-grid.dy, 
-                             C[cell->self()], C[cell->right()], -C[cell->self()], -C[cell->right()]);
+                             C[cell->self()], C[cell->right()], C[cell->self()], C[cell->right()]);
   else
     value = linear_interp_2d( local_x, local_y, C[cell->up()], C[cell->upright()],
                              C[cell->self()], C[cell->right()]);
@@ -280,7 +282,7 @@ void ConvectionSimulator::semi_lagrangian_advect( advection_field field)
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     F[cell->self()] = scratch1[cell->self()];
  
-  clip_field(field, -1.0, 2.0);
+  clip_field(field, 0.0, 1.0);
 }
 
 void ConvectionSimulator::clip_field( advection_field field, double min, double max)
