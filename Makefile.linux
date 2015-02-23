@@ -15,13 +15,13 @@ LINK_FLAGS=
 convection: convection.o main.o rendering.o
 	$(CXX) $(CXX_FLAGS) convection.o rendering.o main.o -o interactive_earth $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
-main.o: main.cpp convection.h
+main.o: main.cpp convection.h staggered_grid.h
 	$(CXX) $(CXX_FLAGS) -c main.cpp  $(LINK_FLAGS) $(INCLUDE_DIRS) $(DEFINES) 
 
-convection.o: convection.cpp convection.h
+convection.o: convection.cpp convection.h staggered_grid.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) convection.cpp
 
-rendering.o: rendering.cpp convection.h
+rendering.o: rendering.cpp convection.h staggered_grid.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) rendering.cpp
 
 .PHONY: clean
