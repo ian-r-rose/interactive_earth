@@ -132,8 +132,8 @@ Point ConvectionSimulator::velocity(const Point &p)
 
   //get interpolated vy
   if(y_cell->at_top_boundary())
-    vel.y = linear_interp_2d (vy_local_x, vy_local_y, v[y_cell->self()], 
-                              v[y_cell->right()], v[y_cell->self()], v[y_cell->right()]);
+    vel.y = linear_interp_2d (vy_local_x, vy_local_y, 0.0, 0.0 ,
+                              v[y_cell->self()], v[y_cell->right()]);
   else
     vel.y = linear_interp_2d (vy_local_x, vy_local_y, v[y_cell->up()], v[y_cell->upright()],
                               v[y_cell->self()], v[y_cell->right()]);
@@ -185,8 +185,7 @@ void ConvectionSimulator::semi_lagrangian_advect()
   {
     //These points are known, as they are the grid points in question.  They will
     //not change for this cell.
-    vel_final.x = (u[cell->self()]+u[cell->right()])/2.0;
-    vel_final.y = (v[cell->up()]+v[cell->self()])/2.0;
+    vel_final = velocity (cell->center() );
     final_point = cell->center();
 
   
