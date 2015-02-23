@@ -8,6 +8,7 @@ calculations
 / ***********************/
 
 #include <iterator>
+#include <cmath>
 
 #ifndef STAGGERED_GRID_H
 #define STAGGERED_GRID_H
@@ -48,8 +49,8 @@ class StaggeredGrid
         //get grid indices of the neighbors
         int left() { return (id % grid.nx == 0 ? id+grid.nx-1 : id-1); };
         int right() { return ( (id+1)%grid.nx == 0 ? id-grid.nx+1 : id+1); };
-        int up() { return (id + grid.nx >= grid.ncells ? id-grid.nx*(grid.ny-1) : id + grid.nx); };
-        int down() { return ( id-grid.nx < 0 ? id+grid.nx*(grid.ny-1) : id-grid.nx) ; };
+        int up() { return (id + grid.nx >= grid.ncells ? -1 : id + grid.nx); };
+        int down() { return ( id-grid.nx < 0 ? -1 : id-grid.nx) ; };
         int upleft() { return id + (id + grid.nx >= grid.ncells ? -grid.nx*(grid.ny-1) : grid.nx) + (id % grid.nx == 0 ? grid.nx-1 : -1); }
         int upright() { return id + (id + grid.nx >= grid.ncells ? -grid.nx*(grid.ny-1) : grid.nx) + ( (id+1)%grid.nx == 0 ? -grid.nx+1 : 1); }
         int downleft() { return id + (id-grid.nx < 0 ? grid.nx*(grid.ny-1) : -grid.nx) + ( id%grid.nx == 0 ? grid.nx-1 : -1); }
