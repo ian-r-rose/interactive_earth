@@ -209,7 +209,7 @@ void ConvectionSimulator::draw()
   glDrawElements(GL_TRIANGLES, n_triangles*vertices_per_triangle, GL_UNSIGNED_INT, 0);
 
   glDisableVertexAttribArray(attribute_coord2d);
-//  glDisableVertexAttribArray(attribute_v_color);
+  glDisableVertexAttribArray(attribute_v_color);
 
 
 #else 

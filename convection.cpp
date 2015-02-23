@@ -1,5 +1,6 @@
 #include "convection.h"
 #include <cmath>
+#include <iostream>
 
 
 inline double fast_fmod(double x,double y) { return x-((int)(x/y))*y; }
@@ -19,8 +20,9 @@ ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, 
 {
   //Allocate memory for data vectors
   T = new double[ncells];
+  C = new double[ncells];
   stream = new double[ncells];
-  curl_T = new double[ncells];
+  curl_density = new double[ncells];
   lux = new double[ncells];
   luy = new double[ncells];
   u = new double[ncells];
@@ -32,9 +34,10 @@ ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, 
 
   //I actually allocate more memory than necessary for the 
   //spectral vector, but this way it makes the indexing simpler
-  curl_T_spectral = new fftw_complex[ncells];
+  curl_density_spectral = new fftw_complex[ncells];
 
   //Initialize the state
+  buoyancy_number = 100.0;
   update_state(Rayleigh, theta);
   initialize_temperature();
 
@@ -49,8 +52,9 @@ ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, 
 ConvectionSimulator::~ConvectionSimulator()
 {
   delete[] T;
+  delete[] C;
   delete[] stream;
-  delete[] curl_T;
+  delete[] curl_density;
   delete[] lux;
   delete[] luy;
   delete[] u;
@@ -59,7 +63,7 @@ ConvectionSimulator::~ConvectionSimulator()
   delete[] freqs;
   delete[] scratch1;
   delete[] scratch2;
-  delete[] curl_T_spectral;
+  delete[] curl_density_spectral;
  
   fftw_destroy_plan(dst);
   fftw_destroy_plan(idst);
@@ -92,6 +96,14 @@ inline double ConvectionSimulator::heat(const Point &p1, const Point &p2 )
   return heat_source*std::exp( -rsq/2.0/heat_source_radius/heat_source_radius );
 }
 
+/* Given a heat source centered on p1, calculate the heating at
+   point p2, using a simple Gaussian source term */ 
+inline double ConvectionSimulator::react(const Point &p1, const Point &p2 )
+{
+  const double rsq = (p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y);
+  return rsq < 0.1*0.1 ? heat_source : 0.0;
+}
+
 /* Loop over all the cells and add heat according to where the current heat
    source is. */
 void ConvectionSimulator::add_heat(double x, double y, bool hot)
@@ -101,6 +113,13 @@ void ConvectionSimulator::add_heat(double x, double y, bool hot)
     T[cell->self()] = T[cell->self()] + (hot ? 1.0 : -1.0)*heat(p, cell->center())*dt;
 }
   
+/* Loop over all the cells and add composition, similar to add_heat*/
+void ConvectionSimulator::add_composition(double x, double y)
+{
+  Point p; p.x = x; p.y=y;
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    C[cell->self()] = C[cell->self()] + react(p, cell->center())*dt;
+}
 
 
 
@@ -146,33 +165,66 @@ Point ConvectionSimulator::velocity(const Point &p)
 } 
 
 /* Interpolate the temperature onto an arbitrary point. */
-inline double ConvectionSimulator::temperature(const Point &p)
+inline double ConvectionSimulator::evaluate_temperature(const Point &p)
 {
-  double temp;
+  double value;
   StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
   double local_x = fast_fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
   double local_y = ( p.y - cell->center().y )/grid.dy;
 
   if (cell->at_top_boundary() )
-    temp = linear_interp_2d( local_x, local_y, -T[cell->self()], -T[cell->right()],  
+    value = linear_interp_2d( local_x, local_y, -T[cell->self()], -T[cell->right()],  
                              T[cell->self()], T[cell->right()]);
   else if (cell->at_bottom_boundary() && local_y < 0.0)
-    temp = linear_interp_2d( local_x, local_y-grid.dy, 
+    value = linear_interp_2d( local_x, local_y-grid.dy, 
                              T[cell->self()], T[cell->right()], 2.0-T[cell->self()], 2.0-T[cell->right()]);
-  else 
-    temp = linear_interp_2d( local_x, local_y, T[cell->up()], T[cell->upright()],
+  else
+    value = linear_interp_2d( local_x, local_y, T[cell->up()], T[cell->upright()],
                              T[cell->self()], T[cell->right()]);
 
-  return temp;
+  return value;
 }
 
+/* Interpolate the temperature onto an arbitrary point. */
+inline double ConvectionSimulator::evaluate_composition(const Point &p)
+{
+  double value;
+  StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
+  double local_x = (p.x - cell->center().x)/grid.dx;
+  double local_y = (p.y - cell->center().y)/grid.dy;
+
+  if (cell->at_top_boundary() )
+    value = linear_interp_2d( local_x, local_y, C[cell->self()], C[cell->right()],  
+                             C[cell->self()], C[cell->right()]);
+  else if (cell->at_bottom_boundary() && local_y < 0.0)
+   value = linear_interp_2d( local_x, local_y-grid.dy, 
+                             C[cell->self()], C[cell->right()], -C[cell->self()], -C[cell->right()]);
+  else
+    value = linear_interp_2d( local_x, local_y, C[cell->up()], C[cell->upright()],
+                             C[cell->self()], C[cell->right()]);
+
+  return value;
+}
+
+void ConvectionSimulator::semi_lagrangian_advect_temperature()
+{
+  advection_field field = temperature;
+  semi_lagrangian_advect( field );
+}
+
+void ConvectionSimulator::semi_lagrangian_advect_composition()
+{
+  advection_field field = composition;
+  semi_lagrangian_advect( field );
+}
+  
 /* Advect the temperature field through the velocity field using
    Semi-lagrangian advection.  This scheme is quite stable, which
    allows me to take VERY large time steps.  The drawback is that it
    is kind of slow.  Here I do it in a very coarse way to make up for
    that.  A more accurate implementation would use better-than-linear
    interpolation and use more iterations. */
-void ConvectionSimulator::semi_lagrangian_advect()
+void ConvectionSimulator::semi_lagrangian_advect( advection_field field)
 {
   //The goal is to find the temperature at the Lagrangian point which will 
   //be advected to the current grid point in one time step.  In general,
@@ -183,6 +235,10 @@ void ConvectionSimulator::semi_lagrangian_advect()
   Point vel_takeoff; //Velocity at the candidate takeoff point
   Point takeoff_point; //Candidate takeoff point
   Point final_point; //grid point
+
+  double *F;
+  if( field == temperature ) F = T;
+  else if( field == composition ) F = C;
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -214,12 +270,30 @@ void ConvectionSimulator::semi_lagrangian_advect()
       takeoff_point.x = fast_fmod(fast_fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
       takeoff_point.y = std::min( grid.ly, std::max( takeoff_point.y, 0.0) );
     } 
-    scratch1[cell->self()] = temperature(takeoff_point);  //Store the temperature we found
+    if (field == temperature ) 
+      scratch1[cell->self()] = evaluate_temperature(takeoff_point);  //Store the temperature we found
+    else if (field == composition ) 
+      scratch1[cell->self()] = evaluate_composition(takeoff_point);  //Store the composition we found
   }
    
-  //Copy the scratch vector into the temperature vector. 
+  //Copy the scratch vector into the field vector. 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    T[cell->self()] = scratch1[cell->self()];
+    F[cell->self()] = scratch1[cell->self()];
+ 
+  clip_field(field, -1.0, 2.0);
+}
+
+void ConvectionSimulator::clip_field( advection_field field, double min, double max)
+{
+  double *F;
+  if( field == temperature ) F = T;
+  else if( field == composition ) F = C;
+
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    double val = F[cell->self()];
+    F[cell->self()] = ( val > max ? max : (val < min ? min: val ) );
+  }
 }
 
 /* Solve the diffusion equation implicitly with reverse Euler.
@@ -376,7 +450,7 @@ void ConvectionSimulator::setup_stokes_problem()
   //transform in the y direction with a dst
   n[0] = grid.ny; stride = grid.nx; dist = 1; howmany = grid.nx; 
   fftw_r2r_kind f[1] = {FFTW_RODFT00};
-  dst = fftw_plan_many_r2r(1, n, howmany, curl_T, NULL, stride, dist,
+  dst = fftw_plan_many_r2r(1, n, howmany, curl_density, NULL, stride, dist,
                                      scratch1, NULL, stride, dist,
                                      f, FFTW_ESTIMATE);
   idst = fftw_plan_many_r2r(1, n, howmany, scratch1, NULL, stride, dist,
@@ -386,8 +460,8 @@ void ConvectionSimulator::setup_stokes_problem()
   //transform in the x direction with a full dft
   n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny; 
   dft = fftw_plan_many_dft_r2c(1, n, howmany, scratch1, NULL, stride, dist,
-                     curl_T_spectral, NULL, stride, dist, FFTW_ESTIMATE);
-  idft = fftw_plan_many_dft_c2r(1, n, howmany, curl_T_spectral, NULL, stride, dist,
+                     curl_density_spectral, NULL, stride, dist, FFTW_ESTIMATE);
+  idft = fftw_plan_many_dft_c2r(1, n, howmany, curl_density_spectral, NULL, stride, dist,
                      scratch1, NULL, stride, dist, FFTW_ESTIMATE);
 
 }
@@ -415,20 +489,33 @@ double ConvectionSimulator::nusselt_number()
       
 //The curl of the temperature is what is relevant for the stream
 //function calculation.  This calculates that curl.
-void ConvectionSimulator::assemble_curl_T_vector()
+void ConvectionSimulator::assemble_curl_density_vector()
 {
-  //Assemble curl_T vector
+  //Assemble curl_density vector
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    if(cell->at_bottom_boundary())
-      curl_T[cell->self()] = 0.0; 
-    else if (cell->at_top_boundary())
-      curl_T[cell->self()] = 0.0; 
+    double dTdx, dTdy, dCdx, dCdy, curl_T, curl_C;
+    dCdx = C[cell->self()] - C[cell->left()];
+
+    if(!cell->at_bottom_boundary())
+    {
+      dTdx = (T[cell->self()] - T[cell->left()] + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx;
+      dCdx = (C[cell->self()] - C[cell->left()] + C[cell->down()] - C[cell->downleft()])/2.0/grid.dx;
+      dTdy = (T[cell->left()] - T[cell->downleft()] + T[cell->self()] - T[cell->down()])/2.0/grid.dy;
+      dCdy = (C[cell->left()] - C[cell->downleft()] + C[cell->self()] - C[cell->down()])/2.0/grid.dy;
+    }
     else
-      curl_T[cell->self()] = Ra*std::cos(theta*M_PI/180.0)*(T[cell->self()] - T[cell->left()]
-                            + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx
-                            - Ra*std::sin(theta*M_PI/180.0)*(T[cell->left()] - T[cell->downleft()]
-                            + T[cell->self()] - T[cell->down()])/2.0/grid.dy;
+    {
+      dTdx = 0.0;
+      dCdx = (C[cell->self()] - C[cell->left()])/grid.dx;
+      dTdy = (T[cell->left()] + T[cell->self()] - 0.0 )/grid.dy/2.0/2.0;
+      dCdy = 0.0;
+    }
+
+    curl_T = (std::cos(theta*M_PI/180.0) * dTdx - std::sin(theta*M_PI/180.0) * dTdy);
+    curl_C = (std::cos(theta*M_PI/180.0) * dCdx - std::sin(theta*M_PI/180.0) * dCdy);
+
+    curl_density[cell->self()] = Ra * (curl_T - buoyancy_number * curl_C);
   }
 }
 
@@ -437,7 +524,7 @@ void ConvectionSimulator::assemble_curl_T_vector()
 void ConvectionSimulator::solve_stokes()
 { 
   //Come up with the RHS of the spectral solve
-  assemble_curl_T_vector();
+  assemble_curl_density_vector();
 
   //Execute the forward fourier transform
   fftw_execute(dst);  //Y direction
@@ -448,8 +535,8 @@ void ConvectionSimulator::solve_stokes()
   {
     if(cell->xindex() <= grid.nx/2)
     {
-      curl_T_spectral[cell->self()][0]*=freqs[cell->self()];
-      curl_T_spectral[cell->self()][1]*=freqs[cell->self()];
+      curl_density_spectral[cell->self()][0]*=freqs[cell->self()];
+      curl_density_spectral[cell->self()][1]*=freqs[cell->self()];
     }
   }
 
@@ -497,7 +584,7 @@ void ConvectionSimulator::update_state(double rayleigh, double gravity_angle)
   const double cfl = grid.dy/velocity_scale;
 
   //Estimate other state properties based on simple isoviscous scalings
-  dt = cfl * 10.0; //Roughly 10x CFL, thanks to semi-lagrangian
+  dt = cfl * 5.0; //Roughly 10x CFL, thanks to semi-lagrangian
   heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
   heat_source = velocity_scale/grid.ly*2.; //Heat a blob of order the ascent time for thta blob
 

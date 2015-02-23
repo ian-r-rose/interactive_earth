@@ -10,6 +10,8 @@
 class ConvectionSimulator
 {
   private:
+
+     enum advection_field { temperature, composition };
    
     //Information about the grid
     int nx,ny;
@@ -17,6 +19,7 @@ class ConvectionSimulator
    
     //Current model parameters
     double Ra;  //Rayleigh number
+    double buoyancy_number;
     double dt;  //timestep
     double theta;  //Direction of gravity
 
@@ -30,10 +33,11 @@ class ConvectionSimulator
     
     //Vectors which are used in the solve
     double *T;  //Temperature
+    double *C; //Composition
     double *scratch1, *scratch2;  //Scratch vectors for storing temporary information
     double *freqs;  //Frequencies in spectral space for the stokes solve
     double *stream;  //Stream function solution
-    double *curl_T; //Curl of temperature for the stream function solution
+    double *curl_density; //Curl of density for the stream function solution
     double *u; //velocity in the x direction
     double *v; //Velocity in the y direction
 
@@ -43,7 +47,7 @@ class ConvectionSimulator
 
     //FFTW stuff
     fftw_plan dst, idst, dft, idft; //FFTW plans for doing the forward and inverse transforms
-    fftw_complex* curl_T_spectral;  //Curl of temperature in spectral space
+    fftw_complex* curl_density_spectral;  //Curl of temperature in spectral space
 
     //Data for rendering with OpenGL
     GLfloat* vertices;  
@@ -53,13 +57,17 @@ class ConvectionSimulator
     //workhorse functions
     void initialize_temperature();  //just like it says
     double heat(const Point&, const Point&);  //heating term at a point, given where the click has happened
+    double react(const Point&, const Point&);  //heating term at a point, given where the click has happened
     void setup_stokes_problem();  //Setup for spectral solve
     void setup_diffusion_problem(); //Setup for diffusion solve (needs to be called every time the Ra is changed)
-    void assemble_curl_T_vector(); //Assembling RHS for spectral solve.  Called every timestep
+    void assemble_curl_density_vector(); //Assembling RHS for spectral solve.  Called every timestep
+    void semi_lagrangian_advect( advection_field field );  //Advect composition through the velocity field
+    void clip_field( advection_field field, double min, double max);
    
     //functions for evaluating field at points
     double initial_temperature(const Point&);
-    double temperature(const Point&);
+    double evaluate_temperature(const Point&);
+    double evaluate_composition(const Point&);
     Point velocity(const Point&);
 
   public:
@@ -73,7 +81,9 @@ class ConvectionSimulator
     double nusselt_number(); //Calculate nusselt number at a timestep
 
     void add_heat(double x, double y, bool hot); //Add heat at a point, with the bool indicating whether it is hot or cold
-    void semi_lagrangian_advect();  //Advect temperature through the velocity field
+    void add_composition(double x, double y); //Add composition at a point
+    void semi_lagrangian_advect_temperature();  //Advect temperature through the velocity field
+    void semi_lagrangian_advect_composition();  //Advect composition through the velocity field
     void diffuse_temperature(); //Diffuse temperature
     void solve_stokes(); //Solve for velocity field
     void draw();  //Render using OpenGL

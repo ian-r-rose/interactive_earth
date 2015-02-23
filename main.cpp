@@ -95,10 +95,11 @@ void timestep()
     handle->solve_stokes();
 
   //Add heat if the user is clicking
-  if(heat_state != 0) handle->add_heat(hx, hy, (heat_state==1 ? true : false));
+  if(heat_state != 0) handle->add_composition(hx, hy);
 
   //Advect temperature field
-  handle->semi_lagrangian_advect();
+  handle->semi_lagrangian_advect_temperature();
+  handle->semi_lagrangian_advect_composition();
 
   //Diffuse temperature
   handle->diffuse_temperature();
