@@ -56,6 +56,7 @@ class ConvectionSimulator
 
     //workhorse functions
     void initialize_temperature();  //just like it says
+    void initialize_composition();
     double heat(const Point&, const Point&);  //heating term at a point, given where the click has happened
     double react(const Point&, const Point&);  //heating term at a point, given where the click has happened
     void setup_stokes_problem();  //Setup for spectral solve
@@ -66,6 +67,7 @@ class ConvectionSimulator
    
     //functions for evaluating field at points
     double initial_temperature(const Point&);
+    double initial_composition(const Point&);
     double evaluate_temperature(const Point&);
     double evaluate_composition(const Point&);
     Point velocity(const Point&);

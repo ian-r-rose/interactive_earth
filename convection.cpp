@@ -40,6 +40,7 @@ ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, 
   buoyancy_number = 1.0;
   update_state(Rayleigh, theta);
   initialize_temperature();
+  initialize_composition();
 
   //Do some setup work for solving stokes and
   //diffustion problems. 
@@ -75,10 +76,12 @@ ConvectionSimulator::~ConvectionSimulator()
    Just start with a constant value of one half.*/
 double ConvectionSimulator::initial_temperature(const Point &p)
 {
-//  if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
-//  else if (std::sqrt( (1.65-p.x)*(1.65-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 0.0;
-//  else return 0.5;
-  return 0.5;
+  return p.y < 0.5 ? 0.5 : 0.5;
+}
+
+double ConvectionSimulator::initial_composition(const Point &p)
+{
+  return p.y < 0.5 ? 0.0 : 0.0;
 }
 
 /* Loop over all the cells and set the initial temperature */
@@ -86,6 +89,13 @@ void ConvectionSimulator::initialize_temperature()
 {
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = initial_temperature(cell->center());
+}
+ 
+/* Loop over all the cells and set the initial temperature */
+void ConvectionSimulator::initialize_composition()
+{
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    C[cell->self()] = initial_composition(cell->center());
 }
  
 /* Given a heat source centered on p1, calculate the heating at

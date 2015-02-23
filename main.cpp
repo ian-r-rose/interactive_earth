@@ -13,8 +13,8 @@
 //Number of cells in the x and y directions.
 //This is the primary control on resolution,
 //as well as performance/
-const unsigned int nx = 400;
-const unsigned int ny = 100;
+const unsigned int nx = 800;
+const unsigned int ny = 200;
 
 //Size of computational domain.  The ratio of
 //lx to ly should be the same of nx to ny,
