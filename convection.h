@@ -48,7 +48,7 @@ class ConvectionSimulator
     //Data for rendering with OpenGL
     GLfloat* vertices;  
     GLfloat* vertex_colors;
-    GLint* triangle_vertex_indices;
+    GLuint* triangle_vertex_indices;
 
     //workhorse functions
     void initialize_temperature();  //just like it says

@@ -5,7 +5,7 @@
 GLuint program;
 GLuint vbo_vertices;
 GLuint vbo_colors;
-GLuint vbo_triangle_vertex_indices;
+GLuint ibo_triangle_vertex_indices;
 GLint attribute_coord2d;
 GLint attribute_v_color;
 #endif //LEGACY_OPENGL
@@ -21,46 +21,50 @@ void ConvectionSimulator::setup_opengl()
     const short vertices_per_triangle = 3;
     const short coordinates_per_vertex = 2;
     const short colors_per_vertex = 3;
-    const unsigned long n_triangles = grid.nx * (grid.ny-1) * triangles_per_quad;
+    const unsigned long n_triangles = (grid.nx-1) * (grid.ny-1) * triangles_per_quad;
+    const unsigned long n_vertices = grid.nx * grid.ny;
     
 
-    vertices = new GLfloat[ n_triangles * vertices_per_triangle * coordinates_per_vertex ];
-    vertex_colors = new GLfloat[ n_triangles * vertices_per_triangle * colors_per_vertex ];
-    triangle_vertex_indices = new GLint[ n_triangles * vertices_per_triangle ];
+    vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
+    vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
+    triangle_vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
     
-    unsigned long i=0;
-    for( StaggeredGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
+    unsigned long v=0, i=0;
+    for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     {
-      //Triangle 1, vertex 1
-      vertices[i + 0] = cell->xindex()*DX-1.0f;
-      vertices[i + 1] = cell->yindex()*DY-1.0f;
-      //Triangle 1, vertex 2
-      vertices[i + 2] = cell->xindex()*DX-1.0f;
-      vertices[i + 3] = (cell->yindex()+1)*DY-1.0f;
-      //Triangle 1, vertex 3
-      vertices[i + 4] = (cell->xindex()+1)*DX-1.0f;
-      vertices[i + 5] = cell->yindex()*DY-1.0f;
+      //Vertex for this cell
+      vertices[v + 0] = cell->xindex()*DX-1.0f;
+      vertices[v + 1] = cell->yindex()*DY-1.0f;
 
-      //Triangle 2, vertex 1
-      vertices[i + 6] = (cell->xindex()+1)*DX-1.0f;
-      vertices[i + 7] = cell->yindex()*DY-1.0f;
-      //Triangle 2, vertex 2
-      vertices[i + 8] = cell->xindex()*DX-1.0f;
-      vertices[i + 9] = (cell->yindex()+1)*DY-1.0f;
-      //Triangle 2, vertex 3
-      vertices[i + 10] = (cell->xindex()+1)*DX-1.0f;
-      vertices[i + 11] = (cell->yindex()+1)*DY-1.0f;
+      if ( !cell->at_top_boundary() && !cell->at_right_boundary() )
+      {
+        //First triangle
+        triangle_vertex_indices[i + 0] = cell->self();
+        triangle_vertex_indices[i + 1] = cell->self()+grid.nx+1;
+        triangle_vertex_indices[i + 2] = cell->self()+grid.nx;
+
+        //Second triangle
+        triangle_vertex_indices[i + 3] = cell->self();
+        triangle_vertex_indices[i + 4] = cell->self() + 1;
+        triangle_vertex_indices[i + 5] = cell->self() + grid.nx + 1;
    
-      i+=triangles_per_quad * vertices_per_triangle * coordinates_per_vertex;
+        i += triangles_per_quad * vertices_per_triangle;
+      }
+
+      v += coordinates_per_vertex;
     }
+
+    glGenBuffers(1, &ibo_triangle_vertex_indices);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_triangle_vertex_indices);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*n_triangles*vertices_per_triangle, triangle_vertex_indices, GL_STATIC_DRAW);
 
     glGenBuffers(1, &vbo_vertices);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_triangles*vertices_per_triangle*coordinates_per_vertex, vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*coordinates_per_vertex, vertices, GL_STATIC_DRAW);
 
     glGenBuffers(1, &vbo_colors);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_colors), vertex_colors, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*colors_per_vertex, vertex_colors, GL_DYNAMIC_DRAW);
   }
 
   GLint compile_ok = GL_FALSE, link_ok = GL_FALSE;
@@ -147,6 +151,7 @@ void ConvectionSimulator::cleanup_opengl()
   glDeleteProgram(program);
   glDeleteBuffers(1, &vbo_vertices);
   glDeleteBuffers(1, &vbo_colors);
+  glDeleteBuffers(1, &ibo_triangle_vertex_indices);
 #endif //LEGACY_OPENGL
 }
 
@@ -154,47 +159,22 @@ void ConvectionSimulator::draw()
 {
 
 #ifndef LEGACY_OPENGL
-
   const short triangles_per_quad = 2;
   const short vertices_per_triangle = 3;
-  const short coordinates_per_vertex = 2;
   const short colors_per_vertex = 3;
-  const unsigned long n_triangles = grid.nx * (grid.ny-1) * triangles_per_quad;
+  const unsigned long n_triangles = (grid.nx-1) * (grid.ny-1) * triangles_per_quad;
+  const unsigned long n_vertices = grid.nx * grid.ny;
 
-  unsigned long i=0;
+  unsigned long v=0;
   for( StaggeredGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
   {
-    color c_s = hot(T[cell->self()]);
-    color c_u = hot(T[cell->up()]);
-    color c_r = hot(T[cell->right()]);
-    color c_ur = hot(T[cell->upright()]);
+    color c = hot(T[cell->self()]);
 
-    //Triangle 1, vertex 1
-    vertex_colors[i + 0] = c_s.R;
-    vertex_colors[i + 1] = c_s.G;
-    vertex_colors[i + 2] = c_s.B;
-    //Triangle 1, vertex 2
-    vertex_colors[i + 3] = c_u.R;
-    vertex_colors[i + 4] = c_u.G;
-    vertex_colors[i + 5] = c_u.B;
-    //Triangle 1, vertex 3
-    vertex_colors[i + 6] = c_r.R;
-    vertex_colors[i + 7] = c_r.G;
-    vertex_colors[i + 8] = c_r.B;
-    //Triangle 2, vertex 1
-    vertex_colors[i + 9] = c_r.R;
-    vertex_colors[i + 10] = c_r.G;
-    vertex_colors[i + 11] = c_r.B;
-    //Triangle 2, vertex 2
-    vertex_colors[i + 12] = c_u.R;
-    vertex_colors[i + 13] = c_u.G;
-    vertex_colors[i + 14] = c_u.B;
-    //Triangle 2, vertex 3
-    vertex_colors[i + 15] = c_ur.R;
-    vertex_colors[i + 16] = c_ur.G;
-    vertex_colors[i + 17] = c_ur.B;
+    vertex_colors[v + 0] = c.R;
+    vertex_colors[v + 1] = c.G;
+    vertex_colors[v + 2] = c.B;
 
-    i += triangles_per_quad*vertices_per_triangle*colors_per_vertex;
+    v += colors_per_vertex;
   }
     
   glClearColor(1.0, 1.0, 1.0, 1.0);
@@ -202,11 +182,11 @@ void ConvectionSimulator::draw()
 
   glUseProgram(program);
   glEnableVertexAttribArray(attribute_coord2d);
-  /* Describe our vertices array to OpenGL (it can't guess its format automatically) */
+  /* Describe our vertices array*/
   glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
   glVertexAttribPointer(
     attribute_coord2d, // attribute
-    2,                 // number of elements per vertex, here (x,y)
+    2,                 // number of elements per vertex (x,y)
     GL_FLOAT,          // the type of each element
     GL_FALSE,          // take our values as-is
     0,                 // no extra data between each position
@@ -214,22 +194,23 @@ void ConvectionSimulator::draw()
   );
 
   glEnableVertexAttribArray(attribute_v_color);
-  /* Describe our vertices array to OpenGL (it can't guess its format automatically) */
+  /* Describe our color array*/
   glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_triangles*vertices_per_triangle*colors_per_vertex, vertex_colors, GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*colors_per_vertex, vertex_colors, GL_DYNAMIC_DRAW);
   glVertexAttribPointer(
     attribute_v_color, // attribute
-    3,                 // number of elements per vertex, here (x,y)
+    3,                 // number of elements per verte (r,g,b)
     GL_FLOAT,          // the type of each element
     GL_FALSE,          // take our values as-is
     0,                 // no extra data between each position
     0);
 
-  /* Push each element in buffer_vertices to the vertex shader */
-  glDrawArrays(GL_TRIANGLES, 0, n_triangles*vertices_per_triangle);
+  /* Draw the triangles */
+  glDrawElements(GL_TRIANGLES, n_triangles*vertices_per_triangle, GL_UNSIGNED_INT, 0);
 
   glDisableVertexAttribArray(attribute_coord2d);
-  glDisableVertexAttribArray(attribute_v_color);
+//  glDisableVertexAttribArray(attribute_v_color);
+
 
 #else 
 
