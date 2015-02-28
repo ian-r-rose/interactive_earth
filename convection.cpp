@@ -189,7 +189,7 @@ inline double ConvectionSimulator::evaluate_temperature(const Point &p)
   else if (cell->at_bottom_boundary() && local_y < 0.0)
     value = linear_interp_2d( local_x, local_y-grid.dy, 
                              T[cell->self()], T[cell->right()], 2.0-T[cell->self()], 2.0-T[cell->right()]);
-  else
+  else 
     value = linear_interp_2d( local_x, local_y, T[cell->up()], T[cell->upright()],
                              T[cell->self()], T[cell->right()]);
 
@@ -203,8 +203,9 @@ inline double ConvectionSimulator::evaluate_composition(const Point &p)
 
   double value;
   StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
-  double local_x = (p.x - cell->center().x)/grid.dx;
-  double local_y = (p.y - cell->center().y)/grid.dy;
+
+  double local_x = std::fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
+  double local_y = ( p.y - cell->center().y )/grid.dy;
 
   if (cell->at_top_boundary() )
     value = linear_interp_2d( local_x, local_y, C[cell->self()], C[cell->right()],  
@@ -292,8 +293,6 @@ void ConvectionSimulator::semi_lagrangian_advect( advection_field field)
   //Copy the scratch vector into the field vector. 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     F[cell->self()] = scratch1[cell->self()];
- 
-  clip_field(field, 0.0, 1.0);
 }
 
 void ConvectionSimulator::clip_field( advection_field field, double min, double max)
