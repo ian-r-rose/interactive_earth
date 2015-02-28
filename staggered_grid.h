@@ -128,7 +128,7 @@ class StaggeredGrid
     inline int cell_id( const Point &p) { int xindex = (p.x/dx); int yindex=(p.y/dy);
                                    return keep_in_domain(xindex, yindex); };
     inline int keep_in_domain( int xindex, int yindex) { return nx*(yindex < 0 ? 0 : (yindex >= ny ? ny-1: yindex))
-                              + (xindex < 0 ? 0 : (xindex >= nx ? nx-1 : xindex)); };
+                              + (xindex % nx + nx) %nx ; };
     iterator cell_at_point( const Point &p) { return iterator(cell_id(p), *this); };
 
     iterator lower_left_corner_cell( const Point &p) { return cell_at_point(p); };

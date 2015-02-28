@@ -112,11 +112,11 @@ Point ConvectionSimulator::velocity(const Point &p)
   StaggeredGrid::iterator y_cell = grid.lower_left_hface_cell(p); 
 
   //Determine the local x and y coordinates for the x velocity
-  double vx_local_x = (p.x - x_cell->vface().x)/grid.dx;
+  double vx_local_x = std::fmod(p.x, grid.dx)/grid.dx;
   double vx_local_y = (p.y - x_cell->vface().y)/grid.dy;
 
   //Determine the local x and y coordinates for the y velocity
-  double vy_local_x = (p.x - y_cell->hface().x)/grid.dx;
+  double vy_local_x = std::fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
   double vy_local_y = (p.y - y_cell->hface().y)/grid.dy;
 
   //get interpolated vx
@@ -147,8 +147,8 @@ inline double ConvectionSimulator::temperature(const Point &p)
 {
   double temp;
   StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
-  double local_x = (p.x - cell->center().x)/grid.dx;
-  double local_y = (p.y - cell->center().y)/grid.dy;
+  double local_x = std::fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
+  double local_y = ( p.y - cell->center().y )/grid.dy;
 
   if (cell->at_top_boundary() )
     temp = linear_interp_2d( local_x, local_y, -T[cell->self()], -T[cell->right()],  
@@ -194,10 +194,8 @@ void ConvectionSimulator::semi_lagrangian_advect()
     takeoff_point.x = final_point.x - vel_final.x*dt;
     takeoff_point.y = final_point.y - vel_final.y*dt;
     //Keep it in the domain
-    takeoff_point.x = (takeoff_point.x < 0.0 ? takeoff_point.x+grid.lx : 
-                      (takeoff_point.x >= grid.lx ? takeoff_point.x-grid.lx : takeoff_point.x));
-    takeoff_point.y = (takeoff_point.y < 0.0 ? 0.0 : 
-                      (takeoff_point.y >= grid.ly ? grid.ly : takeoff_point.y));
+    takeoff_point.x = std::fmod(std::fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
+    takeoff_point.y = std::min( grid.ly, std::max( takeoff_point.y, 0.0) );
 
     //Iterate on the corrector.  Here I only do one iteration for
     //performance reasons, but in principle we could do more to get
@@ -210,10 +208,8 @@ void ConvectionSimulator::semi_lagrangian_advect()
       takeoff_point.x = final_point.x - (vel_final.x + vel_takeoff.x)*dt/2.0;
       takeoff_point.y = final_point.y - (vel_final.y + vel_takeoff.y)*dt/2.0;
       //Keep in domain
-      takeoff_point.x = (takeoff_point.x < 0.0 ? takeoff_point.x+grid.lx : 
-                        (takeoff_point.x >= grid.lx ? takeoff_point.x-grid.lx : takeoff_point.x));
-      takeoff_point.y = (takeoff_point.y < 0.0 ? 0.0 : 
-                        (takeoff_point.y >= grid.ly ? grid.ly : takeoff_point.y));
+      takeoff_point.x = std::fmod(std::fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
+      takeoff_point.y = std::min( grid.ly, std::max( takeoff_point.y, 0.0) );
     } 
     scratch1[cell->self()] = temperature(takeoff_point);  //Store the temperature we found
   }
