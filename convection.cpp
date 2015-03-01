@@ -2,6 +2,9 @@
 #include <cmath>
 
 
+inline double fast_fmod(double x,double y) { return x-((int)(x/y))*y; }
+
+
 /*Constructor for the solver. The parameters are in order:
   lx : domain size in x direction
   ly : domain size in y direction
@@ -112,11 +115,11 @@ Point ConvectionSimulator::velocity(const Point &p)
   StaggeredGrid::iterator y_cell = grid.lower_left_hface_cell(p); 
 
   //Determine the local x and y coordinates for the x velocity
-  double vx_local_x = std::fmod(p.x, grid.dx)/grid.dx;
+  double vx_local_x = fast_fmod(p.x, grid.dx)/grid.dx;
   double vx_local_y = (p.y - x_cell->vface().y)/grid.dy;
 
   //Determine the local x and y coordinates for the y velocity
-  double vy_local_x = std::fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
+  double vy_local_x = fast_fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
   double vy_local_y = (p.y - y_cell->hface().y)/grid.dy;
 
   //get interpolated vx
@@ -147,7 +150,7 @@ inline double ConvectionSimulator::temperature(const Point &p)
 {
   double temp;
   StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
-  double local_x = std::fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
+  double local_x = fast_fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
   double local_y = ( p.y - cell->center().y )/grid.dy;
 
   if (cell->at_top_boundary() )
@@ -156,13 +159,13 @@ inline double ConvectionSimulator::temperature(const Point &p)
   else if (cell->at_bottom_boundary() && local_y < 0.0)
     temp = linear_interp_2d( local_x, local_y-grid.dy, 
                              T[cell->self()], T[cell->right()], 2.0-T[cell->self()], 2.0-T[cell->right()]);
-  else
+  else 
     temp = linear_interp_2d( local_x, local_y, T[cell->up()], T[cell->upright()],
                              T[cell->self()], T[cell->right()]);
 
   return temp;
 }
-  
+
 /* Advect the temperature field through the velocity field using
    Semi-lagrangian advection.  This scheme is quite stable, which
    allows me to take VERY large time steps.  The drawback is that it
@@ -194,7 +197,7 @@ void ConvectionSimulator::semi_lagrangian_advect()
     takeoff_point.x = final_point.x - vel_final.x*dt;
     takeoff_point.y = final_point.y - vel_final.y*dt;
     //Keep it in the domain
-    takeoff_point.x = std::fmod(std::fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
+    takeoff_point.x = fast_fmod(fast_fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
     takeoff_point.y = std::min( grid.ly, std::max( takeoff_point.y, 0.0) );
 
     //Iterate on the corrector.  Here I only do one iteration for
@@ -208,7 +211,7 @@ void ConvectionSimulator::semi_lagrangian_advect()
       takeoff_point.x = final_point.x - (vel_final.x + vel_takeoff.x)*dt/2.0;
       takeoff_point.y = final_point.y - (vel_final.y + vel_takeoff.y)*dt/2.0;
       //Keep in domain
-      takeoff_point.x = std::fmod(std::fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
+      takeoff_point.x = fast_fmod(fast_fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
       takeoff_point.y = std::min( grid.ly, std::max( takeoff_point.y, 0.0) );
     } 
     scratch1[cell->self()] = temperature(takeoff_point);  //Store the temperature we found
