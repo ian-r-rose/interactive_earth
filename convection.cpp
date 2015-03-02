@@ -134,7 +134,7 @@ void ConvectionSimulator::add_composition(double x, double y)
 
 /* Interpolate the velocity onto an arbitrary point
    A bit complicated due to the staggered nature of the grid */
-Point ConvectionSimulator::velocity(const Point &p)
+Point ConvectionSimulator::evaluate_velocity(const Point &p)
 {
   Point vel;
 

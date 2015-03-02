@@ -70,7 +70,7 @@ class ConvectionSimulator
     double initial_composition(const Point&);
     double evaluate_temperature(const Point&);
     double evaluate_composition(const Point&);
-    Point velocity(const Point&);
+    Point  evaluate_velocity(const Point&);
 
   public:
     //Constructor and destructor
