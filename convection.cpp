@@ -110,7 +110,7 @@ inline double ConvectionSimulator::heat(const Point &p1, const Point &p2 )
 inline double ConvectionSimulator::react(const Point &p1, const Point &p2 )
 {
   const double rsq = (p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y);
-  return rsq < 0.1*0.1 ? heat_source : 0.0;
+  return rsq < composition_source_radius*composition_source_radius ? composition_source : 0.0;
 }
 
 /* Loop over all the cells and add heat according to where the current heat
@@ -256,7 +256,7 @@ void ConvectionSimulator::semi_lagrangian_advect( advection_field field)
   {
     //These points are known, as they are the grid points in question.  They will
     //not change for this cell.
-    vel_final = velocity(cell->center());
+    vel_final = evaluate_velocity(cell->center());
     final_point = cell->center();
 
   
@@ -274,7 +274,7 @@ void ConvectionSimulator::semi_lagrangian_advect( advection_field field)
     for(unsigned int i=0; i<1; ++i)
     {
       //Evaluate the velocity at the predictor
-      vel_takeoff = velocity(takeoff_point);
+      vel_takeoff = evaluate_velocity(takeoff_point);
       //Come up with the corrector using a midpoint rule
       takeoff_point.x = final_point.x - (vel_final.x + vel_takeoff.x)*dt/2.0;
       takeoff_point.y = final_point.y - (vel_final.y + vel_takeoff.y)*dt/2.0;
@@ -597,6 +597,8 @@ void ConvectionSimulator::update_state(double rayleigh, double gravity_angle)
   dt = cfl * 5.0; //Roughly 10x CFL, thanks to semi-lagrangian
   heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
   heat_source = velocity_scale/grid.ly*2.; //Heat a blob of order the ascent time for thta blob
+  composition_source_radius = grid.ly/10.;
+  composition_source=heat_source;
 
   setup_diffusion_problem();  //need to recompute the auxiliary vectors for the diffusion problem
 

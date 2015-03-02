@@ -23,9 +23,11 @@ class ConvectionSimulator
     double dt;  //timestep
     double theta;  //Direction of gravity
 
-    //Info about how to add heat on clicking
+    //Info about how to add heat or composition on clicking
     double heat_source_radius;
     double heat_source;
+    double composition_source_radius;
+    double composition_source;
 
     //The full grid, which knows how to iterate,
     //get geometric information, etc.
