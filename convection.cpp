@@ -197,7 +197,7 @@ inline double ConvectionSimulator::evaluate_temperature(const Point &p)
 /* Interpolate the temperature onto an arbitrary point. */
 inline double ConvectionSimulator::evaluate_composition(const Point &p)
 {
-  if (p.y < 0.0 || p.y > 1.0 ) return 0.0;
+  if (p.y < 0.0 || p.y > grid.ly ) return 0.0;
 
   double value;
   StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
@@ -590,7 +590,7 @@ void ConvectionSimulator::update_state(double rayleigh, double gravity_angle)
 
   length_scale = std::pow(Ra/2./Ra_c, -1./3.)*grid.ly;  
   const double Nu = std::pow(Ra/Ra_c/2., 1./3.) / 2.;  //Nusselt
-  const double velocity_scale = std::sqrt( Ra * Nu );
+  const double velocity_scale = std::sqrt( Ra * Nu )*grid.ly;
   const double cfl = grid.dy/velocity_scale;
 
   //Estimate other state properties based on simple isoviscous scalings
