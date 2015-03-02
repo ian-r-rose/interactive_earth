@@ -1,7 +1,5 @@
 #include "convection.h"
 #include <cmath>
-#include <iostream>
-#include <iomanip>
 
 
 inline double fast_fmod(double x,double y) { return x-((int)(x/y))*y; }

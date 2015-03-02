@@ -232,8 +232,17 @@ void ConvectionSimulator::draw( bool draw_composition)
 
     if( !cell->at_right_boundary() )
     {
-      color c_s = hot(T[cell->self()]);
-      color c_u = hot(T[cell->up()]);
+      color c_s, c_u;
+      if (draw_composition)
+      {
+        c_s = hot(T[cell->self()]);
+        c_u = hot(T[cell->up()]);
+      }
+      if (draw_composition)
+      {
+        c_s = hot(C[cell->self()]);
+        c_u = hot(C[cell->up()]);
+      }
 
       glColor3f(c_s.R, c_s.G, c_s.B);
       glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);

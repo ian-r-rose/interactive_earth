@@ -13,8 +13,8 @@
 //Number of cells in the x and y directions.
 //This is the primary control on resolution,
 //as well as performance/
-const unsigned int nx = 800;
-const unsigned int ny = 200;
+const unsigned int nx = 512;
+const unsigned int ny = 128;
 
 //Size of computational domain.  The ratio of
 //lx to ly should be the same of nx to ny,
@@ -41,6 +41,7 @@ double hx, hy;
 
 //Whether to solve the stokes equation for a given timestep.
 bool solve_stokes = true;
+//Whether to draw composition or temperature fields
 bool draw_composition = false;
 
 //Pointer for the solver so that the various event handlers
