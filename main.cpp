@@ -13,8 +13,8 @@
 //Number of cells in the x and y directions.
 //This is the primary control on resolution,
 //as well as performance/
-const unsigned int nx = 400;
-const unsigned int ny = 100;
+const unsigned int nx = 512;
+const unsigned int ny = 128;
 
 //Size of computational domain.  The ratio of
 //lx to ly should be the same of nx to ny,
@@ -28,7 +28,7 @@ const double Ra = 1.e7;
 
 //Factor for how much to blow up the rendered 
 //triangles so that they are bigger on screen
-const unsigned int scale = 3;
+const unsigned int scale = 2;
 
 //Total number of pixels in x and y directions
 const unsigned int xpix = nx*scale;
