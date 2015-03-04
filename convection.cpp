@@ -2,7 +2,13 @@
 #include <cmath>
 
 
+//standard math library functions can be unpredictibly slow in 
+//some implementations, it seems, and not even available in others.
+//Here I implement some super basic, unsafe versions of some 
+//for inlining.
 inline double fast_fmod(double x,double y) { return x-((int)(x/y))*y; }
+inline double dmin (double x, double y) { return x < y ? x : y; }
+inline double dmax (double x, double y) { return x > y ? x : y; }
 
 
 /*Constructor for the solver. The parameters are in order:
@@ -198,7 +204,7 @@ void ConvectionSimulator::semi_lagrangian_advect()
     takeoff_point.y = final_point.y - vel_final.y*dt;
     //Keep it in the domain
     takeoff_point.x = fast_fmod(fast_fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
-    takeoff_point.y = std::min( grid.ly, std::max( takeoff_point.y, 0.0) );
+    takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
 
     //Iterate on the corrector.  Here I only do one iteration for
     //performance reasons, but in principle we could do more to get
@@ -212,7 +218,7 @@ void ConvectionSimulator::semi_lagrangian_advect()
       takeoff_point.y = final_point.y - (vel_final.y + vel_takeoff.y)*dt/2.0;
       //Keep in domain
       takeoff_point.x = fast_fmod(fast_fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
-      takeoff_point.y = std::min( grid.ly, std::max( takeoff_point.y, 0.0) );
+      takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
     } 
     scratch1[cell->self()] = temperature(takeoff_point);  //Store the temperature we found
   }
