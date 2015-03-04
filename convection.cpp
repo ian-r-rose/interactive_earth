@@ -2,7 +2,13 @@
 #include <cmath>
 
 
+//standard math library functions can be unpredictibly slow in 
+//some implementations, it seems, and not even available in others.
+//Here I implement some super basic, unsafe versions of some 
+//for inlining.
 inline double fast_fmod(double x,double y) { return x-((int)(x/y))*y; }
+inline double dmin (double x, double y) { return x < y ? x : y; }
+inline double dmax (double x, double y) { return x > y ? x : y; }
 
 
 /*Constructor for the solver. The parameters are in order:
@@ -202,7 +208,7 @@ inline double ConvectionSimulator::evaluate_composition(const Point &p)
   double value;
   StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
 
-  double local_x = std::fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
+  double local_x = fast_fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
   double local_y = ( p.y - cell->center().y )/grid.dy;
 
   if (cell->at_top_boundary() )
@@ -266,7 +272,7 @@ void ConvectionSimulator::semi_lagrangian_advect( advection_field field)
     takeoff_point.y = final_point.y - vel_final.y*dt;
     //Keep it in the domain
     takeoff_point.x = fast_fmod(fast_fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
-    takeoff_point.y = std::min( grid.ly, std::max( takeoff_point.y, 0.0) );
+    takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
 
     //Iterate on the corrector.  Here I only do one iteration for
     //performance reasons, but in principle we could do more to get
@@ -280,7 +286,7 @@ void ConvectionSimulator::semi_lagrangian_advect( advection_field field)
       takeoff_point.y = final_point.y - (vel_final.y + vel_takeoff.y)*dt/2.0;
       //Keep in domain
       takeoff_point.x = fast_fmod(fast_fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
-      takeoff_point.y = std::min( grid.ly, std::max( takeoff_point.y, 0.0) );
+      takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
     } 
     if (field == temperature ) 
       scratch1[cell->self()] = evaluate_temperature(takeoff_point);  //Store the temperature we found
@@ -302,7 +308,7 @@ void ConvectionSimulator::clip_field( advection_field field, double min, double 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     double val = F[cell->self()];
-    F[cell->self()] = ( val > max ? max : (val < min ? min: val ) );
+    F[cell->self()] = dmin( max, dmax( min, val) );
   }
 }
 
