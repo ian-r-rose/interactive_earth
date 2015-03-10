@@ -15,8 +15,8 @@ void ConvectionSimulator::setup_opengl()
 #ifndef LEGACY_OPENGL
   //Setup the vertices, indices, and colors
   {
-    GLfloat DX = 2.0/grid.nx;
-    GLfloat DY = 2.0/grid.ny;
+    GLfloat DX = 2.0/(grid.nx-1);
+    GLfloat DY = 2.0/(grid.ny-1);
     const short triangles_per_quad = 2;
     const short vertices_per_triangle = 3;
     const short coordinates_per_vertex = 2;
