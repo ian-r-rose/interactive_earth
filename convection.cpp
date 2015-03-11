@@ -405,7 +405,7 @@ void ConvectionSimulator::setup_stokes_problem()
   doing the heat flux through the top boundary*/
 double ConvectionSimulator::nusselt_number() 
 {
-  double heat_flux;
+  double heat_flux = 0;
 
   for ( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
