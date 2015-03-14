@@ -148,7 +148,6 @@ void quit()
 void loop()
 {
   SDL_Event event;
-  SDL_Delay(1);
   while(SDL_PollEvent(&event))
   {
     switch(event.type)
