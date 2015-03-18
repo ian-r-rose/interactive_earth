@@ -1,0 +1,29 @@
+CXX=g++
+CC=gcc
+
+CXX_FLAGS=-O3 
+C_FLAGS=
+
+INCLUDE_DIRS= -I/opt/local/include
+LIBRARY_DIRS= -L/opt/local/lib
+LIBRARIES= -lfftw3 -lSDL2 -lGLEW -lpthread -framework Cocoa -framework OpenGL
+
+LINK_FLAGS=
+
+
+
+convection: convection.o main.o rendering.o
+	$(CXX) $(CXX_FLAGS) convection.o rendering.o main.o -o interactive_earth $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
+
+main.o: main.cpp convection.h
+	$(CXX) $(CXX_FLAGS) -c main.cpp  $(LINK_FLAGS) $(INCLUDE_DIRS) $(DEFINES) 
+
+convection.o: convection.cpp convection.h
+	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) convection.cpp
+
+rendering.o: rendering.cpp convection.h
+	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) rendering.cpp
+
+.PHONY: clean
+clean:
+	rm -f *.o interactive_earth
