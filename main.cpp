@@ -35,7 +35,7 @@ const unsigned int xpix = nx*scale;
 const unsigned int ypix = ny*scale;
 
 //Whether to add heat to the simulation on mouse click.
-int heat_state = 0;
+int click_state = 0;
 //Location of heat-adding
 double hx, hy;
 
@@ -75,13 +75,13 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
   if(event->state==SDL_PRESSED)
   {
      if(event->button == SDL_BUTTON_LEFT)
-       heat_state = 1;
+      click_state = 1;
      if(event->button == SDL_BUTTON_RIGHT)
-       heat_state = -1;
+       click_state = -1;
      hx = lx*(double(event->x)/double(xpix));
      hy = ly*(1.0-double(event->y)/double(ypix));
   }
-  else heat_state=0;
+  else click_state=0;
 }
 
 //Actually perform the timestep
@@ -97,7 +97,11 @@ void timestep()
     handle->solve_stokes();
 
   //Add heat if the user is clicking
-  if(heat_state != 0) handle->add_composition(hx, hy);
+  if(click_state != 0 && draw_composition) 
+    handle->add_composition(hx, hy);
+  else if(click_state != 0 && !draw_composition) 
+    handle->add_heat(hx, hy, (click_state==1 ? true : false));
+
 
   //Advect temperature field
   handle->semi_lagrangian_advect_temperature();
