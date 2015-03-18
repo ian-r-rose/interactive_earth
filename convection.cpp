@@ -345,7 +345,7 @@ void ConvectionSimulator::diffuse_temperature()
   {
     if(cell->at_top_boundary())
       T[cell->self()] = 0.0;
-    if(cell->at_bottom_boundary())
+    else if(cell->at_bottom_boundary())
       T[cell->self()] = 1.0;
     else
       T[cell->self()] = scratch1[cell->self()] - luy[cell->self()]*T[cell->up()];
