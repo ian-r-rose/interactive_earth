@@ -44,6 +44,9 @@ bool solve_stokes = true;
 //Whether to draw composition or temperature fields
 bool draw_composition = false;
 
+//Whether we are in earthquake mode
+bool seismic_mode = false;
+
 //Pointer for the solver so that the various event handlers
 //can access it.  Did it this way due to the way GLUT is 
 //organized, not really necessary now that I am using SDL.
@@ -75,13 +78,17 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
   if(event->state==SDL_PRESSED)
   {
      if(event->button == SDL_BUTTON_LEFT)
-      click_state = 1;
+       click_state = 1;
      if(event->button == SDL_BUTTON_RIGHT)
        click_state = -1;
      hx = lx*(double(event->x)/double(xpix));
      hy = ly*(1.0-double(event->y)/double(ypix));
+     
   }
-  else click_state=0;
+  else
+  {
+    click_state=0;
+  }
 }
 
 //Actually perform the timestep
@@ -90,31 +97,40 @@ void timestep()
   static int i=0;  //Keep track of timestep number
   handle->draw( draw_composition );  //Draw to screen
 
-  //The stokes solve is typically the most expensive part.  I have found
-  //That it usually looks okay if we only update the velocity solution 
-  //every other timestep.  Any more delay and it starts to look funny.
-  if(solve_stokes && i%2==0)
-    handle->solve_stokes();
+  //Do the convection problem if not in seismic mode
+  if( !seismic_mode )
+  {
+    //The stokes solve is typically the most expensive part.  I have found
+    //That it usually looks okay if we only update the velocity solution 
+    //every other timestep.  Any more delay and it starts to look funny.
+    if(solve_stokes && i%2==0)
+      handle->solve_stokes();
 
-  //Add heat if the user is clicking
-  if(click_state != 0 && draw_composition) 
-    handle->add_composition(hx, hy);
-  else if(click_state != 0 && !draw_composition) 
-    handle->add_heat(hx, hy, (click_state==1 ? true : false));
+    //Add heat if the user is clicking
+    if(click_state != 0 && !draw_composition) handle->add_heat(hx, hy, (click_state==1 ? true : false));
+    if(click_state != 0 && draw_composition) handle->add_composition(hx, hy);
 
+    //Advect temperature field
+    handle->semi_lagrangian_advect_temperature();
+    handle->semi_lagrangian_advect_composition();
 
-  //Advect temperature field
-  handle->semi_lagrangian_advect_temperature();
-  handle->semi_lagrangian_advect_composition();
+    //Diffuse temperature
+    handle->diffuse_temperature();
 
-  //Diffuse temperature
-  handle->diffuse_temperature();
-
-  //Output scaling information
-  std::cout<<"Ra: "<<std::setprecision(3)<<handle->rayleigh_number()
-           <<"\tNu: "<<handle->nusselt_number()<<std::endl;
-  //increment timestep
-  ++i;
+    //Output scaling information
+    std::cout<<"Ra: "<<std::setprecision(3)<<handle->rayleigh_number()
+             <<"\tNu: "<<handle->nusselt_number()<<std::endl;
+    //increment timestep
+    ++i;
+  }
+  //If we are in seismic mode
+  else
+  {
+    //Make earthquakes
+    if(click_state != 0) handle->earthquake(hx, hy);
+    //Propagate waves
+    handle->propagate_seismic_waves();
+  }
 }
 
 
@@ -162,10 +178,11 @@ void loop()
       case SDL_QUIT:
         quit();
       case SDL_KEYDOWN:
-        //Neat feature of only advecting and diffusing, but not updating the
-        //Stokes solution.  Not realistic, just fun to play with.
         if(event.key.keysym.sym == SDLK_SPACE)
-          solve_stokes = !solve_stokes;
+        {
+          seismic_mode = !seismic_mode;
+          handle->clear_seismic_waves();
+        }
         //Quitting should be handled by navigating to another
         //webpage or closing the browser when using, emscripten,
         //so just disable quitting on escape

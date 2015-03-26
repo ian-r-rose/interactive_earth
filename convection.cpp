@@ -26,6 +26,8 @@ ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, 
   //Allocate memory for data vectors
   T = new double[ncells];
   C = new double[ncells];
+  D = new double[ncells];
+  Dp = new double[ncells];
   stream = new double[ncells];
   curl_density = new double[ncells];
   lux = new double[ncells];
@@ -59,6 +61,8 @@ ConvectionSimulator::~ConvectionSimulator()
 {
   delete[] T;
   delete[] C;
+  delete[] D;
+  delete[] Dp;
   delete[] stream;
   delete[] curl_density;
   delete[] lux;
@@ -127,6 +131,84 @@ void ConvectionSimulator::add_heat(double x, double y, bool hot)
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = T[cell->self()] + (hot ? 1.0 : -1.0)*heat(p, cell->center())*dt;
 }
+
+/* Loop over the cells and zero out the displacement vectors */
+void ConvectionSimulator::clear_seismic_waves()
+{
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    D[cell->self()] = 0.;
+    Dp[cell->self()] = 0.;
+  }
+}
+
+
+/* Add an earthquake at the point x,y.  I use a functional form of a 
+  Mexican hat wavelet.  At some point it may be good to revisit what
+  functional form is best.  */
+void ConvectionSimulator::earthquake(double x, double y)
+{
+  Point p1; p1.x = x; p1.y=y;
+  const double earthquake_radius = grid.dy*4.;  //Somewhat arbitrary radius
+  const double prefactor = 2. / std::sqrt( 3. * earthquake_radius * M_PI * M_PI);
+
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    Point p2 = cell->center();
+    const double rsq = (p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y);
+    const double dist = rsq/earthquake_radius/earthquake_radius;
+    D[cell->self()] += prefactor * (1.0 - dist) * std::exp( -dist/2. );
+  }
+}
+
+/* Explicitly propagate the wave equation. */
+void ConvectionSimulator::propagate_seismic_waves()
+{
+  const double reference_speed = 1.0;  //dummy wavespeed
+  const double dt = 0.6*dmin(grid.dx,grid.dy)/reference_speed; // Timestep to satisfy cfl
+  double dissipation = 0.5;  //Empirically chosen dissipation
+
+  //We can get away with an explicit timestepping scheme for the wave equation,
+  //so no complicated tridiagonal matrix inversion or any such nonsense here
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    double laplacian;
+
+    //Make the wavespeed temperature dependent.  This is a HUGE 
+    //temperature dependence so it is pretty obvious.
+    double speed = reference_speed*(1.0 - 0.7*T[cell->self()]);
+    if(speed < 0.0) speed = 0.0;
+
+    //Five point laplacian stencil
+    if( cell->at_top_boundary() )
+      laplacian = (D[cell->down()] + D[cell->down()] - 2.0 * D[cell->self()])/grid.dy/grid.dy + 
+                  (D[cell->right()] + D[cell->left()] - 2.0 * D[cell->self()])/grid.dx/grid.dx; 
+    else if ( cell->at_bottom_boundary() )
+      laplacian = (D[cell->up()] + D[cell->up()] - 2.0 * D[cell->self()])/grid.dy/grid.dy + 
+                  (D[cell->right()] + D[cell->left()] - 2.0 * D[cell->self()])/grid.dx/grid.dx; 
+    else
+      laplacian = (D[cell->up()] + D[cell->down()] - 2.0 * D[cell->self()])/grid.dy/grid.dy + 
+                  (D[cell->right()] + D[cell->left()] - 2.0 * D[cell->self()])/grid.dx/grid.dx; 
+
+    //Explicitly propagate wave
+    scratch1[cell->self()] = (2.0 * D[cell->self()] - Dp[cell->self()]  
+                             + dt*dt*speed*speed*laplacian + dt*dissipation*D[cell->self()])
+                             /(1.0 + dissipation*dt); 
+  }
+
+  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    //Current displacement becomes previous displacement
+    Dp[cell->self()] = D[cell->self()];
+    //Copy over new displacement
+    D[cell->self()] = scratch1[cell->self()];
+  
+    //clip field to tamp down on instabilities and keep it in reasonable values
+    if(D[cell->self()] > 1.0) D[cell->self()] = 1.0;
+    if(D[cell->self()] < -1.0) D[cell->self()] = -1.0;
+  }
+}
+
   
 /* Loop over all the cells and add composition, similar to add_heat*/
 void ConvectionSimulator::add_composition(double x, double y)
