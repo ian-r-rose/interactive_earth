@@ -30,6 +30,8 @@ class ConvectionSimulator
     
     //Vectors which are used in the solve
     double *T;  //Temperature
+    double *D;  //Displacement
+    double *Dp;  //Previous displacement
     double *scratch1, *scratch2;  //Scratch vectors for storing temporary information
     double *freqs;  //Frequencies in spectral space for the stokes solve
     double *stream;  //Stream function solution
@@ -71,6 +73,10 @@ class ConvectionSimulator
     double rayleigh_number() const;  //return Ra
     double timescale() const;  //Characteristic timescale, which is scaled to plume ascent time
     double nusselt_number(); //Calculate nusselt number at a timestep
+
+    void earthquake(double x, double y);  //Add source term for wave equation
+    void propagate_seismic_waves(); //evolve the wave equation
+    void clear_seismic_waves(); //zero out the displacement vectors
 
     void add_heat(double x, double y, bool hot); //Add heat at a point, with the bool indicating whether it is hot or cold
     void semi_lagrangian_advect();  //Advect temperature through the velocity field
