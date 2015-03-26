@@ -144,7 +144,7 @@ void ConvectionSimulator::earthquake(double x, double y)
 void ConvectionSimulator::propagate_seismic_waves()
 {
   const double reference_speed = 1.0;  //dummy wavespeed
-  const double dt = 0.6*std::min(grid.dx,grid.dy)/reference_speed; // Timestep to satisfy cfl
+  const double dt = 0.6*dmin(grid.dx,grid.dy)/reference_speed; // Timestep to satisfy cfl
   double dissipation = 0.5;  //Empirically chosen dissipation
 
   //We can get away with an explicit timestepping scheme for the wave equation,
