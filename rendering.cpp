@@ -157,7 +157,7 @@ void ConvectionSimulator::cleanup_opengl()
 
 void ConvectionSimulator::draw( bool draw_composition)
 {
-
+  double displacement_factor = 0.4;
 #ifndef LEGACY_OPENGL
   const short triangles_per_quad = 2;
   const short vertices_per_triangle = 3;
@@ -173,6 +173,11 @@ void ConvectionSimulator::draw( bool draw_composition)
       c = hot(C[cell->self()]);
     else
       c = hot(T[cell->self()]);
+
+    double displacement = displacement_factor * D[cell->self()]; //Perturb color if there is displacement
+    c.R += displacement;
+    c.G += displacement;
+    c.B += displacement;
 
     vertex_colors[v + 0] = c.R;
     vertex_colors[v + 1] = c.G;
@@ -243,6 +248,13 @@ void ConvectionSimulator::draw( bool draw_composition)
         c_s = hot(T[cell->self()]);
         c_u = hot(T[cell->up()]);
       }
+
+      c_s.R += displacement_factor*D[cell->self()];
+      c_s.G += displacement_factor*D[cell->self()];
+      c_s.B += displacement_factor*D[cell->self()];
+      c_u.R += displacement_factor*D[cell->self()];
+      c_u.G += displacement_factor*D[cell->self()];
+      c_u.B += displacement_factor*D[cell->self()];
 
       glColor3f(c_s.R, c_s.G, c_s.B);
       glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
