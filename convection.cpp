@@ -177,7 +177,7 @@ void ConvectionSimulator::propagate_seismic_waves()
     //Make the wavespeed temperature dependent.  This is a HUGE 
     //temperature dependence so it is pretty obvious.
     double speed = reference_speed*(1.0 - 0.7*T[cell->self()]);
-    if(speed < 0.0) speed = 0.0;
+    speed = ( speed < 0.1 ? 0.1 : (speed > 1.0 ? 1.0 : speed));
 
     //Five point laplacian stencil
     if( cell->at_top_boundary() )
