@@ -50,12 +50,29 @@ The temperature field and stream function are located at the cell centers, the x
 The temperature boundary conditions are $T=0$ at the surface and $T=1$ at the bottom.
 The velocity boundary conditions are free slip.
 
+The user is also able to pause the simulation.  While it is paused, they may click to add earthquakes (that is, send seismic waves through the fluid).  These waves travel at a temperature-dependent speed, and the boundaries of the domain are reflecting.  The waves are propagated by solving the scalar wave equation:
+
+\begin{equation}
+\frac{\partial^2 \xi}{\partial t^2} = c^2 \nabla^2 \xi - \gamma \frac{\partial \xi}{\partial t}
+\end{equation}
+
+Where $\xi$ is the displacement field, $c$ is the wavespeed, and $\gamma$ is some dissipation for the displacement.
+
+When the convection simulation is running, the the code loops over the following steps:
+
 \begin{enumerate}
 \item{Solve the Stokes equations}
 \item{Add the heating terms}
 \item{Advect the temperature field}
 \item{Diffuse the temperature field}
 \item{Render the temperature field to screen}
+\end{enumerate}
+
+When the convection simulation is paused, the code loops over the following:
+\begin{enumerate}
+\item{Add earthquake source terms}
+\item{Propagate seismic waves}
+\item{Render the displacement and temperature fields to screen}
 \end{enumerate}
 
 The following describes in some detail the methods for each of these steps.
@@ -215,5 +232,39 @@ However, they are also extremely stable, to the point where I am able to take 10
 I can alleviate the interpolation cost by doing very cheap and innacurate linear interpolations.
 
 \section{Diffusion}
+
+\section{Earthquake sources}
+
+\section{Seismic wave propagation}
+
+The CFL condition for second-order hyperbolic equations (like the wave equation) is not nearly so onerous as that for parabolic equations (like the diffusion equation).
+We can therefore get away with propagating the seismic waves using an explicit time marching scheme, which significantly simplifies the code.
+The time derivatives are evaluated using the simplest possible finite difference approximations, and the Laplacian is discretized using a five-point stencil.
+
+Applying these discretizations, we get
+
+
+\begin{equation}
+\begin{aligned}
+& \frac{\xi^{n+1}(x,y) - 2 \xi^{n}(x,y) + \xi^{n-1}(x,y) }{\Delta t^2}  = \\
+ &c^2 \frac{\xi^{n}(x+\Delta x, y)  -2 \xi^{n}(x,y) + \xi^{n}(x-\Delta x, y)}{\Delta x^2} \\
+ + &c^2 \frac{\xi^{n}(x, y+ \Delta y)  -2 \xi^{n}(x,y) + \xi^{n}(x, y-\Delta y)}{\Delta y^2} \\
+& - \gamma \frac{\xi^{n+1}(x,y) - \xi^{n}(x,y) }{\Delta t}
+\end{aligned}
+\end{equation}
+
+Since this is an explicit scheme, we can solve directly for $\xi^{n+1}$:
+
+\begin{equation}
+\begin{aligned}
+& (1 + \gamma \Delta t) \xi^{n+1}(x,y) = \\
+& 2 \xi^{n}(x,y) - \xi^{n-1}(x,y)   +  \\
+ &\frac{ c^2 \Delta t^2}{\Delta x^2} \left( \xi^{n}(x+\Delta x, y)  -2 \xi^{n}(x,y) + \xi^{n}(x-\Delta x, y) \right) \\
+ + &\frac{ c^2 \Delta t^2}{\Delta y^2} \left( \xi^{n}(x, y+ \Delta y)  -2 \xi^{n}(x,y) + \xi^{n}(x, y-\Delta y) \right) \\
+& + \gamma \Delta t \xi^{n}(x,y)
+\end{aligned}
+\end{equation}
+
+This is evaluated directly from the current and prevous solutions to the displacement field.
 
 \end{document}
