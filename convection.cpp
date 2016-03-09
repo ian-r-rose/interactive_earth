@@ -81,8 +81,6 @@ ConvectionSimulator::~ConvectionSimulator()
     delete stokes_matrices[i];
   delete[] stokes_matrices;
  
-  fftw_destroy_plan(dst);
-  fftw_destroy_plan(idst);
   fftw_destroy_plan(dft);
   fftw_destroy_plan(idft);
 }
