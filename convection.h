@@ -1,3 +1,4 @@
+#include <complex>
 #include "fftw3.h"
 #include "staggered_grid.h"
 #include "GL/glew.h"
@@ -45,7 +46,7 @@ class ConvectionSimulator
 
     //FFTW stuff
     fftw_plan dst, idst, dft, idft; //FFTW plans for doing the forward and inverse transforms
-    fftw_complex* curl_T_spectral;  //Curl of temperature in spectral space
+    std::complex<double>* curl_T_spectral;  //Curl of temperature in spectral space
 
     //Data for rendering with OpenGL
     GLfloat* vertices;  

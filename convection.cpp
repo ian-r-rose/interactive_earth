@@ -11,6 +11,41 @@ inline double dmin (double x, double y) { return x < y ? x : y; }
 inline double dmax (double x, double y) { return x > y ? x : y; }
 
 
+/* Tridiagonal matrix solver. Given the diagonal, upper diagonal,
+   lower diagonal, and right hand side, invert the system.
+*/
+template<typename T>
+void tridiagonal_matrix_solve( int n, double* lower_diag, double* diag, double* upper_diag,
+                               T *x, T *rhs, int stride )
+{
+  double *upper_diag_prime = new double[n];
+  T *rhs_prime = new T[n];
+
+  upper_diag_prime[0] = upper_diag[0]/diag[0];
+  rhs_prime[0] = rhs[0]/diag[0];
+
+  for (unsigned int i=1; i < n-1; ++i)
+  {
+    unsigned int strided_index = stride*i;
+    upper_diag_prime[i] = upper_diag[strided_index]/
+                          (diag[strided_index] - lower_diag[strided_index]*upper_diag_prime[i-1]);
+    rhs_prime[i] = (rhs[strided_index] - lower_diag[strided_index]*rhs_prime[i-1])/
+                   (diag[strided_index] - lower_diag[strided_index]*upper_diag_prime[i-1]);
+  }
+  
+  rhs_prime[n-1] = (rhs[(n-1)*stride] - lower_diag[(n-1)*stride]*rhs_prime[n-2])/
+                   (diag[(n-1)*stride] - lower_diag[(n-1)*stride]*upper_diag_prime[n-2]);
+
+  x[(n-1)*stride] = rhs_prime[n-1];
+  for (unsigned int i = n-2; i >= 0; --i)
+    x[i*stride] = rhs_prime[i] - upper_diag_prime[i]*x[(i+1)*stride];
+
+  delete[] upper_diag_prime;
+  delete[] rhs_prime;
+}
+  
+
+
 /*Constructor for the solver. The parameters are in order:
   lx : domain size in x direction
   ly : domain size in y direction
@@ -38,9 +73,14 @@ ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, 
   scratch1 = new double[ncells];
   scratch2 = new double[ncells];
 
+  //Memory for tridiagonal system in biharmonic equation
+  //diag = new double[ncells];
+  //upper_diag = new double[ncells];
+  //lower_diag = new double[ncells];
+
   //I actually allocate more memory than necessary for the 
   //spectral vector, but this way it makes the indexing simpler
-  curl_T_spectral = new fftw_complex[ncells];
+  curl_T_spectral = new std::complex<double>[ncells];
 
   //Initialize the state
   update_state(Rayleigh, theta);
@@ -452,8 +492,7 @@ void ConvectionSimulator::setup_stokes_problem()
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     int l = cell->xindex();
-    int m = cell->yindex()+1;
-    double factor = 1.0/(4.0*M_PI*M_PI*l*l/grid.lx/grid.lx + M_PI*M_PI*m*m/grid.ly/grid.ly);
+    double factor = 1.0/(4.0*M_PI*M_PI*l*l/grid.lx/grid.lx);
     factor = factor*factor;
     freqs[cell->self()]=factor;
   }
@@ -461,22 +500,15 @@ void ConvectionSimulator::setup_stokes_problem()
   int n[1];
   int stride, dist, howmany;
 
-  //transform in the y direction with a dst
-  n[0] = grid.ny; stride = grid.nx; dist = 1; howmany = grid.nx; 
-  fftw_r2r_kind f[1] = {FFTW_RODFT00};
-  dst = fftw_plan_many_r2r(1, n, howmany, curl_T, NULL, stride, dist,
-                                     scratch1, NULL, stride, dist,
-                                     f, FFTW_ESTIMATE);
-  idst = fftw_plan_many_r2r(1, n, howmany, scratch1, NULL, stride, dist,
-                                     scratch2, NULL, stride, dist,
-                                     f, FFTW_ESTIMATE);
-
   //transform in the x direction with a full dft
   n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny; 
   dft = fftw_plan_many_dft_r2c(1, n, howmany, scratch1, NULL, stride, dist,
-                     curl_T_spectral, NULL, stride, dist, FFTW_ESTIMATE);
-  idft = fftw_plan_many_dft_c2r(1, n, howmany, curl_T_spectral, NULL, stride, dist,
-                     scratch1, NULL, stride, dist, FFTW_ESTIMATE);
+                     reinterpret_cast<fftw_complex*>(curl_T_spectral), 
+                     NULL, stride, dist, FFTW_ESTIMATE);
+  idft = fftw_plan_many_dft_c2r(1, n, howmany, 
+                     reinterpret_cast<fftw_complex*>(curl_T_spectral),
+                     NULL, stride, dist, scratch1, NULL, 
+                     stride, dist, FFTW_ESTIMATE);
 
 }
 
@@ -528,26 +560,22 @@ void ConvectionSimulator::solve_stokes()
   assemble_curl_T_vector();
 
   //Execute the forward fourier transform
-  fftw_execute(dst);  //Y direction
   fftw_execute(dft);  //X direction
 
   //Multiply by the relevant frequencies.
+  for (unsigned int i = 0; i <= grid.nx/2. 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     if(cell->xindex() <= grid.nx/2)
-    {
-      curl_T_spectral[cell->self()][0]*=freqs[cell->self()];
-      curl_T_spectral[cell->self()][1]*=freqs[cell->self()];
-    }
+      curl_T_spectral[cell->self()]*=freqs[cell->self()];
   }
 
   //Execute the inverse Fourier transform
-  fftw_execute(idft);  //Y direction
-  fftw_execute(idst);  //X direction
+  fftw_execute(idft);  //X direction
 
   //Renormalize
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    stream[cell->self()] = scratch2[cell->self()]/(grid.ny+1)/2.0/grid.nx;
+    stream[cell->self()] = scratch2[cell->self()]/2.0/grid.nx;
 
   //Come up with the velocities by taking finite differences of the stream function.
   //I could also take these derivatives in spectral space, but that would mean 
