@@ -1,7 +1,5 @@
-#include "convection.h"
 #include <cmath>
-#include <vector>
-#include <iostream>
+#include "convection.h"
 
 
 //standard math library functions can be unpredictibly slow in 
@@ -13,41 +11,6 @@ inline double dmin (double x, double y) { return x < y ? x : y; }
 inline double dmax (double x, double y) { return x > y ? x : y; }
 
 
-/* Tridiagonal matrix solver. Given the diagonal, upper diagonal,
-   lower diagonal, and right hand side, invert the system.
-*/
-template<typename T>
-void tridiagonal_matrix_solve( int n, double* lower_diag, double* diag, double* upper_diag,
-                               T *x, T *rhs, int stride )
-{
-  double *upper_diag_prime = new double[n];
-  T *rhs_prime = new T[n];
-
-  upper_diag_prime[0] = upper_diag[0]/diag[0];
-  rhs_prime[0] = rhs[0]/diag[0];
-
-  for (unsigned int i=1; i < n-1; ++i)
-  {
-    unsigned int strided_index = stride*i;
-    upper_diag_prime[i] = upper_diag[i]/
-                          (diag[i] - lower_diag[i]*upper_diag_prime[i-1]);
-    rhs_prime[i] = (rhs[strided_index] - lower_diag[i]*rhs_prime[i-1])/
-                   (diag[i] - lower_diag[i]*upper_diag_prime[i-1]);
-  }
-  
-  rhs_prime[n-1] = (rhs[(n-1)*stride] - lower_diag[(n-1)]*rhs_prime[n-2])/
-                   (diag[(n-1)] - lower_diag[(n-1)]*upper_diag_prime[n-2]);
-
-  x[(n-1)*stride] = rhs_prime[n-1];
-  for (int i = n-2; i >= 0; --i)
-    x[i*stride] = rhs_prime[i] - upper_diag_prime[i]*x[(i+1)*stride];
-
-  delete[] upper_diag_prime;
-  delete[] rhs_prime;
-}
-  
-
-
 /*Constructor for the solver. The parameters are in order:
   lx : domain size in x direction
   ly : domain size in y direction
@@ -57,7 +20,7 @@ void tridiagonal_matrix_solve( int n, double* lower_diag, double* diag, double* 
 */
 ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, double Rayleigh):
                           nx(nx), ny(ny), ncells(nx*ny), Ra(Rayleigh),
-                          grid(lx, ly, nx, ny), 
+                          grid(lx, ly, nx, ny),
                           theta(0.0)
 {
   //Allocate memory for data vectors
@@ -75,16 +38,15 @@ ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, 
   scratch1 = new double[ncells];
   scratch2 = new double[ncells];
 
-  //Memory for tridiagonal system in biharmonic equation
-  //diag = new double[ncells];
-  //upper_diag = new double[ncells];
-  //lower_diag = new double[ncells];
-
   //I actually allocate more memory than necessary for the 
   //spectral vector, but this way it makes the indexing simpler
   curl_T_spectral = new std::complex<double>[ncells];
   phi_spectral = new std::complex<double>[ncells];
   psi_spectral = new std::complex<double>[ncells];
+
+  stokes_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.nx/2];
+  for (unsigned int i=0; i<=grid.nx/2; ++i)
+    stokes_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.ny);
 
   //Initialize the state
   update_state(Rayleigh, theta);
@@ -114,6 +76,10 @@ ConvectionSimulator::~ConvectionSimulator()
   delete[] scratch1;
   delete[] scratch2;
   delete[] curl_T_spectral;
+
+  for (unsigned int i=0; i<=grid.nx/2; ++i)
+    delete stokes_matrices[i];
+  delete[] stokes_matrices;
  
   fftw_destroy_plan(dst);
   fftw_destroy_plan(idst);
@@ -492,6 +458,27 @@ void ConvectionSimulator::setup_diffusion_problem()
    eigenmodes, as well as tell FFTW how to do the transforms */
 void ConvectionSimulator::setup_stokes_problem()
 {
+  double *upper_diag = new double[grid.ny];
+  double *diag = new double[grid.ny];
+  double *lower_diag = new double[grid.ny];
+
+  for( unsigned int i=0; i < grid.ny; ++i )
+  {
+    upper_diag[i] = 1./grid.dy/grid.dy;
+    lower_diag[i] = 1./grid.dy/grid.dy;
+  }
+  upper_diag[0] = 0.0;  //fix for lower B.C.
+  lower_diag[grid.ny-1] = 0.0; //fix for upper B.C.
+
+  for (unsigned int l = 0; l <= grid.nx/2.; ++l)
+  {
+     double factor = (4.0*M_PI*M_PI*l*l/grid.lx/grid.lx);
+     diag[0] = 1.0; diag[grid.ny-1] = 1.0;
+     for (unsigned int i=0; i<grid.ny; ++i)
+       diag[i] = -2./grid.dy/grid.dy - factor;
+
+     stokes_matrices[l]->initialize(lower_diag, diag, upper_diag);
+  }
 
   int n[1];
   int stride, dist, howmany;
@@ -558,17 +545,10 @@ void ConvectionSimulator::solve_stokes()
   //Execute the forward fourier transform
   fftw_execute(dft);  //X direction
 
-  std::vector<double> upper_diag(grid.ny, 1./grid.dy/grid.dy);
-  std::vector<double> lower_diag(grid.ny, 1./grid.dy/grid.dy);
-  upper_diag[0] = 0.0; lower_diag[grid.ny-1] = 0.0;
-  std::vector< std::complex<double> > phi(grid.ny);
   for (unsigned int l = 0; l <= grid.nx/2.; ++l)
   {
-     double factor = (4.0*M_PI*M_PI*l*l/grid.lx/grid.lx);
-     std::vector< double > diag( grid.ny, -2./grid.dy/grid.dy - factor);
-     diag[0] = 1.0; diag[grid.ny-1] = 1.0;
-     tridiagonal_matrix_solve<std::complex<double> >( grid.ny, &lower_diag[0], &diag[0], &upper_diag[0], phi_spectral+l, curl_T_spectral+l, grid.nx);
-     tridiagonal_matrix_solve<std::complex<double> >( grid.ny, &lower_diag[0], &diag[0], &upper_diag[0], psi_spectral+l, phi_spectral+l, grid.nx);
+     stokes_matrices[l]->solve( curl_T_spectral+l, grid.nx, phi_spectral+l);
+     stokes_matrices[l]->solve( phi_spectral+l, grid.nx, psi_spectral+l);
   }
      
   //Execute the inverse Fourier transform

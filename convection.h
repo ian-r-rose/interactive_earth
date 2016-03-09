@@ -1,12 +1,14 @@
+#ifndef STOKES_H
+#define STOKES_H
+
 #include <complex>
 #include "fftw3.h"
 #include "staggered_grid.h"
 #include "GL/glew.h"
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_opengl.h"
+#include "tridiagonal_matrix_solver.h"
 
-#ifndef STOKES_H
-#define STOKES_H
 
 class ConvectionSimulator
 {
@@ -39,6 +41,8 @@ class ConvectionSimulator
     double *curl_T; //Curl of temperature for the stream function solution
     double *u; //velocity in the x direction
     double *v; //Velocity in the y direction
+
+    TridiagonalMatrixSolver<std::complex<double> > **stokes_matrices;
 
     //Auxiliary vectors used in solving the diffusion equation
     double *g, *lux, *luy;
