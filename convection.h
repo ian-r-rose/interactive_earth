@@ -47,6 +47,8 @@ class ConvectionSimulator
     //FFTW stuff
     fftw_plan dst, idst, dft, idft; //FFTW plans for doing the forward and inverse transforms
     std::complex<double>* curl_T_spectral;  //Curl of temperature in spectral space
+    std::complex<double>* phi_spectral;  //Curl of temperature in spectral space
+    std::complex<double>* psi_spectral;  //Curl of temperature in spectral space
 
     //Data for rendering with OpenGL
     GLfloat* vertices;  

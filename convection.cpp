@@ -1,5 +1,7 @@
 #include "convection.h"
 #include <cmath>
+#include <vector>
+#include <iostream>
 
 
 //standard math library functions can be unpredictibly slow in 
@@ -27,17 +29,17 @@ void tridiagonal_matrix_solve( int n, double* lower_diag, double* diag, double* 
   for (unsigned int i=1; i < n-1; ++i)
   {
     unsigned int strided_index = stride*i;
-    upper_diag_prime[i] = upper_diag[strided_index]/
-                          (diag[strided_index] - lower_diag[strided_index]*upper_diag_prime[i-1]);
-    rhs_prime[i] = (rhs[strided_index] - lower_diag[strided_index]*rhs_prime[i-1])/
-                   (diag[strided_index] - lower_diag[strided_index]*upper_diag_prime[i-1]);
+    upper_diag_prime[i] = upper_diag[i]/
+                          (diag[i] - lower_diag[i]*upper_diag_prime[i-1]);
+    rhs_prime[i] = (rhs[strided_index] - lower_diag[i]*rhs_prime[i-1])/
+                   (diag[i] - lower_diag[i]*upper_diag_prime[i-1]);
   }
   
-  rhs_prime[n-1] = (rhs[(n-1)*stride] - lower_diag[(n-1)*stride]*rhs_prime[n-2])/
-                   (diag[(n-1)*stride] - lower_diag[(n-1)*stride]*upper_diag_prime[n-2]);
+  rhs_prime[n-1] = (rhs[(n-1)*stride] - lower_diag[(n-1)]*rhs_prime[n-2])/
+                   (diag[(n-1)] - lower_diag[(n-1)]*upper_diag_prime[n-2]);
 
   x[(n-1)*stride] = rhs_prime[n-1];
-  for (unsigned int i = n-2; i >= 0; --i)
+  for (int i = n-2; i >= 0; --i)
     x[i*stride] = rhs_prime[i] - upper_diag_prime[i]*x[(i+1)*stride];
 
   delete[] upper_diag_prime;
@@ -81,6 +83,8 @@ ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, 
   //I actually allocate more memory than necessary for the 
   //spectral vector, but this way it makes the indexing simpler
   curl_T_spectral = new std::complex<double>[ncells];
+  phi_spectral = new std::complex<double>[ncells];
+  psi_spectral = new std::complex<double>[ncells];
 
   //Initialize the state
   update_state(Rayleigh, theta);
@@ -489,24 +493,16 @@ void ConvectionSimulator::setup_diffusion_problem()
 void ConvectionSimulator::setup_stokes_problem()
 {
 
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    int l = cell->xindex();
-    double factor = 1.0/(4.0*M_PI*M_PI*l*l/grid.lx/grid.lx);
-    factor = factor*factor;
-    freqs[cell->self()]=factor;
-  }
-
   int n[1];
   int stride, dist, howmany;
 
   //transform in the x direction with a full dft
   n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny; 
-  dft = fftw_plan_many_dft_r2c(1, n, howmany, scratch1, NULL, stride, dist,
+  dft = fftw_plan_many_dft_r2c(1, n, howmany, curl_T, NULL, stride, dist,
                      reinterpret_cast<fftw_complex*>(curl_T_spectral), 
                      NULL, stride, dist, FFTW_ESTIMATE);
   idft = fftw_plan_many_dft_c2r(1, n, howmany, 
-                     reinterpret_cast<fftw_complex*>(curl_T_spectral),
+                     reinterpret_cast<fftw_complex*>(psi_spectral),
                      NULL, stride, dist, scratch1, NULL, 
                      stride, dist, FFTW_ESTIMATE);
 
@@ -562,20 +558,25 @@ void ConvectionSimulator::solve_stokes()
   //Execute the forward fourier transform
   fftw_execute(dft);  //X direction
 
-  //Multiply by the relevant frequencies.
-  for (unsigned int i = 0; i <= grid.nx/2. 
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  std::vector<double> upper_diag(grid.ny, 1./grid.dy/grid.dy);
+  std::vector<double> lower_diag(grid.ny, 1./grid.dy/grid.dy);
+  upper_diag[0] = 0.0; lower_diag[grid.ny-1] = 0.0;
+  std::vector< std::complex<double> > phi(grid.ny);
+  for (unsigned int l = 0; l <= grid.nx/2.; ++l)
   {
-    if(cell->xindex() <= grid.nx/2)
-      curl_T_spectral[cell->self()]*=freqs[cell->self()];
+     double factor = (4.0*M_PI*M_PI*l*l/grid.lx/grid.lx);
+     std::vector< double > diag( grid.ny, -2./grid.dy/grid.dy - factor);
+     diag[0] = 1.0; diag[grid.ny-1] = 1.0;
+     tridiagonal_matrix_solve<std::complex<double> >( grid.ny, &lower_diag[0], &diag[0], &upper_diag[0], phi_spectral+l, curl_T_spectral+l, grid.nx);
+     tridiagonal_matrix_solve<std::complex<double> >( grid.ny, &lower_diag[0], &diag[0], &upper_diag[0], psi_spectral+l, phi_spectral+l, grid.nx);
   }
-
+     
   //Execute the inverse Fourier transform
   fftw_execute(idft);  //X direction
 
   //Renormalize
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    stream[cell->self()] = scratch2[cell->self()]/2.0/grid.nx;
+    stream[cell->self()] = scratch1[cell->self()]/2.0/grid.nx;
 
   //Come up with the velocities by taking finite differences of the stream function.
   //I could also take these derivatives in spectral space, but that would mean 
