@@ -20,7 +20,7 @@ inline double dmax (double x, double y) { return x > y ? x : y; }
 */
 ConvectionSimulator::ConvectionSimulator( double inner_radius, int nx, int ny, double Rayleigh):
                           nx(nx), ny(ny), ncells(nx*ny), Ra(Rayleigh),
-                          grid(2.*M_PI, 1.0-inner_radius, nx, ny)
+                          grid(inner_radius, nx, ny)
 {
   //Allocate memory for data vectors
   T = new double[ncells];

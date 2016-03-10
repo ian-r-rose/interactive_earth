@@ -122,9 +122,10 @@ class StaggeredGrid
     const int nx, ny; //Number of cells in x,y directions
     const double dx, dy; //grid cell spacing in x,y directions
     const int ncells; //Total number of cells
+    const double r_inner, r_outer;
 
-    StaggeredGrid(const double lenx, const double leny, const unsigned int numx, const unsigned int numy)
-                  : lx(lenx), ly(leny), nx(numx), ny(numy), dx(lx/nx), dy(ly/ny), ncells(nx*ny) {}; 
+    StaggeredGrid(const double inner_radius, const unsigned int numx, const unsigned int numy)
+                  : r_inner(inner_radius), r_outer(1.0), lx(2.0*M_PI), ly(1.0-inner_radius), nx(numx), ny(numy), dx(lx/nx), dy(ly/ny), ncells(nx*ny) {}; 
     const iterator begin() { return iterator(0, *this); };
     const iterator end() {return iterator(ncells, *this);};
     const reverse_iterator rbegin() { return reverse_iterator(ncells-1, *this); };
