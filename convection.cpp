@@ -105,7 +105,9 @@ void ConvectionSimulator::initialize_temperature()
    point p2, using a simple Gaussian source term */ 
 inline double ConvectionSimulator::heat(const Point &p1, const Point &p2 )
 {
-  const double rsq = (p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y);
+  const double x1 = (p1.y+grid.r_inner)*std::cos(p1.x), y1 = (p1.y+grid.r_inner)*std::sin(p1.x);
+  const double x2 = (p2.y+grid.r_inner)*std::cos(p2.x), y2 = (p2.y+grid.r_inner)*std::sin(p2.x);
+  const double rsq = (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
   return heat_source*std::exp( -rsq/2.0/heat_source_radius/heat_source_radius );
 }
 
@@ -132,16 +134,18 @@ void ConvectionSimulator::clear_seismic_waves()
 /* Add an earthquake at the point x,y.  I use a functional form of a 
   Mexican hat wavelet.  At some point it may be good to revisit what
   functional form is best.  */
-void ConvectionSimulator::earthquake(double x, double y)
+void ConvectionSimulator::earthquake(double theta, double r)
 {
-  Point p1; p1.x = x; p1.y=y;
+  const double x1 = (r+grid.r_inner)*std::cos(theta), y1 = (r+grid.r_inner)*std::sin(theta);
+
   const double earthquake_radius = grid.dy*4.;  //Somewhat arbitrary radius
   const double prefactor = 2. / std::sqrt( 3. * earthquake_radius * M_PI * M_PI);
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     Point p2 = cell->center();
-    const double rsq = (p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y);
+    const double x2 = (p2.y+grid.r_inner)*std::cos(p2.x), y2 = (p2.y+grid.r_inner)*std::sin(p2.x);
+    const double rsq = (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
     const double dist = rsq/earthquake_radius/earthquake_radius;
     D[cell->self()] += prefactor * (1.0 - dist) * std::exp( -dist/2. );
   }
@@ -159,6 +163,9 @@ void ConvectionSimulator::propagate_seismic_waves()
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     double laplacian;
+    const double r = cell->center().y + grid.r_inner;
+    const double dr = grid.dy;
+    const double dtheta = grid.dx;
 
     //Make the wavespeed temperature dependent.  This is a HUGE 
     //temperature dependence so it is pretty obvious.
@@ -167,14 +174,17 @@ void ConvectionSimulator::propagate_seismic_waves()
 
     //Five point laplacian stencil
     if( cell->at_top_boundary() )
-      laplacian = (D[cell->down()] + D[cell->down()] - 2.0 * D[cell->self()])/grid.dy/grid.dy + 
-                  (D[cell->right()] + D[cell->left()] - 2.0 * D[cell->self()])/grid.dx/grid.dx; 
+      laplacian = (1./dr/dr + 0.5/r/dr)*D[cell->down()] + (1./dr/dr - 0.5/r/dr)*D[cell->down()]
+                  + 1./r/r/dtheta/dtheta * ( D[cell->right()] + D[cell->left()] ) -
+                  (2./r/r/dtheta/dtheta + 2./dr/dr)*D[cell->self()];
     else if ( cell->at_bottom_boundary() )
-      laplacian = (D[cell->up()] + D[cell->up()] - 2.0 * D[cell->self()])/grid.dy/grid.dy + 
-                  (D[cell->right()] + D[cell->left()] - 2.0 * D[cell->self()])/grid.dx/grid.dx; 
+      laplacian = (1./dr/dr + 0.5/r/dr)*D[cell->up()] + (1./dr/dr - 0.5/r/dr)*D[cell->up()]
+                  + 1./r/r/dtheta/dtheta * ( D[cell->right()] + D[cell->left()] ) -
+                  (2./r/r/dtheta/dtheta + 2./dr/dr)*D[cell->self()];
     else
-      laplacian = (D[cell->up()] + D[cell->down()] - 2.0 * D[cell->self()])/grid.dy/grid.dy + 
-                  (D[cell->right()] + D[cell->left()] - 2.0 * D[cell->self()])/grid.dx/grid.dx; 
+      laplacian = (1./dr/dr + 0.5/r/dr)*D[cell->up()] + (1./dr/dr - 0.5/r/dr)*D[cell->down()]
+                  + 1./r/r/dtheta/dtheta * ( D[cell->right()] + D[cell->left()] ) -
+                  (2./r/r/dtheta/dtheta + 2./dr/dr)*D[cell->self()];
 
     //Explicitly propagate wave
     scratch1[cell->self()] = (2.0 * D[cell->self()] - Dp[cell->self()]  
