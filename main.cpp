@@ -22,17 +22,18 @@ const unsigned int ny = 128;
 //look kind of squashed and funny.
 const double lx = 4.0;
 const double ly = 1.0;
+const double r_inner = 0.4;
 
 //Initial Rayleigh number of simulation
 const double Ra = 1.e7;
 
 //Factor for how much to blow up the rendered 
 //triangles so that they are bigger on screen
-const unsigned int scale = 2;
+const unsigned int scale = 1;
 
 //Total number of pixels in x and y directions
 const unsigned int xpix = nx*scale;
-const unsigned int ypix = ny*scale;
+const unsigned int ypix = nx*scale;
 
 //Whether to add heat to the simulation on mouse click.
 int click_state = 0;
@@ -57,8 +58,14 @@ SDL_Window *window=NULL;
 //Update where to add heat
 inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 {
-  hx = lx*(double(event->x)/double(xpix));
-  hy = ly*(1.0-double(event->y)/double(ypix));
+  const float xx = float(event->x)/float(xpix);
+  const float yy = 1.0f-float(event->y)/float(ypix);
+  float theta = std::atan2( yy-0.5f, xx-0.5f );
+  theta = (theta < 0. ? theta + 2.*M_PI : theta );
+  const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
+
+  hx = lx * theta / 2. / M_PI;
+  hy = ly*(r-r_inner)/(1.0f-r_inner);
 }
 
 //Change the Rayleigh number on scrolling
@@ -75,18 +82,34 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 {
   if(event->state==SDL_PRESSED)
   {
-     if(event->button == SDL_BUTTON_LEFT)
-       click_state = 1;
-     if(event->button == SDL_BUTTON_RIGHT)
-       click_state = -1;
-     hx = lx*(double(event->x)/double(xpix));
-     hy = ly*(1.0-double(event->y)/double(ypix));
+    if(event->button == SDL_BUTTON_LEFT)
+      click_state = 1;
+    if(event->button == SDL_BUTTON_RIGHT)
+      click_state = -1;
+
+    const float xx = float(event->x)/float(xpix);
+    const float yy = 1.0f-float(event->y)/float(ypix);
+    float theta = std::atan2( yy-0.5f, xx-0.5f );
+    theta = (theta < 0. ? theta + 2.*M_PI : theta );
+    const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
+
+    hx = lx * theta / 2. / M_PI;
+    hy = ly*(r-r_inner)/(1.0f-r_inner);
      
   }
   else
   {
     click_state=0;
   }
+}
+
+inline bool in_domain( const float x, const float y )
+{
+  const float xx = float(x)/float(xpix);
+  const float yy = 1.0f-float(y)/float(ypix);
+  const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
+  //return (r < 1.) && ( r > r_inner);
+  return true;
 }
 
 //Actually perform the timestep
@@ -105,7 +128,7 @@ void timestep()
       handle->solve_stokes();
 
     //Add heat if the user is clicking
-    if(click_state != 0) handle->add_heat(hx, hy, (click_state==1 ? true : false));
+    if(click_state != 0 && in_domain(hx, hy) ) handle->add_heat(hx, hy, (click_state==1 ? true : false));
 
     //Advect temperature field
     handle->semi_lagrangian_advect();
@@ -123,7 +146,7 @@ void timestep()
   else
   {
     //Make earthquakes
-    if(click_state != 0) handle->earthquake(hx, hy);
+    if(click_state != 0 && in_domain(hx,hy) ) handle->earthquake(hx, hy);
     //Propagate waves
     handle->propagate_seismic_waves();
   }
@@ -139,7 +162,7 @@ void init()
     window = SDL_CreateWindow(
        "Convection", 
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
-        scale*nx, scale*ny, 
+        xpix, ypix, 
         SDL_WINDOW_OPENGL);
     context = SDL_GL_CreateContext(window);
     if (!context)

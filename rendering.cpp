@@ -1,3 +1,4 @@
+#include <cmath>
 #include "convection.h"
 #include "color.h"
 
@@ -15,8 +16,8 @@ void ConvectionSimulator::setup_opengl()
 #ifndef LEGACY_OPENGL
   //Setup the vertices, indices, and colors
   {
-    GLfloat DX = 2.0/(grid.nx-1);
-    GLfloat DY = 2.0/(grid.ny-1);
+    GLfloat DX = 2.0*M_PI/(grid.nx-1);
+    GLfloat DY = 1.0/(grid.ny-1);
     const short triangles_per_quad = 2;
     const short vertices_per_triangle = 3;
     const short coordinates_per_vertex = 2;
@@ -33,8 +34,11 @@ void ConvectionSimulator::setup_opengl()
     for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     {
       //Vertex for this cell
-      vertices[v + 0] = cell->xindex()*DX-1.0f;
-      vertices[v + 1] = cell->yindex()*DY-1.0f;
+      const float r_inner = 0.4f;
+      const float r = r_inner + (cell->yindex()*DY * (1.0f - r_inner) );
+      const float theta = cell->xindex()*DX;
+      vertices[v + 0] = r * std::cos(theta);
+      vertices[v + 1] = r * std::sin(theta);
 
       if ( !cell->at_top_boundary() && !cell->at_right_boundary() )
       {
@@ -181,7 +185,7 @@ void ConvectionSimulator::draw()
     v += colors_per_vertex;
   }
     
-  glClearColor(1.0, 1.0, 1.0, 1.0);
+  glClearColor(0.0, 0.0, 0.0, 1.0);
   glClear(GL_COLOR_BUFFER_BIT);
 
   glUseProgram(program);
