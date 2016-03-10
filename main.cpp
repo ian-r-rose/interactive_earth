@@ -13,14 +13,14 @@
 //Number of cells in the x and y directions.
 //This is the primary control on resolution,
 //as well as performance/
-const unsigned int nx = 512;
-const unsigned int ny = 64;
+const unsigned int nx = 1024;
+const unsigned int ny = 128;
 
 //Size of computational domain.  The ratio of
 //lx to ly should be the same of nx to ny,
 //otherwise the convective features will
 //look kind of squashed and funny.
-const double r_inner = 0.4;
+const double r_inner = 0.5;
 const double lx = 2.*M_PI;
 const double ly = 1.0-r_inner;
 

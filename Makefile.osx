@@ -18,7 +18,7 @@ convection: convection.o main.o rendering.o
 main.o: main.cpp convection.h
 	$(CXX) $(CXX_FLAGS) -c main.cpp  $(LINK_FLAGS) $(INCLUDE_DIRS) $(DEFINES) 
 
-convection.o: convection.cpp convection.h staggered_grid.h triangular_matrix_solver.h
+convection.o: convection.cpp convection.h staggered_grid.h tridiagonal_matrix_solver.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) convection.cpp
 
 rendering.o: rendering.cpp convection.h staggered_grid.h

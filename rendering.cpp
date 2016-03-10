@@ -34,7 +34,7 @@ void ConvectionSimulator::setup_opengl()
     for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     {
       //Vertex for this cell
-      const float r_inner = 0.4f;
+      const float r_inner = grid.r_inner;
       const float r = r_inner + (cell->yindex()*DY * (1.0f - r_inner) );
       const float theta = cell->xindex()*DX;
       vertices[v + 0] = r * std::cos(theta);

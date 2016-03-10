@@ -459,20 +459,25 @@ void ConvectionSimulator::setup_stokes_problem()
   double *diag = new double[grid.ny];
   double *lower_diag = new double[grid.ny];
 
+  const double dr = grid.dy;
   for( unsigned int i=0; i < grid.ny; ++i )
   {
-    upper_diag[i] = 1./grid.dy/grid.dy;
-    lower_diag[i] = 1./grid.dy/grid.dy;
+    const double r = grid.r_inner + i*dr;
+    upper_diag[i] = 1./dr/dr + 0.5/dr/r;
+    lower_diag[i] = 1./dr/dr - 0.5/dr/r;
   }
   upper_diag[0] = 0.0;  //fix for lower B.C.
   lower_diag[grid.ny-1] = 0.0; //fix for upper B.C.
 
   for (unsigned int l = 0; l <= grid.nx/2.; ++l)
   {
-     double factor = (4.0*M_PI*M_PI*l*l/grid.lx/grid.lx);
+     double factor = (l*l);
      diag[0] = 1.0; diag[grid.ny-1] = 1.0;
      for (unsigned int i=0; i<grid.ny; ++i)
-       diag[i] = -2./grid.dy/grid.dy - factor;
+     {
+       const double r = grid.r_inner + i*dr;
+       diag[i] = -2./dr/dr - factor/r/r;
+     }
 
      stokes_matrices[l]->initialize(lower_diag, diag, upper_diag);
   }
@@ -526,7 +531,8 @@ void ConvectionSimulator::assemble_curl_T_vector()
       curl_T[cell->self()] = 0.0; 
     else
       curl_T[cell->self()] = Ra*(T[cell->self()] - T[cell->left()]
-                               + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx;
+                               + T[cell->down()] - T[cell->downleft()])
+                                 /cell->corner().y/2.0/grid.dx;
   }
 }
 
