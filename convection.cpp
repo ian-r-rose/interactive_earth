@@ -20,8 +20,7 @@ inline double dmax (double x, double y) { return x > y ? x : y; }
 */
 ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, double Rayleigh):
                           nx(nx), ny(ny), ncells(nx*ny), Ra(Rayleigh),
-                          grid(lx, ly, nx, ny),
-                          theta(0.0)
+                          grid(lx, ly, nx, ny)
 {
   //Allocate memory for data vectors
   T = new double[ncells];
@@ -49,7 +48,7 @@ ConvectionSimulator::ConvectionSimulator( double lx, double ly, int nx, int ny, 
     stokes_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.ny);
 
   //Initialize the state
-  update_state(Rayleigh, theta);
+  update_state(Rayleigh);
   initialize_temperature();
 
   //Do some setup work for solving stokes and
@@ -526,10 +525,8 @@ void ConvectionSimulator::assemble_curl_T_vector()
     else if (cell->at_top_boundary())
       curl_T[cell->self()] = 0.0; 
     else
-      curl_T[cell->self()] = Ra*std::cos(theta*M_PI/180.0)*(T[cell->self()] - T[cell->left()]
-                            + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx
-                            - Ra*std::sin(theta*M_PI/180.0)*(T[cell->left()] - T[cell->downleft()]
-                            + T[cell->self()] - T[cell->down()])/2.0/grid.dy;
+      curl_T[cell->self()] = Ra*(T[cell->self()] - T[cell->left()]
+                               + T[cell->down()] - T[cell->downleft()])/2.0/grid.dx;
   }
 }
 
@@ -573,9 +570,8 @@ void ConvectionSimulator::solve_stokes()
 }
 
 
-void ConvectionSimulator::update_state(double rayleigh, double gravity_angle)
+void ConvectionSimulator::update_state(double rayleigh)
 {
-  theta = gravity_angle; //update the angle of gravity
   double Ra_c = 657.;  //critical rayleigh number
   double length_scale = std::pow(rayleigh/2./Ra_c, -1./3.)*grid.ly;  //calculate a provisional length scale
 

@@ -21,7 +21,6 @@ class ConvectionSimulator
     //Current model parameters
     double Ra;  //Rayleigh number
     double dt;  //timestep
-    double theta;  //Direction of gravity
 
     //Info about how to add heat on clicking
     double heat_source_radius;
@@ -90,7 +89,7 @@ class ConvectionSimulator
     void diffuse_temperature(); //Diffuse temperature
     void solve_stokes(); //Solve for velocity field
     void draw();  //Render using OpenGL
-    void update_state(double rayleigh, double gravity_angle = 0);  //Update the state of the solver
+    void update_state(double rayleigh);  //Update the state of the solver
 
     void setup_opengl();  //Setup OpenGL data structures
     void cleanup_opengl(); //Cleanup OpenGL data structures
