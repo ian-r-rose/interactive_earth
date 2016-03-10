@@ -72,7 +72,7 @@ class ConvectionSimulator
 
   public:
     //Constructor and destructor
-    ConvectionSimulator( double lx, double ly, int nx, int ny, double Rayleigh);
+    ConvectionSimulator( double inner_radius, int nx, int ny, double Rayleigh);
     ~ConvectionSimulator();
 
     //Querying physics information about the solver

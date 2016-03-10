@@ -230,7 +230,7 @@ void loop()
 
 int main(int argc, char** argv)
 {
-    ConvectionSimulator stokes(lx, ly, nx,ny, Ra);
+    ConvectionSimulator stokes(r_inner, nx,ny, Ra);
     handle = &stokes;
  
     init();
