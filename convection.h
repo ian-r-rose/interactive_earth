@@ -45,7 +45,7 @@ class ConvectionSimulator
 
     //Auxiliary vectors used in solving the diffusion equation
     double *g, *lux, *luy;
-    double gamma; //Auxiliary constant for solving the diffusion equation. 
+    double *gamma; //Auxiliary constant for solving the diffusion equation. 
 
     //FFTW stuff
     fftw_plan dft, idft; //FFTW plans for doing the forward and inverse transforms

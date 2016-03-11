@@ -33,6 +33,7 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int nx, int ny, d
   u = new double[ncells];
   v = new double[ncells];
   g = new double[ncells];
+  gamma = new double[ny];
   freqs = new double[ncells];
   scratch1 = new double[ncells];
   scratch2 = new double[ncells];
@@ -71,6 +72,7 @@ ConvectionSimulator::~ConvectionSimulator()
   delete[] u;
   delete[] v;
   delete[] g;
+  delete[] gamma;
   delete[] freqs;
   delete[] scratch1;
   delete[] scratch2;
@@ -342,18 +344,20 @@ void ConvectionSimulator::diffuse_temperature()
 {
 
   //First do diffusion in the y direction
-  double eta_y = dt/grid.dy/grid.dy;
-  double alpha_y = -eta_y;
-  double lambda_y = (1.0 + 2.0*eta_y);
+  double eta_r = dt/grid.dy/grid.dy;
+  double lambda_r = (1.0 + 2.0*eta_r);
   //Forward sweep
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
+    const double dr = grid.dy;
+    const double r = cell->center().y + grid.r_inner;
+
     if(cell->at_bottom_boundary())
       scratch1[cell->self()] = 1.0;
     else if (cell->at_top_boundary())
       scratch1[cell->self()] = 0.0;
     else
-      scratch1[cell->self()] = (T[cell->self()] - scratch1[cell->down()]*alpha_y)/(lambda_y-luy[cell->down()]*alpha_y);
+      scratch1[cell->self()] = (T[cell->self()] + scratch1[cell->down()]*eta_r)/(lambda_r + luy[cell->down()]*eta_r);
   }
   //Do reverse sweep for y direction
   for( StaggeredGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
@@ -368,24 +372,31 @@ void ConvectionSimulator::diffuse_temperature()
 
 
   //Now do the x direction, which is more complicated due to the periodicity.
-  double eta_x = dt/grid.dx/grid.dx;
-  double alpha_x = -eta_x;
-  double lambda_x = (1.0 + 2.0*eta_x);
 
   //First sweep!
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
+    const double dr = grid.dy;
+    const double r = cell->center().y + grid.r_inner;
+    double eta_theta = dt/grid.dx/grid.dx/r/r;
+    double lambda_theta = (1.0 + 2.0*eta_theta);
+
     if(cell->at_left_boundary())
-      scratch1[cell->self()] = T[cell->self()]/lambda_x;
+      scratch1[cell->self()] = T[cell->self()]/lambda_theta;
     else if (cell->at_right_boundary())
       scratch1[cell->self()] = 0.0; 
     else
-      scratch1[cell->self()] = (T[cell->self()]-scratch1[cell->left()]*alpha_x)/(lambda_x-lux[cell->left()]*alpha_x);
+      scratch1[cell->self()] = (T[cell->self()] + scratch1[cell->left()]*eta_theta)/(lambda_theta + lux[cell->left()]*eta_theta);
   }
   //Do reverse sweep for x direction
   StaggeredGrid::reverse_iterator trailer = grid.rbegin();
   for( StaggeredGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
   {
+    const double dr = grid.dy;
+    const double r = cell->center().y + grid.r_inner;
+    double eta_theta = dt/grid.dx/grid.dx/r/r;
+    double lambda_theta = (1.0 + 2.0*eta_theta);
+
     if(cell->at_right_boundary())
     {
       ++cell;
@@ -396,7 +407,7 @@ void ConvectionSimulator::diffuse_temperature()
  
     if(cell->at_left_boundary())
     {
-      double xn = (T[trailer->self()] - alpha_x*(scratch2[cell->self()] + scratch2[trailer->self()-1]))/(lambda_x-gamma);
+      double xn = (T[trailer->self()] + eta_theta*(scratch2[cell->self()] + scratch2[trailer->self()-1]))/(lambda_theta-gamma[cell->yindex()]);
       T[trailer->self()] = xn;
       ++trailer;
       for(; (trailer->at_right_boundary()==false && trailer != grid.rend()); ++trailer)
@@ -409,31 +420,32 @@ void ConvectionSimulator::diffuse_temperature()
 void ConvectionSimulator::setup_diffusion_problem()
 {
 
-  double eta_x = dt/grid.dx/grid.dx;
-  double eta_y = dt/grid.dy/grid.dy;
-  double alpha_x = -eta_x;
-  double lambda_x = (1.0 + 2.0*eta_x);
-  double alpha_y = -eta_y;
-  double lambda_y = (1.0 + 2.0*eta_y);
+  double eta_r = dt/grid.dy/grid.dy;
+  double lambda_r = (1.0 + 2.0*eta_r);
 
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
+    const double dr = grid.dy;
+    const double r = cell->center().y + grid.r_inner;
+    double eta_theta = dt/grid.dx/grid.dx/r/r;
+    double lambda_theta = (1.0 + 2.0*eta_theta);
+
     //assemble condensed lux vector
     if(cell->at_left_boundary())
     {
-      lux[cell->self()] = alpha_x/lambda_x;
-      scratch2[cell->self()] = alpha_x/lambda_x;
+      lux[cell->self()] = -eta_theta/lambda_theta;
+      scratch2[cell->self()] = -eta_theta/lambda_theta;
     }
     else if (cell->at_right_boundary())
     {
       lux[cell->self()] = 0.0; lux[cell->left()] = 0.0; //solving condensed system, so no last DOF
       scratch2[cell->self()] = 0.0; 
-      scratch2[cell->left()] = (alpha_x-scratch2[cell->left()-1]*alpha_x)/(lambda_x-lux[cell->left()-1]*alpha_x);
+      scratch2[cell->left()] = (-eta_theta + scratch2[cell->left()-1]*eta_theta)/(lambda_theta + lux[cell->left()-1]*eta_theta);
     }
     else
     {
-      lux[cell->self()] = alpha_x/(lambda_x - lux[cell->left()]*alpha_x);
-      scratch2[cell->self()] = (-scratch2[cell->left()]*alpha_x)/(lambda_x-lux[cell->left()]*alpha_x);
+      lux[cell->self()] = -eta_theta/(lambda_theta + lux[cell->left()]*eta_theta);
+      scratch2[cell->self()] = (scratch2[cell->left()]*eta_theta)/(lambda_theta + lux[cell->left()]*eta_theta);
     }
 
     //Assemble luy vector
@@ -442,11 +454,16 @@ void ConvectionSimulator::setup_diffusion_problem()
     else if (cell->at_top_boundary())
       luy[cell->self()] = 0.0;
     else
-      luy[cell->self()] = alpha_y/(lambda_y - luy[cell->down()]*alpha_y);
+      luy[cell->self()] = -eta_r/(lambda_r + luy[cell->down()]*eta_r);
   }
   //Do reverse sweep for x direction
   for( StaggeredGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
   {
+    const double dr = grid.dy;
+    const double r = cell->center().y + grid.r_inner;
+    double eta_theta = dt/grid.dx/grid.dx/r/r;
+    double lambda_theta = (1.0 + 2.0*eta_theta);
+
     if(cell->at_right_boundary())
     {
       ++cell;
@@ -456,7 +473,7 @@ void ConvectionSimulator::setup_diffusion_problem()
       g[cell->self()] = scratch2[cell->self()] - lux[cell->self()]*g[cell->right()];
  
     if(cell->at_left_boundary())
-      gamma = alpha_x*(g[cell->self()] + g[cell->left()-1]);
+      gamma[cell->yindex()] = -eta_theta*(g[cell->self()] + g[cell->left()-1]);
   }
 }
 
