@@ -16,13 +16,13 @@ void ConvectionSimulator::setup_opengl()
 #ifndef LEGACY_OPENGL
   //Setup the vertices, indices, and colors
   {
-    GLfloat DX = 2.0*M_PI/(grid.nx-1);
+    GLfloat DX = 2.0*M_PI/grid.nx;
     GLfloat DY = 1.0/(grid.ny-1);
     const short triangles_per_quad = 2;
     const short vertices_per_triangle = 3;
     const short coordinates_per_vertex = 2;
     const short colors_per_vertex = 3;
-    const unsigned long n_triangles = (grid.nx-1) * (grid.ny-1) * triangles_per_quad;
+    const unsigned long n_triangles = grid.nx * (grid.ny-1) * triangles_per_quad;
     const unsigned long n_vertices = grid.nx * grid.ny;
     
 
@@ -40,17 +40,17 @@ void ConvectionSimulator::setup_opengl()
       vertices[v + 0] = r * std::cos(theta);
       vertices[v + 1] = r * std::sin(theta);
 
-      if ( !cell->at_top_boundary() && !cell->at_right_boundary() )
+      if ( !cell->at_top_boundary() )
       {
         //First triangle
         triangle_vertex_indices[i + 0] = cell->self();
-        triangle_vertex_indices[i + 1] = cell->self()+grid.nx+1;
-        triangle_vertex_indices[i + 2] = cell->self()+grid.nx;
+        triangle_vertex_indices[i + 1] = cell->upright();
+        triangle_vertex_indices[i + 2] = cell->up();
 
         //Second triangle
         triangle_vertex_indices[i + 3] = cell->self();
-        triangle_vertex_indices[i + 4] = cell->self() + 1;
-        triangle_vertex_indices[i + 5] = cell->self() + grid.nx + 1;
+        triangle_vertex_indices[i + 4] = cell->right();
+        triangle_vertex_indices[i + 5] = cell->upright();
    
         i += triangles_per_quad * vertices_per_triangle;
       }
@@ -166,7 +166,7 @@ void ConvectionSimulator::draw()
   const short triangles_per_quad = 2;
   const short vertices_per_triangle = 3;
   const short colors_per_vertex = 3;
-  const unsigned long n_triangles = (grid.nx-1) * (grid.ny-1) * triangles_per_quad;
+  const unsigned long n_triangles = grid.nx * (grid.ny-1) * triangles_per_quad;
   const unsigned long n_vertices = grid.nx * grid.ny;
 
   unsigned long v=0;
