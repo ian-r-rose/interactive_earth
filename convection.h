@@ -3,7 +3,7 @@
 
 #include <complex>
 #include "fftw3.h"
-#include "staggered_grid.h"
+#include "regular_grid.h"
 #include "GL/glew.h"
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_opengl.h"
@@ -28,7 +28,7 @@ class ConvectionSimulator
 
     //The full grid, which knows how to iterate,
     //get geometric information, etc.
-    StaggeredGrid grid;
+    RegularGrid grid;
     
     //Vectors which are used in the solve
     double *T;  //Temperature

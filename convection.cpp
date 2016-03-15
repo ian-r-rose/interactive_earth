@@ -99,8 +99,8 @@ double ConvectionSimulator::initial_temperature(const Point &p)
 /* Loop over all the cells and set the initial temperature */
 void ConvectionSimulator::initialize_temperature()
 {
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    T[cell->self()] = initial_temperature(cell->center());
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    T[cell->self()] = initial_temperature(cell->location());
 }
  
 /* Given a heat source centered on p1, calculate the heating at
@@ -118,14 +118,14 @@ inline double ConvectionSimulator::heat(const Point &p1, const Point &p2 )
 void ConvectionSimulator::add_heat(double x, double y, bool hot)
 {
   Point p; p.x = x; p.y=y;
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    T[cell->self()] = T[cell->self()] + (hot ? 1.0 : -1.0)*heat(p, cell->center())*dt;
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    T[cell->self()] = T[cell->self()] + (hot ? 1.0 : -1.0)*heat(p, cell->location())*dt;
 }
 
 /* Loop over the cells and zero out the displacement vectors */
 void ConvectionSimulator::clear_seismic_waves()
 {
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     D[cell->self()] = 0.;
     Dp[cell->self()] = 0.;
@@ -143,9 +143,9 @@ void ConvectionSimulator::earthquake(double theta, double r)
   const double earthquake_radius = grid.dy*4.;  //Somewhat arbitrary radius
   const double prefactor = 2. / std::sqrt( 3. * earthquake_radius * M_PI * M_PI);
 
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    Point p2 = cell->center();
+    Point p2 = cell->location();
     const double x2 = (p2.y+grid.r_inner)*std::cos(p2.x), y2 = (p2.y+grid.r_inner)*std::sin(p2.x);
     const double rsq = (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
     const double dist = rsq/earthquake_radius/earthquake_radius;
@@ -162,10 +162,10 @@ void ConvectionSimulator::propagate_seismic_waves()
 
   //We can get away with an explicit timestepping scheme for the wave equation,
   //so no complicated tridiagonal matrix inversion or any such nonsense here
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     double laplacian;
-    const double r = cell->center().y + grid.r_inner;
+    const double r = cell->location().y + grid.r_inner;
     const double dr = grid.dy;
     const double dtheta = grid.dx;
 
@@ -194,7 +194,7 @@ void ConvectionSimulator::propagate_seismic_waves()
                              /(1.0 + dissipation*dt); 
   }
 
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     //Current displacement becomes previous displacement
     Dp[cell->self()] = D[cell->self()];
@@ -212,42 +212,33 @@ void ConvectionSimulator::propagate_seismic_waves()
 
 
 /* Interpolate the velocity onto an arbitrary point
-   A bit complicated due to the staggered nature of the grid */
+   A bit complicated*/
 Point ConvectionSimulator::velocity(const Point &p)
 {
   Point vel;
 
-  //Get the relevant lower-left cells for the x and y velocities
-  StaggeredGrid::iterator x_cell = grid.lower_left_vface_cell(p); 
-  StaggeredGrid::iterator y_cell = grid.lower_left_hface_cell(p); 
+  //Get the relevant lower-left cells for the velocities
+  RegularGrid::iterator cell = grid.lower_left_cell(p); 
 
-  //Determine the local x and y coordinates for the x velocity
-  double vx_local_x = fast_fmod(p.x, grid.dx)/grid.dx;
-  double vx_local_y = (p.y - x_cell->vface().y)/grid.dy;
-
-  //Determine the local x and y coordinates for the y velocity
-  double vy_local_x = fast_fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
-  double vy_local_y = (p.y - y_cell->hface().y)/grid.dy;
+  //Determine the local x and y coordinates for the velocity
+  double local_x = fast_fmod(p.x, grid.dx)/grid.dx;
+  double local_y = (p.y - cell->location().y)/grid.dy;
 
   //get interpolated vx
-  if(x_cell->at_top_boundary())
-    vel.x = linear_interp_2d (vx_local_x, vx_local_y, u[x_cell->self()], 
-                              u[x_cell->right()], u[x_cell->self()], u[x_cell->right()]);
-  else if(x_cell->at_bottom_boundary() && vx_local_y < 0.0)
-    vel.x = linear_interp_2d (vx_local_x, 1.0+vx_local_y, u[x_cell->self()], 
-                              u[x_cell->right()], u[x_cell->self()], u[x_cell->right()]);
+  if(cell->at_top_boundary())
+  {
+    vel.x = linear_interp_2d (local_x, local_y, u[cell->self()], 
+                              u[cell->right()], u[cell->self()], u[cell->right()]);
+    vel.y = linear_interp_2d (local_x, local_y, 0.0, 0.0 ,
+                              v[cell->self()], v[cell->right()]);
+  }
   else
-    vel.x = linear_interp_2d (vx_local_x, vx_local_y, u[x_cell->up()], u[x_cell->upright()],
-                              u[x_cell->self()], u[x_cell->right()]);
-
-  //get interpolated vy
-  if(y_cell->at_top_boundary())
-    vel.y = linear_interp_2d (vy_local_x, vy_local_y, 0.0, 0.0 ,
-                              v[y_cell->self()], v[y_cell->right()]);
-  else
-    vel.y = linear_interp_2d (vy_local_x, vy_local_y, v[y_cell->up()], v[y_cell->upright()],
-                              v[y_cell->self()], v[y_cell->right()]);
-
+  {
+    vel.x = linear_interp_2d (local_x, local_y, u[cell->up()], u[cell->upright()],
+                              u[cell->self()], u[cell->right()]);
+    vel.y = linear_interp_2d (local_x, local_y, v[cell->up()], v[cell->upright()],
+                              v[cell->self()], v[cell->right()]);
+  }
 
   return vel;
 } 
@@ -256,16 +247,13 @@ Point ConvectionSimulator::velocity(const Point &p)
 inline double ConvectionSimulator::temperature(const Point &p)
 {
   double temp;
-  StaggeredGrid::iterator cell = grid.lower_left_center_cell(p); 
-  double local_x = fast_fmod(p.x + grid.dx*0.5, grid.dx)/grid.dx;
-  double local_y = ( p.y - cell->center().y )/grid.dy;
+  RegularGrid::iterator cell = grid.lower_left_cell(p); 
+  double local_x = fast_fmod(p.x, grid.dx)/grid.dx;
+  double local_y = ( p.y - cell->location().y )/grid.dy;
 
   if (cell->at_top_boundary() )
     temp = linear_interp_2d( local_x, local_y, -T[cell->self()], -T[cell->right()],  
                              T[cell->self()], T[cell->right()]);
-  else if (cell->at_bottom_boundary() && local_y < 0.0)
-    temp = linear_interp_2d( local_x, local_y-grid.dy, 
-                             T[cell->self()], T[cell->right()], 2.0-T[cell->self()], 2.0-T[cell->right()]);
   else 
     temp = linear_interp_2d( local_x, local_y, T[cell->up()], T[cell->upright()],
                              T[cell->self()], T[cell->right()]);
@@ -291,12 +279,12 @@ void ConvectionSimulator::semi_lagrangian_advect()
   Point takeoff_point; //Candidate takeoff point
   Point final_point; //grid point
 
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     //These points are known, as they are the grid points in question.  They will
     //not change for this cell.
-    vel_final = velocity (cell->center() );
-    final_point = cell->center();
+    vel_final = velocity (cell->location() );
+    final_point = cell->location();
 
   
     //Calculate the initial guess for the takeoff point using a basic predictor
@@ -325,7 +313,7 @@ void ConvectionSimulator::semi_lagrangian_advect()
   }
    
   //Copy the scratch vector into the temperature vector. 
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = scratch1[cell->self()];
 }
 
@@ -347,10 +335,10 @@ void ConvectionSimulator::diffuse_temperature()
   double eta_r = dt/grid.dy/grid.dy;
   double lambda_r = (1.0 + 2.0*eta_r);
   //Forward sweep
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     const double dr = grid.dy;
-    const double r = cell->center().y + grid.r_inner;
+    const double r = cell->location().y + grid.r_inner;
 
     if(cell->at_bottom_boundary())
       scratch1[cell->self()] = 1.0;
@@ -360,7 +348,7 @@ void ConvectionSimulator::diffuse_temperature()
       scratch1[cell->self()] = (T[cell->self()] + scratch1[cell->down()]*eta_r)/(lambda_r + luy[cell->down()]*eta_r);
   }
   //Do reverse sweep for y direction
-  for( StaggeredGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
+  for( RegularGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
   {
     if(cell->at_top_boundary())
       T[cell->self()] = 0.0;
@@ -374,10 +362,10 @@ void ConvectionSimulator::diffuse_temperature()
   //Now do the x direction, which is more complicated due to the periodicity.
 
   //First sweep!
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     const double dr = grid.dy;
-    const double r = cell->center().y + grid.r_inner;
+    const double r = cell->location().y + grid.r_inner;
     double eta_theta = dt/grid.dx/grid.dx/r/r;
     double lambda_theta = (1.0 + 2.0*eta_theta);
 
@@ -389,11 +377,11 @@ void ConvectionSimulator::diffuse_temperature()
       scratch1[cell->self()] = (T[cell->self()] + scratch1[cell->left()]*eta_theta)/(lambda_theta + lux[cell->left()]*eta_theta);
   }
   //Do reverse sweep for x direction
-  StaggeredGrid::reverse_iterator trailer = grid.rbegin();
-  for( StaggeredGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
+  RegularGrid::reverse_iterator trailer = grid.rbegin();
+  for( RegularGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
   {
     const double dr = grid.dy;
-    const double r = cell->center().y + grid.r_inner;
+    const double r = cell->location().y + grid.r_inner;
     double eta_theta = dt/grid.dx/grid.dx/r/r;
     double lambda_theta = (1.0 + 2.0*eta_theta);
 
@@ -423,10 +411,10 @@ void ConvectionSimulator::setup_diffusion_problem()
   double eta_r = dt/grid.dy/grid.dy;
   double lambda_r = (1.0 + 2.0*eta_r);
 
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     const double dr = grid.dy;
-    const double r = cell->center().y + grid.r_inner;
+    const double r = cell->location().y + grid.r_inner;
     double eta_theta = dt/grid.dx/grid.dx/r/r;
     double lambda_theta = (1.0 + 2.0*eta_theta);
 
@@ -457,10 +445,10 @@ void ConvectionSimulator::setup_diffusion_problem()
       luy[cell->self()] = -eta_r/(lambda_r + luy[cell->down()]*eta_r);
   }
   //Do reverse sweep for x direction
-  for( StaggeredGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
+  for( RegularGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
   {
     const double dr = grid.dy;
-    const double r = cell->center().y + grid.r_inner;
+    const double r = cell->location().y + grid.r_inner;
     double eta_theta = dt/grid.dx/grid.dx/r/r;
     double lambda_theta = (1.0 + 2.0*eta_theta);
 
@@ -533,7 +521,7 @@ double ConvectionSimulator::nusselt_number()
 {
   double heat_flux = 0;
 
-  for ( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for ( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     if( cell->at_top_boundary() )
     {
@@ -550,16 +538,15 @@ double ConvectionSimulator::nusselt_number()
 void ConvectionSimulator::assemble_curl_T_vector()
 {
   //Assemble curl_T vector
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    const double r = cell->corner().y + grid.r_inner;
+    const double r = cell->location().y + grid.r_inner;
     if(cell->at_bottom_boundary())
       curl_T[cell->self()] = 0.0; 
     else if (cell->at_top_boundary())
       curl_T[cell->self()] = 0.0; 
     else
-      curl_T[cell->self()] = Ra*(T[cell->self()] - T[cell->left()]
-                               + T[cell->down()] - T[cell->downleft()])
+      curl_T[cell->self()] = Ra*(T[cell->right()] - T[cell->left()])
                                  /r/2.0/grid.dx;
   }
 }
@@ -584,21 +571,23 @@ void ConvectionSimulator::solve_stokes()
   fftw_execute(idft);  //X direction
 
   //Renormalize
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     stream[cell->self()] = scratch1[cell->self()]/2.0/grid.nx;
 
   //Come up with the velocities by taking finite differences of the stream function.
   //I could also take these derivatives in spectral space, but that would mean 
   //more fourier transforms, so this should be considerably cheaper.
-  for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    const double r = cell->corner().y + grid.r_inner;
-    if( cell->at_top_boundary() == false)
+    const double r = cell->location().y + grid.r_inner;
+    if( cell->at_top_boundary() )
+      u[cell->self()] = (stream[cell->self()] - stream[cell->down()])/grid.dy;
+    else if ( cell->at_bottom_boundary() )
       u[cell->self()] = (stream[cell->up()] - stream[cell->self()])/grid.dy;
     else
-      u[cell->self()] = (stream[cell->self()] - stream[cell->down()])/grid.dy;
+      u[cell->self()] = (stream[cell->up()] - stream[cell->down()])/2.0/grid.dy;
 
-    v[cell->self()] = -(stream[cell->right()] - stream[cell->self()])/grid.dx/r;
+    v[cell->self()] = -(stream[cell->right()] - stream[cell->left()])/2.0/grid.dx/r;
   }
 
 

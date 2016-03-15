@@ -31,7 +31,7 @@ void ConvectionSimulator::setup_opengl()
     triangle_vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
     
     unsigned long v=0, i=0;
-    for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     {
       //Vertex for this cell
       const float r_inner = grid.r_inner;
@@ -170,7 +170,7 @@ void ConvectionSimulator::draw()
   const unsigned long n_vertices = grid.nx * grid.ny;
 
   unsigned long v=0;
-  for( StaggeredGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
   {
     color c = hot(T[cell->self()]);
     double displacement = displacement_factor * D[cell->self()]; //Perturb color if there is displacement
@@ -229,7 +229,7 @@ void ConvectionSimulator::draw()
   glClear(GL_COLOR_BUFFER_BIT);
   glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
   glBegin(GL_TRIANGLE_STRIP);
-  for( StaggeredGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
   {
     if (cell->at_left_boundary())
       glBegin(GL_TRIANGLE_STRIP);

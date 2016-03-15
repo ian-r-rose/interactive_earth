@@ -1,16 +1,16 @@
 /************************ /
-    StaggeredGrid.h
+    regular_grid.h
 Define an abstract interface to a simple cartesian mesh,
 with ways to iterate over the mesh cells, as well as query
 for indexing and geometric information.  For use with
-staggered cartesian grids in serial finite difference 
+cartesian grids in serial finite difference 
 calculations
 / ***********************/
 
 #include <iterator>
 
-#ifndef STAGGERED_GRID_H
-#define STAGGERED_GRID_H
+#ifndef REGULAR_GRID_H
+#define REGULAR_GRID_H
 
 struct Point
 {
@@ -24,7 +24,7 @@ inline int fast_floor(double x)
   return i - ( i > x );  //handle negatives
 }
 
-class StaggeredGrid
+class RegularGrid
 {
   public:
 
@@ -37,7 +37,7 @@ class StaggeredGrid
     {
       public:
 
-        Cell (unsigned int i, const StaggeredGrid &g): id(i), grid(g) {};
+        Cell (unsigned int i, const RegularGrid &g): id(i), grid(g) {};
         Cell (Cell &c): id(c.id), grid(c.grid) {};
         Cell &operator=(const Cell &rhs) { id=rhs.id; return *this;}
  
@@ -65,18 +65,15 @@ class StaggeredGrid
 
         //Get some location information.  This is more complicated than a nonstaggered grid,
         //as different of the properties will be found on different parts of the cell.
-        Point center() { Point p; p.x = xindex()*grid.dx + grid.dx/2.0; p.y = yindex()*grid.dy + grid.dy/2.0;  return p;}; //center of cell
-        Point corner() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy;  return p;}; //lower left
-        Point hface() { Point p; p.x = xindex()*grid.dx + grid.dx/2.0; p.y = yindex()*grid.dy;  return p;}; //horizontal (bottom) face of cell
-        Point vface() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy + grid.dy/2.0;  return p;}; //vertical (left) face of cell
+        Point location() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy;  return p;}; //lower left
 
         
       private:
-        const StaggeredGrid& grid;  //Const reference to the grid
+        const RegularGrid& grid;  //Const reference to the grid
         int id; //id of the cell, which will correspond to its index in vectors
 
-      friend class StaggeredGrid::iterator;
-      friend class StaggeredGrid::reverse_iterator;
+      friend class RegularGrid::iterator;
+      friend class RegularGrid::reverse_iterator;
 
     };
 
@@ -86,10 +83,10 @@ class StaggeredGrid
     {
       private:
         int id;
-        const StaggeredGrid& grid;
+        const RegularGrid& grid;
         Cell c;
       public:
-        iterator(int i, const StaggeredGrid& g): id(i), grid(g), c(id,grid) {};
+        iterator(int i, const RegularGrid& g): id(i), grid(g), c(id,grid) {};
         iterator(const iterator &it) : id(it.id), grid(it.grid), c(id, grid) {};
         iterator& operator++() { ++id; ++c.id; return (*this);}
         iterator& operator++(int) { return operator++();}
@@ -104,10 +101,10 @@ class StaggeredGrid
     {
       private:
         int id;
-        const StaggeredGrid& grid;
+        const RegularGrid& grid;
         Cell c;
       public:
-        reverse_iterator(int i, const StaggeredGrid& g): id(i), grid(g), c(id,grid) {};
+        reverse_iterator(int i, const RegularGrid& g): id(i), grid(g), c(id,grid) {};
         reverse_iterator(const reverse_iterator &it) : id(it.id), grid(it.grid), c(id, grid) {};
         reverse_iterator& operator++() { --id; --c.id; return (*this);}
         reverse_iterator& operator++(int) { return operator++();}
@@ -124,7 +121,7 @@ class StaggeredGrid
     const int ncells; //Total number of cells
     const double r_inner, r_outer;
 
-    StaggeredGrid(const double inner_radius, const unsigned int numx, const unsigned int numy)
+    RegularGrid(const double inner_radius, const unsigned int numx, const unsigned int numy)
                   : r_inner(inner_radius), r_outer(1.0), lx(2.0*M_PI), ly(1.0-inner_radius), nx(numx), ny(numy), dx(lx/nx), dy(ly/ny), ncells(nx*ny) {}; 
     const iterator begin() { return iterator(0, *this); };
     const iterator end() {return iterator(ncells, *this);};
@@ -138,10 +135,7 @@ class StaggeredGrid
                               + (xindex % nx + nx) %nx ; };
     iterator cell_at_point( const Point &p) { return iterator(cell_id(p), *this); };
 
-    iterator lower_left_corner_cell( const Point &p) { return cell_at_point(p); };
-    iterator lower_left_hface_cell( const Point &p) { Point p2 = p; p2.x-= dx*0.5; return cell_at_point(p2); }; 
-    iterator lower_left_vface_cell( const Point &p) { Point p2 = p; p2.y-= dy*0.5; return cell_at_point(p2); }; 
-    iterator lower_left_center_cell( const Point &p) { Point p2 = p; p2.y-= dy*0.5; p2.x-= dx/2.0; return cell_at_point(p2); }; 
+    iterator lower_left_cell( const Point &p) { return cell_at_point(p); };
    
 };
 
