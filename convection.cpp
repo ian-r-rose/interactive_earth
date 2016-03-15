@@ -552,6 +552,7 @@ void ConvectionSimulator::assemble_curl_T_vector()
   //Assemble curl_T vector
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
+    const double r = cell->corner().y + grid.r_inner;
     if(cell->at_bottom_boundary())
       curl_T[cell->self()] = 0.0; 
     else if (cell->at_top_boundary())
@@ -559,7 +560,7 @@ void ConvectionSimulator::assemble_curl_T_vector()
     else
       curl_T[cell->self()] = Ra*(T[cell->self()] - T[cell->left()]
                                + T[cell->down()] - T[cell->downleft()])
-                                 /cell->corner().y/2.0/grid.dx;
+                                 /r/2.0/grid.dx;
   }
 }
 
@@ -591,12 +592,13 @@ void ConvectionSimulator::solve_stokes()
   //more fourier transforms, so this should be considerably cheaper.
   for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
+    const double r = cell->corner().y + grid.r_inner;
     if( cell->at_top_boundary() == false)
       u[cell->self()] = (stream[cell->up()] - stream[cell->self()])/grid.dy;
     else
       u[cell->self()] = (stream[cell->self()] - stream[cell->down()])/grid.dy;
 
-    v[cell->self()] = -(stream[cell->right()] - stream[cell->self()])/grid.dx;
+    v[cell->self()] = -(stream[cell->right()] - stream[cell->self()])/grid.dx/r;
   }
 
 
