@@ -34,24 +34,22 @@ class ConvectionSimulator
     double *T;  //Temperature
     double *D;  //Displacement
     double *Dp;  //Previous displacement
-    double *scratch1, *scratch2;  //Scratch vectors for storing temporary information
-    double *freqs;  //Frequencies in spectral space for the stokes solve
+    double *scratch;  //Scratch vectors for storing temporary information
     double *stream;  //Stream function solution
     double *curl_T; //Curl of temperature for the stream function solution
     double *u; //velocity in the x direction
     double *v; //Velocity in the y direction
 
     TridiagonalMatrixSolver<std::complex<double> > **stokes_matrices;
-
-    //Auxiliary vectors used in solving the diffusion equation
-    double *g, *lux, *luy;
-    double *gamma; //Auxiliary constant for solving the diffusion equation. 
+    TridiagonalMatrixSolver<std::complex<double> > **diffusion_matrices;
 
     //FFTW stuff
-    fftw_plan dft, idft; //FFTW plans for doing the forward and inverse transforms
+    fftw_plan dft_stokes, idft_stokes; //FFTW plans for doing the forward and inverse transforms
+    fftw_plan dft_diffusion, idft_diffusion; //FFTW plans for doing the forward and inverse transforms
     std::complex<double>* curl_T_spectral;  //Curl of temperature in spectral space
-    std::complex<double>* phi_spectral;  //Curl of temperature in spectral space
-    std::complex<double>* psi_spectral;  //Curl of temperature in spectral space
+    std::complex<double>* T_spectral;  //Temperature in spectral space
+    std::complex<double> *scratch1_spectral, *scratch2_spectral;  //Scratch complex vectors for temporary stuff
+
 
     //Data for rendering with OpenGL
     GLfloat* vertices;  

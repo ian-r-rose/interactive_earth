@@ -1,7 +1,6 @@
 #include <cmath>
 #include "convection.h"
 
-
 //standard math library functions can be unpredictibly slow in 
 //some implementations, it seems, and not even available in others.
 //Here I implement some super basic, unsafe versions of some 
@@ -28,25 +27,24 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int nx, int ny, d
   Dp = new double[ncells];
   stream = new double[ncells];
   curl_T = new double[ncells];
-  lux = new double[ncells];
-  luy = new double[ncells];
   u = new double[ncells];
   v = new double[ncells];
-  g = new double[ncells];
-  gamma = new double[ny];
-  freqs = new double[ncells];
-  scratch1 = new double[ncells];
-  scratch2 = new double[ncells];
+  scratch = new double[ncells];
 
   //I actually allocate more memory than necessary for the 
   //spectral vector, but this way it makes the indexing simpler
   curl_T_spectral = new std::complex<double>[ncells];
-  phi_spectral = new std::complex<double>[ncells];
-  psi_spectral = new std::complex<double>[ncells];
+  T_spectral = new std::complex<double>[ncells];
+  scratch1_spectral = new std::complex<double>[ncells];
+  scratch2_spectral = new std::complex<double>[ncells];
 
   stokes_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.nx/2];
+  diffusion_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.nx/2];
   for (unsigned int i=0; i<=grid.nx/2; ++i)
+  {
     stokes_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.ny);
+    diffusion_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.ny);
+  }
 
   //Initialize the state
   update_state(Rayleigh);
@@ -56,7 +54,6 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int nx, int ny, d
   //diffustion problems. 
   setup_stokes_problem();
   setup_diffusion_problem();
-
 }
 
 /* Destructor for the solver.*/
@@ -67,23 +64,26 @@ ConvectionSimulator::~ConvectionSimulator()
   delete[] Dp;
   delete[] stream;
   delete[] curl_T;
-  delete[] lux;
-  delete[] luy;
   delete[] u;
   delete[] v;
-  delete[] g;
-  delete[] gamma;
-  delete[] freqs;
-  delete[] scratch1;
-  delete[] scratch2;
+  delete[] scratch;
   delete[] curl_T_spectral;
+  delete[] T_spectral;
+  delete[] scratch1_spectral;
+  delete[] scratch2_spectral;
 
   for (unsigned int i=0; i<=grid.nx/2; ++i)
+  {
     delete stokes_matrices[i];
+    delete diffusion_matrices[i];
+  }
   delete[] stokes_matrices;
+  delete[] diffusion_matrices;
  
-  fftw_destroy_plan(dft);
-  fftw_destroy_plan(idft);
+  fftw_destroy_plan(dft_diffusion);
+  fftw_destroy_plan(idft_diffusion);
+  fftw_destroy_plan(dft_stokes);
+  fftw_destroy_plan(idft_stokes);
 }
  
 /* Functional form of initial temperature field.  
@@ -189,7 +189,7 @@ void ConvectionSimulator::propagate_seismic_waves()
                   (2./r/r/dtheta/dtheta + 2./dr/dr)*D[cell->self()];
 
     //Explicitly propagate wave
-    scratch1[cell->self()] = (2.0 * D[cell->self()] - Dp[cell->self()]  
+    scratch[cell->self()] = (2.0 * D[cell->self()] - Dp[cell->self()]  
                              + dt*dt*speed*speed*laplacian + dt*dissipation*D[cell->self()])
                              /(1.0 + dissipation*dt); 
   }
@@ -199,7 +199,7 @@ void ConvectionSimulator::propagate_seismic_waves()
     //Current displacement becomes previous displacement
     Dp[cell->self()] = D[cell->self()];
     //Copy over new displacement
-    D[cell->self()] = scratch1[cell->self()];
+    D[cell->self()] = scratch[cell->self()];
   
     //clip field to tamp down on instabilities and keep it in reasonable values
     if(D[cell->self()] > 1.0) D[cell->self()] = 1.0;
@@ -309,12 +309,12 @@ void ConvectionSimulator::semi_lagrangian_advect()
       takeoff_point.x = fast_fmod(fast_fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
       takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
     } 
-    scratch1[cell->self()] = temperature(takeoff_point);  //Store the temperature we found
+    scratch[cell->self()] = temperature(takeoff_point);  //Store the temperature we found
   }
    
   //Copy the scratch vector into the temperature vector. 
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    T[cell->self()] = scratch1[cell->self()];
+    T[cell->self()] = scratch[cell->self()];
 }
 
 /* Solve the diffusion equation implicitly with reverse Euler.
@@ -330,139 +330,79 @@ void ConvectionSimulator::semi_lagrangian_advect()
    unconditionally stable.  */
 void ConvectionSimulator::diffuse_temperature()
 {
-
-  //First do diffusion in the y direction
-  double eta_r = dt/grid.dy/grid.dy;
-  double lambda_r = (1.0 + 2.0*eta_r);
-  //Forward sweep
+  //Apply boundary conditions
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    const double dr = grid.dy;
-    const double r = cell->location().y + grid.r_inner;
-
-    if(cell->at_bottom_boundary())
-      scratch1[cell->self()] = 1.0;
-    else if (cell->at_top_boundary())
-      scratch1[cell->self()] = 0.0;
-    else
-      scratch1[cell->self()] = (T[cell->self()] + scratch1[cell->down()]*eta_r)/(lambda_r + luy[cell->down()]*eta_r);
-  }
-  //Do reverse sweep for y direction
-  for( RegularGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
-  {
-    if(cell->at_top_boundary())
+    if (cell->at_top_boundary())
       T[cell->self()] = 0.0;
-    else if(cell->at_bottom_boundary())
+    else if (cell->at_bottom_boundary())
       T[cell->self()] = 1.0;
-    else
-      T[cell->self()] = scratch1[cell->self()] - luy[cell->self()]*T[cell->up()];
   }
 
+  //Execute the forward fourier transform
+  fftw_execute(dft_diffusion);  //X direction
 
-  //Now do the x direction, which is more complicated due to the periodicity.
+  for (unsigned int l = 0; l <= grid.nx/2.; ++l)
+    diffusion_matrices[l]->solve( T_spectral+l, grid.nx, scratch1_spectral+l);
+     
+  //Execute the inverse Fourier transform
+  fftw_execute(idft_diffusion);  //X direction
 
-  //First sweep!
+  //Renormalize
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    const double dr = grid.dy;
-    const double r = cell->location().y + grid.r_inner;
-    double eta_theta = dt/grid.dx/grid.dx/r/r;
-    double lambda_theta = (1.0 + 2.0*eta_theta);
-
-    if(cell->at_left_boundary())
-      scratch1[cell->self()] = T[cell->self()]/lambda_theta;
-    else if (cell->at_right_boundary())
-      scratch1[cell->self()] = 0.0; 
-    else
-      scratch1[cell->self()] = (T[cell->self()] + scratch1[cell->left()]*eta_theta)/(lambda_theta + lux[cell->left()]*eta_theta);
-  }
-  //Do reverse sweep for x direction
-  RegularGrid::reverse_iterator trailer = grid.rbegin();
-  for( RegularGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
-  {
-    const double dr = grid.dy;
-    const double r = cell->location().y + grid.r_inner;
-    double eta_theta = dt/grid.dx/grid.dx/r/r;
-    double lambda_theta = (1.0 + 2.0*eta_theta);
-
-    if(cell->at_right_boundary())
-    {
-      ++cell;
-      scratch2[cell->self()] = scratch1[cell->self()];
-    }
-    else
-      scratch2[cell->self()] = scratch1[cell->self()] - lux[cell->self()]*scratch2[cell->right()];
- 
-    if(cell->at_left_boundary())
-    {
-      double xn = (T[trailer->self()] + eta_theta*(scratch2[cell->self()] + scratch2[trailer->self()-1]))/(lambda_theta-gamma[cell->yindex()]);
-      T[trailer->self()] = xn;
-      ++trailer;
-      for(; (trailer->at_right_boundary()==false && trailer != grid.rend()); ++trailer)
-        T[trailer->self()] = scratch2[trailer->self()] - xn*g[trailer->self()];
-    }
-  }
+    T[cell->self()] = scratch[cell->self()]/grid.nx;
 }
 
   
 void ConvectionSimulator::setup_diffusion_problem()
 {
+  //Setup the tridiagonal matrices in the y direction
+  double *upper_diag = new double[grid.ny];
+  double *diag = new double[grid.ny];
+  double *lower_diag = new double[grid.ny];
 
-  double eta_r = dt/grid.dy/grid.dy;
-  double lambda_r = (1.0 + 2.0*eta_r);
-
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  const double dr = grid.dy;
+  //Upper and lower diagonals are the same for each frequency
+  for( unsigned int i=0; i < grid.ny; ++i )
   {
-    const double dr = grid.dy;
-    const double r = cell->location().y + grid.r_inner;
-    double eta_theta = dt/grid.dx/grid.dx/r/r;
-    double lambda_theta = (1.0 + 2.0*eta_theta);
-
-    //assemble condensed lux vector
-    if(cell->at_left_boundary())
-    {
-      lux[cell->self()] = -eta_theta/lambda_theta;
-      scratch2[cell->self()] = -eta_theta/lambda_theta;
-    }
-    else if (cell->at_right_boundary())
-    {
-      lux[cell->self()] = 0.0; lux[cell->left()] = 0.0; //solving condensed system, so no last DOF
-      scratch2[cell->self()] = 0.0; 
-      scratch2[cell->left()] = (-eta_theta + scratch2[cell->left()-1]*eta_theta)/(lambda_theta + lux[cell->left()-1]*eta_theta);
-    }
-    else
-    {
-      lux[cell->self()] = -eta_theta/(lambda_theta + lux[cell->left()]*eta_theta);
-      scratch2[cell->self()] = (scratch2[cell->left()]*eta_theta)/(lambda_theta + lux[cell->left()]*eta_theta);
-    }
-
-    //Assemble luy vector
-    if(cell->at_bottom_boundary())
-      luy[cell->self()] = 0.0;
-    else if (cell->at_top_boundary())
-      luy[cell->self()] = 0.0;
-    else
-      luy[cell->self()] = -eta_r/(lambda_r + luy[cell->down()]*eta_r);
+    const double r = grid.r_inner + i*dr;
+    upper_diag[i] = -dt/dr/dr * (1. + 0.5*dr/r);
+    lower_diag[i] = -dt/dr/dr * (1. - 0.5*dr/r);
   }
-  //Do reverse sweep for x direction
-  for( RegularGrid::reverse_iterator cell = grid.rbegin(); cell != grid.rend(); ++cell)
+  upper_diag[0] = 0.0;  //fix for lower B.C.
+  lower_diag[grid.ny-1] = 0.0; //fix for upper B.C.
+
+  //Diagonals include a term for the frequency in the x-direction
+  for (unsigned int l = 0; l <= grid.nx/2.; ++l)
   {
-    const double dr = grid.dy;
-    const double r = cell->location().y + grid.r_inner;
-    double eta_theta = dt/grid.dx/grid.dx/r/r;
-    double lambda_theta = (1.0 + 2.0*eta_theta);
+     double factor = (l*l);
+     diag[0] = 1.0; diag[grid.ny-1] = 1.0;
+     for (unsigned int i=1; i<grid.ny-1; ++i)
+     {
+       const double r = grid.r_inner + i*dr;
+       diag[i] = 1. + 2.*dt/dr/dr + factor*dt/r/r;
+     }
 
-    if(cell->at_right_boundary())
-    {
-      ++cell;
-      g[cell->self()] = scratch2[cell->self()];
-    }
-    else
-      g[cell->self()] = scratch2[cell->self()] - lux[cell->self()]*g[cell->right()];
- 
-    if(cell->at_left_boundary())
-      gamma[cell->yindex()] = -eta_theta*(g[cell->self()] + g[cell->left()-1]);
+     diffusion_matrices[l]->initialize(lower_diag, diag, upper_diag);
   }
+
+  delete[] upper_diag;
+  delete[] diag;
+  delete[] lower_diag;
+
+  int n[1];
+  int stride, dist, howmany;
+
+  //transform in the x direction with a full dft
+  n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny; 
+  dft_diffusion = fftw_plan_many_dft_r2c(1, n, howmany, T, NULL, stride, dist,
+                                         reinterpret_cast<fftw_complex*>(T_spectral), 
+                                         NULL, stride, dist, FFTW_ESTIMATE);
+  idft_diffusion = fftw_plan_many_dft_c2r(1, n, howmany, 
+                                          reinterpret_cast<fftw_complex*>(scratch1_spectral),
+                                          NULL, stride, dist, scratch, NULL, 
+                                          stride, dist, FFTW_ESTIMATE);
+
 }
 
 /* Setup the stokes solve with the stream function formulation.
@@ -488,7 +428,7 @@ void ConvectionSimulator::setup_stokes_problem()
   {
      double factor = (l*l);
      diag[0] = 1.0; diag[grid.ny-1] = 1.0;
-     for (unsigned int i=0; i<grid.ny; ++i)
+     for (unsigned int i=1; i<grid.ny-1; ++i)
      {
        const double r = grid.r_inner + i*dr;
        diag[i] = -2./dr/dr - factor/r/r;
@@ -497,18 +437,22 @@ void ConvectionSimulator::setup_stokes_problem()
      stokes_matrices[l]->initialize(lower_diag, diag, upper_diag);
   }
 
+  delete[] upper_diag;
+  delete[] diag;
+  delete[] lower_diag;
+
   int n[1];
   int stride, dist, howmany;
 
   //transform in the x direction with a full dft
   n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny; 
-  dft = fftw_plan_many_dft_r2c(1, n, howmany, curl_T, NULL, stride, dist,
-                     reinterpret_cast<fftw_complex*>(curl_T_spectral), 
-                     NULL, stride, dist, FFTW_ESTIMATE);
-  idft = fftw_plan_many_dft_c2r(1, n, howmany, 
-                     reinterpret_cast<fftw_complex*>(psi_spectral),
-                     NULL, stride, dist, scratch1, NULL, 
-                     stride, dist, FFTW_ESTIMATE);
+  dft_stokes = fftw_plan_many_dft_r2c(1, n, howmany, curl_T, NULL, stride, dist,
+                                      reinterpret_cast<fftw_complex*>(curl_T_spectral), 
+                                      NULL, stride, dist, FFTW_ESTIMATE);
+  idft_stokes = fftw_plan_many_dft_c2r(1, n, howmany, 
+                                       reinterpret_cast<fftw_complex*>(scratch2_spectral),
+                                       NULL, stride, dist, scratch, NULL, 
+                                       stride, dist, FFTW_ESTIMATE);
 
 }
 
@@ -559,20 +503,20 @@ void ConvectionSimulator::solve_stokes()
   assemble_curl_T_vector();
 
   //Execute the forward fourier transform
-  fftw_execute(dft);  //X direction
+  fftw_execute(dft_stokes);  //X direction
 
   for (unsigned int l = 0; l <= grid.nx/2.; ++l)
   {
-     stokes_matrices[l]->solve( curl_T_spectral+l, grid.nx, phi_spectral+l);
-     stokes_matrices[l]->solve( phi_spectral+l, grid.nx, psi_spectral+l);
+     stokes_matrices[l]->solve( curl_T_spectral+l, grid.nx, scratch1_spectral+l);
+     stokes_matrices[l]->solve( scratch1_spectral+l, grid.nx, scratch2_spectral+l);
   }
      
   //Execute the inverse Fourier transform
-  fftw_execute(idft);  //X direction
+  fftw_execute(idft_stokes);  //X direction
 
   //Renormalize
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    stream[cell->self()] = scratch1[cell->self()]/2.0/grid.nx;
+    stream[cell->self()] = scratch[cell->self()]/grid.nx;
 
   //Come up with the velocities by taking finite differences of the stream function.
   //I could also take these derivatives in spectral space, but that would mean 
