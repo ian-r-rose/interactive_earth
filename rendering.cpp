@@ -222,8 +222,8 @@ void ConvectionSimulator::draw()
 
 #else
 
-  double DX = 2.0/grid.nx;
-  double DY = 2.0/grid.ny;
+  GLfloat DX = 2.0*M_PI/(grid.nx);
+  GLfloat DY = 1.0/(grid.ny-1);
 
   glClearColor(0.0, 0.0, 0.0, 0.0);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -231,28 +231,51 @@ void ConvectionSimulator::draw()
   glBegin(GL_TRIANGLE_STRIP);
   for( RegularGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
   {
-    if (cell->at_left_boundary())
+    if (cell->at_left_boundary() && cell->self() != 0.)
       glBegin(GL_TRIANGLE_STRIP);
 
-    if( !cell->at_right_boundary() )
-    {
-      color c_s = hot(T[cell->self()]);
-      color c_u = hot(T[cell->up()]);
+    color c_s = hot(T[cell->self()]);
+    color c_u = hot(T[cell->up()]);
 
-      c_s.R += displacement_factor*D[cell->self()];
-      c_s.G += displacement_factor*D[cell->self()];
-      c_s.B += displacement_factor*D[cell->self()];
-      c_u.R += displacement_factor*D[cell->self()];
-      c_u.G += displacement_factor*D[cell->self()];
-      c_u.B += displacement_factor*D[cell->self()];
+    c_s.R += displacement_factor*D[cell->self()];
+    c_s.G += displacement_factor*D[cell->self()];
+    c_s.B += displacement_factor*D[cell->self()];
+    c_u.R += displacement_factor*D[cell->up()];
+    c_u.G += displacement_factor*D[cell->up()];
+    c_u.B += displacement_factor*D[cell->up()];
+
+    const float r = grid.r_inner + (cell->yindex()*DY * (1.0f - grid.r_inner) );
+    const float r_up = grid.r_inner + ((cell->yindex()+1)*DY * (1.0f - grid.r_inner) );
+    const float theta = cell->xindex()*DX;
+
+    glColor3f(c_s.R, c_s.G, c_s.B);
+    glVertex2f(r * std::cos(theta), r * std::sin(theta));
+    glColor3f(c_u.R, c_u.G, c_u.B);
+    glVertex2f(r_up * std::cos(theta), r_up * std::sin(theta));
+
+    //Add last strip for periodicity
+    if (cell->at_right_boundary() )
+    {
+      c_s = hot(T[cell->right()]);
+      c_u = hot(T[cell->upright()]);
+
+      c_s.R += displacement_factor*D[cell->right()];
+      c_s.G += displacement_factor*D[cell->right()];
+      c_s.B += displacement_factor*D[cell->right()];
+      c_u.R += displacement_factor*D[cell->upright()];
+      c_u.G += displacement_factor*D[cell->upright()];
+      c_u.B += displacement_factor*D[cell->upright()];
+
+      const float r = grid.r_inner + (cell->yindex()*DY * (1.0f - grid.r_inner) );
+      const float r_up = grid.r_inner + ((cell->yindex()+1)*DY * (1.0f - grid.r_inner) );
+      const float theta = 0.0;
 
       glColor3f(c_s.R, c_s.G, c_s.B);
-      glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
+      glVertex2f(r * std::cos(theta), r * std::sin(theta));
       glColor3f(c_u.R, c_u.G, c_u.B);
-      glVertex2f((cell->xindex())*DX-1.0, (cell->yindex()+1)*DY-1.0);
-    }
-    else
+      glVertex2f(r_up * std::cos(theta), r_up * std::sin(theta));
       glEnd();
+    }
   }
   glFlush();
 
