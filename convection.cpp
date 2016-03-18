@@ -38,8 +38,8 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int nx, int ny, d
   scratch1_spectral = new std::complex<double>[ncells];
   scratch2_spectral = new std::complex<double>[ncells];
 
-  stokes_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.nx/2];
-  diffusion_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.nx/2];
+  stokes_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.nx/2+1];
+  diffusion_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.nx/2+1];
   for (unsigned int i=0; i<=grid.nx/2; ++i)
   {
     stokes_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.ny);
@@ -49,6 +49,9 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int nx, int ny, d
   //Initialize the state
   update_state(Rayleigh);
   initialize_temperature();
+
+  //Initialize displacement to zero
+  clear_seismic_waves();
 
   //Do some setup work for solving stokes and
   //diffustion problems.
@@ -84,6 +87,7 @@ ConvectionSimulator::~ConvectionSimulator()
   fftw_destroy_plan(idft_diffusion);
   fftw_destroy_plan(dft_stokes);
   fftw_destroy_plan(idft_stokes);
+  fftw_cleanup();
 }
 
 /* Functional form of initial temperature field.

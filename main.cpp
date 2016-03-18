@@ -46,10 +46,8 @@ bool solve_stokes = true;
 //Whether we are in earthquake mode
 bool seismic_mode = false;
 
-//Pointer for the solver so that the various event handlers
-//can access it.  Did it this way due to the way GLUT is
-//organized, not really necessary now that I am using SDL.
-ConvectionSimulator* handle = NULL;
+//Global solver
+ConvectionSimulator simulator(r_inner, nx,ny, Ra);
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -71,9 +69,9 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 //Change the Rayleigh number on scrolling
 inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 {
-  double rayleigh = handle->rayleigh_number();
+  double rayleigh = simulator.rayleigh_number();
   double factor = std::pow(10.0, 1./100.* (event->y < 0 ? -1. : 1.0) );
-  handle->update_state( rayleigh * factor );
+  simulator.update_state( rayleigh * factor );
 }
 
 //Toggle whether to add heat, and whether it should
@@ -116,7 +114,7 @@ inline bool in_domain( const float x, const float y )
 void timestep()
 {
   static int i=0;  //Keep track of timestep number
-  handle->draw();  //Draw to screen
+  simulator.draw();  //Draw to screen
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -124,20 +122,20 @@ void timestep()
     //I have found that it usually looks okay if we only update the velocity solution
     //every other timestep.  Any more delay and it starts to look funny.
     if(solve_stokes && i%2==0)
-      handle->solve_stokes();
+      simulator.solve_stokes();
 
     //Add heat if the user is clicking
-    if(click_state != 0 && in_domain(hx, hy) ) handle->add_heat(hx, hy, (click_state==1 ? true : false));
+    if(click_state != 0 && in_domain(hx, hy) ) simulator.add_heat(hx, hy, (click_state==1 ? true : false));
 
     //Advect temperature field
-    handle->semi_lagrangian_advect();
+    simulator.semi_lagrangian_advect();
 
     //Diffuse temperature
-    handle->diffuse_temperature();
+    simulator.diffuse_temperature();
 
     //Output scaling information
-    std::cout<<"Ra: "<<std::setprecision(3)<<handle->rayleigh_number()
-             <<"\tNu: "<<handle->nusselt_number()<<std::endl;
+    std::cout<<"Ra: "<<std::setprecision(3)<<simulator.rayleigh_number()
+             <<"\tNu: "<<simulator.nusselt_number()<<std::endl;
     //increment timestep
     ++i;
   }
@@ -145,9 +143,9 @@ void timestep()
   else
   {
     //Make earthquakes
-    if(click_state != 0 && in_domain(hx,hy) ) handle->earthquake(hx, hy);
+    if(click_state != 0 && in_domain(hx,hy) ) simulator.earthquake(hx, hy);
     //Propagate waves
-    handle->propagate_seismic_waves();
+    simulator.propagate_seismic_waves();
   }
 }
 
@@ -174,13 +172,13 @@ void init()
     }
 
 
-    handle->setup_opengl();
+    simulator.setup_opengl();
 }
 
 //Cleanup
 void quit()
 {
-    handle->cleanup_opengl();
+    simulator.cleanup_opengl();
     SDL_GL_DeleteContext(context);
     SDL_Quit();
     exit(0);
@@ -199,7 +197,7 @@ void loop()
         if(event.key.keysym.sym == SDLK_SPACE)
         {
           seismic_mode = !seismic_mode;
-          handle->clear_seismic_waves();
+          simulator.clear_seismic_waves();
         }
         //Quitting should be handled by navigating to another
         //webpage or closing the browser when using, emscripten,
@@ -229,9 +227,6 @@ void loop()
 
 int main(int argc, char** argv)
 {
-    ConvectionSimulator stokes(r_inner, nx,ny, Ra);
-    handle = &stokes;
-
     init();
 
     //The browser needs to handle the event loop if we are using
