@@ -24,12 +24,12 @@ void ConvectionSimulator::setup_opengl()
     const short colors_per_vertex = 3;
     const unsigned long n_triangles = grid.nx * (grid.ny-1) * triangles_per_quad;
     const unsigned long n_vertices = grid.nx * grid.ny;
-    
+
 
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
     vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
     triangle_vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
-    
+
     unsigned long v=0, i=0;
     for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     {
@@ -51,7 +51,7 @@ void ConvectionSimulator::setup_opengl()
         triangle_vertex_indices[i + 3] = cell->self();
         triangle_vertex_indices[i + 4] = cell->right();
         triangle_vertex_indices[i + 5] = cell->upright();
-   
+
         i += triangles_per_quad * vertices_per_triangle;
       }
 
@@ -184,7 +184,7 @@ void ConvectionSimulator::draw()
 
     v += colors_per_vertex;
   }
-    
+
   glClearColor(0.0, 0.0, 0.0, 1.0);
   glClear(GL_COLOR_BUFFER_BIT);
 
@@ -220,7 +220,7 @@ void ConvectionSimulator::draw()
 //  glDisableVertexAttribArray(attribute_v_color);
 
 
-#else 
+#else
 
   double DX = 2.0/grid.nx;
   double DY = 2.0/grid.ny;
@@ -259,4 +259,4 @@ void ConvectionSimulator::draw()
 #endif //LEGACY_OPENGL
 
 }
-  
+

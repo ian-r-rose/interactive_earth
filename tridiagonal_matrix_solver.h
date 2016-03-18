@@ -15,9 +15,9 @@ class TridiagonalMatrixSolver
 
     TridiagonalMatrixSolver() : size(0) {}
     TridiagonalMatrixSolver( const unsigned int n );
-    
-    void initialize( const double* lower_diagonal, 
-                     const double* diagonal, 
+
+    void initialize( const double* lower_diagonal,
+                     const double* diagonal,
                      const double* upper_diagonal );
 
     ~TridiagonalMatrixSolver();
@@ -28,7 +28,7 @@ class TridiagonalMatrixSolver
     unsigned int size;
     double *upper_diag, *diag, *lower_diag;
     double * upper_diag_prime;
-    T *rhs_prime; 
+    T *rhs_prime;
 };
 
 template<typename T>
@@ -54,8 +54,8 @@ TridiagonalMatrixSolver<T>::~TridiagonalMatrixSolver()
 }
 
 template<typename T>
-void TridiagonalMatrixSolver<T>::initialize( const double* lower_diagonal, 
-                                             const double* diagonal, 
+void TridiagonalMatrixSolver<T>::initialize( const double* lower_diagonal,
+                                             const double* diagonal,
                                              const double* upper_diagonal )
 {
   unsigned int n = size;
@@ -78,7 +78,7 @@ void TridiagonalMatrixSolver<T>::initialize( const double* lower_diagonal,
 
 
 template<typename T>
-void TridiagonalMatrixSolver<T>::solve( const T* rhs, unsigned int stride, T* x) 
+void TridiagonalMatrixSolver<T>::solve( const T* rhs, unsigned int stride, T* x)
 {
   unsigned int n = size;
   rhs_prime[0] = rhs[0]/diag[0];
@@ -86,7 +86,7 @@ void TridiagonalMatrixSolver<T>::solve( const T* rhs, unsigned int stride, T* x)
   for (unsigned int i=1; i < n-1; ++i)
     rhs_prime[i] = (rhs[stride*i] - lower_diag[i]*rhs_prime[i-1])/
                    (diag[i] - lower_diag[i]*upper_diag_prime[i-1]);
-  
+
   rhs_prime[n-1] = (rhs[(n-1)*stride] - lower_diag[(n-1)]*rhs_prime[n-2])/
                    (diag[(n-1)] - lower_diag[(n-1)]*upper_diag_prime[n-2]);
 

@@ -1,9 +1,9 @@
 #include <cmath>
 #include "convection.h"
 
-//standard math library functions can be unpredictibly slow in 
+//standard math library functions can be unpredictibly slow in
 //some implementations, it seems, and not even available in others.
-//Here I implement some super basic, unsafe versions of some 
+//Here I implement some super basic, unsafe versions of some
 //for inlining.
 inline double fast_fmod(double x,double y) { return x-((int)(x/y))*y; }
 inline double dmin (double x, double y) { return x < y ? x : y; }
@@ -31,7 +31,7 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int nx, int ny, d
   v = new double[ncells];
   scratch = new double[ncells];
 
-  //I actually allocate more memory than necessary for the 
+  //I actually allocate more memory than necessary for the
   //spectral vector, but this way it makes the indexing simpler
   curl_T_spectral = new std::complex<double>[ncells];
   T_spectral = new std::complex<double>[ncells];
@@ -51,7 +51,7 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int nx, int ny, d
   initialize_temperature();
 
   //Do some setup work for solving stokes and
-  //diffustion problems. 
+  //diffustion problems.
   setup_stokes_problem();
   setup_diffusion_problem();
 }
@@ -79,14 +79,14 @@ ConvectionSimulator::~ConvectionSimulator()
   }
   delete[] stokes_matrices;
   delete[] diffusion_matrices;
- 
+
   fftw_destroy_plan(dft_diffusion);
   fftw_destroy_plan(idft_diffusion);
   fftw_destroy_plan(dft_stokes);
   fftw_destroy_plan(idft_stokes);
 }
- 
-/* Functional form of initial temperature field.  
+
+/* Functional form of initial temperature field.
    Just start with a constant value of one half.*/
 double ConvectionSimulator::initial_temperature(const Point &p)
 {
@@ -102,9 +102,9 @@ void ConvectionSimulator::initialize_temperature()
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = initial_temperature(cell->location());
 }
- 
+
 /* Given a heat source centered on p1, calculate the heating at
-   point p2, using a simple Gaussian source term */ 
+   point p2, using a simple Gaussian source term */
 inline double ConvectionSimulator::heat(const Point &p1, const Point &p2 )
 {
   const double x1 = (p1.y+grid.r_inner)*std::cos(p1.x), y1 = (p1.y+grid.r_inner)*std::sin(p1.x);
@@ -133,7 +133,7 @@ void ConvectionSimulator::clear_seismic_waves()
 }
 
 
-/* Add an earthquake at the point x,y.  I use a functional form of a 
+/* Add an earthquake at the point x,y.  I use a functional form of a
   Mexican hat wavelet.  At some point it may be good to revisit what
   functional form is best.  */
 void ConvectionSimulator::earthquake(double theta, double r)
@@ -169,7 +169,7 @@ void ConvectionSimulator::propagate_seismic_waves()
     const double dr = grid.dy;
     const double dtheta = grid.dx;
 
-    //Make the wavespeed temperature dependent.  This is a HUGE 
+    //Make the wavespeed temperature dependent.  This is a HUGE
     //temperature dependence so it is pretty obvious.
     double speed = reference_speed*(1.0 - 0.7*T[cell->self()]);
     if(speed < 0.0) speed = 0.0;
@@ -189,9 +189,9 @@ void ConvectionSimulator::propagate_seismic_waves()
                   (2./r/r/dtheta/dtheta + 2./dr/dr)*D[cell->self()];
 
     //Explicitly propagate wave
-    scratch[cell->self()] = (2.0 * D[cell->self()] - Dp[cell->self()]  
+    scratch[cell->self()] = (2.0 * D[cell->self()] - Dp[cell->self()]
                              + dt*dt*speed*speed*laplacian + dt*dissipation*D[cell->self()])
-                             /(1.0 + dissipation*dt); 
+                             /(1.0 + dissipation*dt);
   }
 
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
@@ -200,14 +200,14 @@ void ConvectionSimulator::propagate_seismic_waves()
     Dp[cell->self()] = D[cell->self()];
     //Copy over new displacement
     D[cell->self()] = scratch[cell->self()];
-  
+
     //clip field to tamp down on instabilities and keep it in reasonable values
     if(D[cell->self()] > 1.0) D[cell->self()] = 1.0;
     if(D[cell->self()] < -1.0) D[cell->self()] = -1.0;
   }
 }
 
-  
+
 
 
 
@@ -218,7 +218,7 @@ Point ConvectionSimulator::velocity(const Point &p)
   Point vel;
 
   //Get the relevant lower-left cells for the velocities
-  RegularGrid::iterator cell = grid.lower_left_cell(p); 
+  RegularGrid::iterator cell = grid.lower_left_cell(p);
 
   //Determine the local x and y coordinates for the velocity
   double local_x = fast_fmod(p.x, grid.dx)/grid.dx;
@@ -245,20 +245,20 @@ Point ConvectionSimulator::velocity(const Point &p)
                             v[dl], v[dr]);
 
   return vel;
-} 
+}
 
 /* Interpolate the temperature onto an arbitrary point. */
 inline double ConvectionSimulator::temperature(const Point &p)
 {
   double temp;
-  RegularGrid::iterator cell = grid.lower_left_cell(p); 
+  RegularGrid::iterator cell = grid.lower_left_cell(p);
   double local_x = fast_fmod(p.x, grid.dx)/grid.dx;
   double local_y = ( p.y - cell->location().y )/grid.dy;
 
   if (cell->at_top_boundary() )
-    temp = linear_interp_2d( local_x, local_y, -T[cell->self()], -T[cell->right()],  
+    temp = linear_interp_2d( local_x, local_y, -T[cell->self()], -T[cell->right()],
                              T[cell->self()], T[cell->right()]);
-  else 
+  else
     temp = linear_interp_2d( local_x, local_y, T[cell->up()], T[cell->upright()],
                              T[cell->self()], T[cell->right()]);
 
@@ -273,10 +273,10 @@ inline double ConvectionSimulator::temperature(const Point &p)
    interpolation and use more iterations. */
 void ConvectionSimulator::semi_lagrangian_advect()
 {
-  //The goal is to find the temperature at the Lagrangian point which will 
+  //The goal is to find the temperature at the Lagrangian point which will
   //be advected to the current grid point in one time step.  In general,
   //this point wil not be on the grid.  I find this point using a coarse
-  //iterated predictor corrector.  
+  //iterated predictor corrector.
 
   Point vel_final;  //Velocity at the grid point
   Point vel_takeoff; //Velocity at the candidate takeoff point
@@ -292,7 +292,7 @@ void ConvectionSimulator::semi_lagrangian_advect()
     vel_final.y = v[cell_index];
     final_point = cell->location();
 
-  
+
     //Calculate the initial guess for the takeoff point using a basic predictor
     //with a forward euler step
     takeoff_point.x = final_point.x - vel_final.x*dt;
@@ -314,11 +314,11 @@ void ConvectionSimulator::semi_lagrangian_advect()
       //Keep in domain
       takeoff_point.x = fast_fmod(takeoff_point.x + grid.lx, grid.lx);
       takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
-    } 
+    }
     scratch[cell_index] = temperature(takeoff_point);  //Store the temperature we found
   }
-   
-  //Copy the scratch vector into the temperature vector. 
+
+  //Copy the scratch vector into the temperature vector.
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = scratch[cell->self()];
 }
@@ -327,11 +327,11 @@ void ConvectionSimulator::semi_lagrangian_advect()
    I do the x and y direction separately, so in all cases I am
    solving a series of tridiagonal matrix equations.  This allows
    me to solve it in O(N).  The tridiagonal solves are done using
-   the Thomas algorithm.  The x-direction is more complicated, 
+   the Thomas algorithm.  The x-direction is more complicated,
    because the periodicity makes it not strictly tridiagonal. To
    get around this, I condense the matrix with one step of Gaussian
    elimination, so that it is separated into the tridiagonal and
-   non-tridiagonal parts.  This is kind of complicated and needs 
+   non-tridiagonal parts.  This is kind of complicated and needs
    to be better documented.  The good news is that it is fast and
    unconditionally stable.  */
 void ConvectionSimulator::diffuse_temperature()
@@ -350,7 +350,7 @@ void ConvectionSimulator::diffuse_temperature()
 
   for (unsigned int l = 0; l <= grid.nx/2.; ++l)
     diffusion_matrices[l]->solve( T_spectral+l, grid.nx, scratch1_spectral+l);
-     
+
   //Execute the inverse Fourier transform
   fftw_execute(idft_diffusion);  //X direction
 
@@ -359,7 +359,7 @@ void ConvectionSimulator::diffuse_temperature()
     T[cell->self()] = scratch[cell->self()]/grid.nx;
 }
 
-  
+
 void ConvectionSimulator::setup_diffusion_problem()
 {
   //Setup the tridiagonal matrices in the y direction
@@ -400,13 +400,13 @@ void ConvectionSimulator::setup_diffusion_problem()
   int stride, dist, howmany;
 
   //transform in the x direction with a full dft
-  n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny; 
+  n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny;
   dft_diffusion = fftw_plan_many_dft_r2c(1, n, howmany, T, NULL, stride, dist,
-                                         reinterpret_cast<fftw_complex*>(T_spectral), 
+                                         reinterpret_cast<fftw_complex*>(T_spectral),
                                          NULL, stride, dist, FFTW_ESTIMATE);
-  idft_diffusion = fftw_plan_many_dft_c2r(1, n, howmany, 
+  idft_diffusion = fftw_plan_many_dft_c2r(1, n, howmany,
                                           reinterpret_cast<fftw_complex*>(scratch1_spectral),
-                                          NULL, stride, dist, scratch, NULL, 
+                                          NULL, stride, dist, scratch, NULL,
                                           stride, dist, FFTW_ESTIMATE);
 
 }
@@ -451,23 +451,23 @@ void ConvectionSimulator::setup_stokes_problem()
   int stride, dist, howmany;
 
   //transform in the x direction with a full dft
-  n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny; 
+  n[0] = grid.nx; stride = 1; dist = grid.nx; howmany = grid.ny;
   dft_stokes = fftw_plan_many_dft_r2c(1, n, howmany, curl_T, NULL, stride, dist,
-                                      reinterpret_cast<fftw_complex*>(curl_T_spectral), 
+                                      reinterpret_cast<fftw_complex*>(curl_T_spectral),
                                       NULL, stride, dist, FFTW_ESTIMATE);
-  idft_stokes = fftw_plan_many_dft_c2r(1, n, howmany, 
+  idft_stokes = fftw_plan_many_dft_c2r(1, n, howmany,
                                        reinterpret_cast<fftw_complex*>(scratch2_spectral),
-                                       NULL, stride, dist, scratch, NULL, 
+                                       NULL, stride, dist, scratch, NULL,
                                        stride, dist, FFTW_ESTIMATE);
 
 }
 
-  
+
 /*Calculate the Nusselt number for the given temperature field.
   In principle I could calculate the heat flux through the bottom
   boundary as well, and take the average, but as it is, I am only
   doing the heat flux through the top boundary*/
-double ConvectionSimulator::nusselt_number() 
+double ConvectionSimulator::nusselt_number()
 {
   double heat_flux = 0;
 
@@ -481,8 +481,8 @@ double ConvectionSimulator::nusselt_number()
   }
   return -heat_flux * grid.ly/grid.nx;
 }
-  
-      
+
+
 //The curl of the temperature is what is relevant for the stream
 //function calculation.  This calculates that curl.
 void ConvectionSimulator::assemble_curl_T_vector()
@@ -492,9 +492,9 @@ void ConvectionSimulator::assemble_curl_T_vector()
   {
     const double r = cell->location().y + grid.r_inner;
     if(cell->at_bottom_boundary())
-      curl_T[cell->self()] = 0.0; 
+      curl_T[cell->self()] = 0.0;
     else if (cell->at_top_boundary())
-      curl_T[cell->self()] = 0.0; 
+      curl_T[cell->self()] = 0.0;
     else
       curl_T[cell->self()] = Ra*(T[cell->right()] - T[cell->left()])
                                  /r/2.0/grid.dx;
@@ -504,7 +504,7 @@ void ConvectionSimulator::assemble_curl_T_vector()
 
 /* Actually solve the biharmonic equation for the Stokes system.*/
 void ConvectionSimulator::solve_stokes()
-{ 
+{
   //Come up with the RHS of the spectral solve
   assemble_curl_T_vector();
 
@@ -516,7 +516,7 @@ void ConvectionSimulator::solve_stokes()
      stokes_matrices[l]->solve( curl_T_spectral+l, grid.nx, scratch1_spectral+l);
      stokes_matrices[l]->solve( scratch1_spectral+l, grid.nx, scratch2_spectral+l);
   }
-     
+
   //Execute the inverse Fourier transform
   fftw_execute(idft_stokes);  //X direction
 
@@ -525,7 +525,7 @@ void ConvectionSimulator::solve_stokes()
     stream[cell->self()] = scratch[cell->self()]/grid.nx;
 
   //Come up with the velocities by taking finite differences of the stream function.
-  //I could also take these derivatives in spectral space, but that would mean 
+  //I could also take these derivatives in spectral space, but that would mean
   //more fourier transforms, so this should be considerably cheaper.
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -556,7 +556,7 @@ void ConvectionSimulator::update_state(double rayleigh)
     Ra = 2.*Ra_c*std::pow( grid.ly/boundary_layer_cells/grid.dy, 3.0);
   else Ra = rayleigh;
 
-  length_scale = std::pow(Ra/2./Ra_c, -1./3.)*grid.ly;  
+  length_scale = std::pow(Ra/2./Ra_c, -1./3.)*grid.ly;
   const double Nu = std::pow(Ra/Ra_c/2., 1./3.) / 2.;  //Nusselt
   const double velocity_scale = std::sqrt( Ra * Nu );
   const double cfl = grid.dy/velocity_scale;

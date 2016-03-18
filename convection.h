@@ -13,11 +13,11 @@
 class ConvectionSimulator
 {
   private:
-   
+
     //Information about the grid
     int nx,ny;
     int ncells;
-   
+
     //Current model parameters
     double Ra;  //Rayleigh number
     double dt;  //timestep
@@ -29,7 +29,7 @@ class ConvectionSimulator
     //The full grid, which knows how to iterate,
     //get geometric information, etc.
     RegularGrid grid;
-    
+
     //Vectors which are used in the solve
     double *T;  //Temperature
     double *D;  //Displacement
@@ -52,7 +52,7 @@ class ConvectionSimulator
 
 
     //Data for rendering with OpenGL
-    GLfloat* vertices;  
+    GLfloat* vertices;
     GLfloat* vertex_colors;
     GLuint* triangle_vertex_indices;
 
@@ -62,7 +62,7 @@ class ConvectionSimulator
     void setup_stokes_problem();  //Setup for spectral solve
     void setup_diffusion_problem(); //Setup for diffusion solve (needs to be called every time the Ra is changed)
     void assemble_curl_T_vector(); //Assembling RHS for spectral solve.  Called every timestep
-   
+
     //functions for evaluating field at points
     double initial_temperature(const Point&);
     double temperature(const Point&);

@@ -27,7 +27,7 @@ const double ly = 1.0-r_inner;
 //Initial Rayleigh number of simulation
 const double Ra = 1.e7;
 
-//Factor for how much to blow up the rendered 
+//Factor for how much to blow up the rendered
 //triangles so that they are bigger on screen
 const unsigned int scale = 1;
 
@@ -47,7 +47,7 @@ bool solve_stokes = true;
 bool seismic_mode = false;
 
 //Pointer for the solver so that the various event handlers
-//can access it.  Did it this way due to the way GLUT is 
+//can access it.  Did it this way due to the way GLUT is
 //organized, not really necessary now that I am using SDL.
 ConvectionSimulator* handle = NULL;
 
@@ -75,7 +75,7 @@ inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
   double factor = std::pow(10.0, 1./100.* (event->y < 0 ? -1. : 1.0) );
   handle->update_state( rayleigh * factor );
 }
-  
+
 //Toggle whether to add heat, and whether it should
 //be positive or negative
 inline void handle_mouse_button(SDL_MouseButtonEvent *event)
@@ -95,7 +95,7 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 
     hx = lx * theta / 2. / M_PI;
     hy = ly*(r-r_inner)/(1.0f-r_inner);
-     
+
   }
   else
   {
@@ -121,7 +121,7 @@ void timestep()
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
   {
-    //I have found that it usually looks okay if we only update the velocity solution 
+    //I have found that it usually looks okay if we only update the velocity solution
     //every other timestep.  Any more delay and it starts to look funny.
     if(solve_stokes && i%2==0)
       handle->solve_stokes();
@@ -159,9 +159,9 @@ void init()
 
 
     window = SDL_CreateWindow(
-       "Convection", 
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
-        xpix, ypix, 
+       "Convection",
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        xpix, ypix,
         SDL_WINDOW_OPENGL);
     context = SDL_GL_CreateContext(window);
     if (!context)
@@ -231,7 +231,7 @@ int main(int argc, char** argv)
 {
     ConvectionSimulator stokes(r_inner, nx,ny, Ra);
     handle = &stokes;
- 
+
     init();
 
     //The browser needs to handle the event loop if we are using

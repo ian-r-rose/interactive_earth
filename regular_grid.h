@@ -3,7 +3,7 @@
 Define an abstract interface to a simple cartesian mesh,
 with ways to iterate over the mesh cells, as well as query
 for indexing and geometric information.  For use with
-cartesian grids in serial finite difference 
+cartesian grids in serial finite difference
 calculations
 / ***********************/
 
@@ -31,20 +31,20 @@ class RegularGrid
     class iterator;
     class reverse_iterator;
 
-    //Basic cell data type, which knows its own index, 
+    //Basic cell data type, which knows its own index,
     //geometric properties, and how to access its neighbors.
-    class Cell 
+    class Cell
     {
       public:
 
         Cell (unsigned int i, const RegularGrid &g): id(i), grid(g) {};
         Cell (Cell &c): id(c.id), grid(c.grid) {};
         Cell &operator=(const Cell &rhs) { id=rhs.id; return *this;}
- 
+
         //get the x,y index of the cell
         int xindex() { return id % grid.nx; };
         int yindex() { return id / grid.nx; };
-        
+
         //get grid indices of the neighbors
         int left() { return (id % grid.nx == 0 ? id+grid.nx-1 : id-1); };
         int right() { return ( (id+1)%grid.nx == 0 ? id-grid.nx+1 : id+1); };
@@ -67,7 +67,7 @@ class RegularGrid
         //as different of the properties will be found on different parts of the cell.
         Point location() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy;  return p;}; //lower left
 
-        
+
       private:
         const RegularGrid& grid;  //Const reference to the grid
         int id; //id of the cell, which will correspond to its index in vectors
@@ -113,7 +113,7 @@ class RegularGrid
         Cell &operator*() {return c;}
         Cell* operator->() {return &c;}
     };
-        
+
     //const members so we can query directly
     const double lx, ly; //Length in x,y directions
     const int nx, ny; //Number of cells in x,y directions
@@ -122,7 +122,7 @@ class RegularGrid
     const double r_inner, r_outer;
 
     RegularGrid(const double inner_radius, const unsigned int numx, const unsigned int numy)
-                  : r_inner(inner_radius), r_outer(1.0), lx(2.0*M_PI), ly(1.0-inner_radius), nx(numx), ny(numy), dx(lx/nx), dy(ly/(ny-1)), ncells(nx*ny) {}; 
+                  : r_inner(inner_radius), r_outer(1.0), lx(2.0*M_PI), ly(1.0-inner_radius), nx(numx), ny(numy), dx(lx/nx), dy(ly/(ny-1)), ncells(nx*ny) {};
     const iterator begin() { return iterator(0, *this); };
     const iterator end() {return iterator(ncells, *this);};
     const reverse_iterator rbegin() { return reverse_iterator(ncells-1, *this); };
@@ -136,18 +136,18 @@ class RegularGrid
     iterator cell_at_point( const Point &p) { return iterator(cell_id(p), *this); };
 
     iterator lower_left_cell( const Point &p) { return cell_at_point(p); };
-   
+
 };
 
 
-//Cubic lagrange interpolation at an arbitrary point, given the values of the 
+//Cubic lagrange interpolation at an arbitrary point, given the values of the
 //function at a nine-point stencil around it.  I am currently using linear
 //rather than cubic interpolation for performance reasons.
 inline double cubic_interp_2d( double x, double y, double ul, double u, double ur,
                                   double l, double c, double r, double dl, double d, double dr)
 {
-  return   ul*(x)*(x-1.0)*(y)*(y+1.0)/4.0 
-         - u*(x-1.0)*(x+1.0)*(y)*(y+1.0)/2.0 
+  return   ul*(x)*(x-1.0)*(y)*(y+1.0)/4.0
+         - u*(x-1.0)*(x+1.0)*(y)*(y+1.0)/2.0
          + ur*(x+1.0)*(x)*(y)*(y+1.0)/4.0
          - l*(x)*(x-1.0)*(y-1.0)*(y+1.0)/2.0
          + c*(x-1.0)*(x+1.0)*(y-1.0)*(y+1.0)
