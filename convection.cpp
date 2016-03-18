@@ -224,21 +224,25 @@ Point ConvectionSimulator::velocity(const Point &p)
   double local_x = fast_fmod(p.x, grid.dx)/grid.dx;
   double local_y = (p.y - cell->location().y)/grid.dy;
 
-  //get interpolated vx
-  if(cell->at_top_boundary())
+  unsigned int ul, ur, dl, dr;
+  if (cell->at_top_boundary() )
   {
-    vel.x = linear_interp_2d (local_x, local_y, u[cell->self()], 
-                              u[cell->right()], u[cell->self()], u[cell->right()]);
-    vel.y = linear_interp_2d (local_x, local_y, 0.0, 0.0 ,
-                              v[cell->self()], v[cell->right()]);
+    ul = cell->self();
+    ur = cell->right();
   }
   else
   {
-    vel.x = linear_interp_2d (local_x, local_y, u[cell->up()], u[cell->upright()],
-                              u[cell->self()], u[cell->right()]);
-    vel.y = linear_interp_2d (local_x, local_y, v[cell->up()], v[cell->upright()],
-                              v[cell->self()], v[cell->right()]);
+    ul = cell->up();
+    ur = cell->right();
   }
+  dl = cell->self();
+  dr = cell->right();
+
+  //get interpolated vx
+  vel.x = linear_interp_2d (local_x, local_y, u[ul], u[ur],
+                            u[dl], u[dr]);
+  vel.y = linear_interp_2d (local_x, local_y, v[ul], v[ur],
+                            v[dl], v[dr]);
 
   return vel;
 } 
@@ -283,7 +287,9 @@ void ConvectionSimulator::semi_lagrangian_advect()
   {
     //These points are known, as they are the grid points in question.  They will
     //not change for this cell.
-    vel_final = velocity (cell->location() );
+    unsigned int cell_index = cell->self();
+    vel_final.x = u[cell_index];
+    vel_final.y = v[cell_index];
     final_point = cell->location();
 
   
@@ -292,7 +298,7 @@ void ConvectionSimulator::semi_lagrangian_advect()
     takeoff_point.x = final_point.x - vel_final.x*dt;
     takeoff_point.y = final_point.y - vel_final.y*dt;
     //Keep it in the domain
-    takeoff_point.x = fast_fmod(fast_fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
+    takeoff_point.x = fast_fmod(takeoff_point.x + grid.lx, grid.lx);
     takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
 
     //Iterate on the corrector.  Here I only do one iteration for
@@ -306,10 +312,10 @@ void ConvectionSimulator::semi_lagrangian_advect()
       takeoff_point.x = final_point.x - (vel_final.x + vel_takeoff.x)*dt/2.0;
       takeoff_point.y = final_point.y - (vel_final.y + vel_takeoff.y)*dt/2.0;
       //Keep in domain
-      takeoff_point.x = fast_fmod(fast_fmod(takeoff_point.x, grid.lx) + grid.lx, grid.lx);
+      takeoff_point.x = fast_fmod(takeoff_point.x + grid.lx, grid.lx);
       takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
     } 
-    scratch[cell->self()] = temperature(takeoff_point);  //Store the temperature we found
+    scratch[cell_index] = temperature(takeoff_point);  //Store the temperature we found
   }
    
   //Copy the scratch vector into the temperature vector. 

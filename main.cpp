@@ -121,8 +121,7 @@ void timestep()
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
   {
-    //The stokes solve is typically the most expensive part.  I have found
-    //That it usually looks okay if we only update the velocity solution 
+    //I have found that it usually looks okay if we only update the velocity solution 
     //every other timestep.  Any more delay and it starts to look funny.
     if(solve_stokes && i%2==0)
       handle->solve_stokes();
