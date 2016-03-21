@@ -20,7 +20,7 @@ const unsigned int ny = 128;
 //lx to ly should be the same of nx to ny,
 //otherwise the convective features will
 //look kind of squashed and funny.
-const double r_inner = 0.5;
+const double r_inner = 0.2;
 const double lx = 2.*M_PI;
 const double ly = 1.0-r_inner;
 
@@ -128,7 +128,7 @@ void timestep()
     if(click_state != 0 && in_domain(hx, hy) ) simulator.add_heat(hx, hy, (click_state==1 ? true : false));
 
     //Advect temperature field
-    simulator.semi_lagrangian_advect();
+    simulator.upwind_advect();
 
     //Diffuse temperature
     simulator.diffuse_temperature();

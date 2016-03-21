@@ -84,6 +84,7 @@ class ConvectionSimulator
 
     void add_heat(double x, double y, bool hot); //Add heat at a point, with the bool indicating whether it is hot or cold
     void semi_lagrangian_advect();  //Advect temperature through the velocity field
+    void upwind_advect();  //Advect temperature through the velocity field
     void diffuse_temperature(); //Diffuse temperature
     void solve_stokes(); //Solve for velocity field
     void draw();  //Render using OpenGL
