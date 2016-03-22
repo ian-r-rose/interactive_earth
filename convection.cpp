@@ -97,7 +97,9 @@ double ConvectionSimulator::initial_temperature(const Point &p)
 //  if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
 //  else if (std::sqrt( (1.65-p.x)*(1.65-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 0.0;
 //  else return 0.5;
-  return 0.5;
+  //Guess of internal temperature based on isoviscous boundary layer theory
+  //in a cylinder.
+  return grid.r_inner/(1.+grid.r_inner);
 }
 
 /* Loop over all the cells and set the initial temperature */
@@ -586,7 +588,7 @@ void ConvectionSimulator::update_state(double rayleigh)
   const double cfl = dmin(grid.dy, grid.r_inner*grid.dx)/velocity_scale;
 
   //Estimate other state properties based on simple isoviscous scalings
-  dt = cfl * 10.0; //Roughly 10x CFL, thanks to semi-lagrangian
+  dt = cfl * 20.0; //Roughly 10x CFL, thanks to semi-lagrangian
   heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
   heat_source = velocity_scale/grid.ly*2.; //Heat a blob of order the ascent time for thta blob
 
