@@ -94,9 +94,6 @@ ConvectionSimulator::~ConvectionSimulator()
    Just start with a constant value of one half.*/
 double ConvectionSimulator::initial_temperature(const Point &p)
 {
-//  if (std::sqrt( (0.35-p.x)*(0.35-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 1.0;
-//  else if (std::sqrt( (1.65-p.x)*(1.65-p.x)+(0.5-p.y)*(0.5-p.y))  < 0.05 ) return 0.0;
-//  else return 0.5;
   //Guess of internal temperature based on isoviscous boundary layer theory
   //in a cylinder.
   return grid.r_inner/(1.+grid.r_inner);
@@ -113,17 +110,17 @@ void ConvectionSimulator::initialize_temperature()
    point p2, using a simple Gaussian source term */
 inline double ConvectionSimulator::heat(const Point &p1, const Point &p2 )
 {
-  const double x1 = (p1.y+grid.r_inner)*std::cos(p1.x), y1 = (p1.y+grid.r_inner)*std::sin(p1.x);
-  const double x2 = (p2.y+grid.r_inner)*std::cos(p2.x), y2 = (p2.y+grid.r_inner)*std::sin(p2.x);
+  const double x1 = (p1.r+grid.r_inner)*std::cos(p1.theta), y1 = (p1.r+grid.r_inner)*std::sin(p1.theta);
+  const double x2 = (p2.r+grid.r_inner)*std::cos(p2.theta), y2 = (p2.r+grid.r_inner)*std::sin(p2.theta);
   const double rsq = (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
   return heat_source*std::exp( -rsq/2.0/heat_source_radius/heat_source_radius );
 }
 
 /* Loop over all the cells and add heat according to where the current heat
    source is. */
-void ConvectionSimulator::add_heat(double x, double y, bool hot)
+void ConvectionSimulator::add_heat(double theta, double r, bool hot)
 {
-  Point p; p.x = x; p.y=y;
+  Point p; p.theta = theta; p.r=r;
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = T[cell->self()] + (hot ? 1.0 : -1.0)*heat(p, cell->location())*dt;
 }
@@ -152,7 +149,7 @@ void ConvectionSimulator::earthquake(double theta, double r)
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     Point p2 = cell->location();
-    const double x2 = (p2.y+grid.r_inner)*std::cos(p2.x), y2 = (p2.y+grid.r_inner)*std::sin(p2.x);
+    const double x2 = (p2.r+grid.r_inner)*std::cos(p2.theta), y2 = (p2.r+grid.r_inner)*std::sin(p2.theta);
     const double rsq = (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
     const double dist = rsq/earthquake_radius/earthquake_radius;
     D[cell->self()] += prefactor * (1.0 - dist) * std::exp( -dist/2. );
@@ -171,7 +168,7 @@ void ConvectionSimulator::propagate_seismic_waves()
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     double laplacian;
-    const double r = cell->location().y + grid.r_inner;
+    const double r = cell->location().r + grid.r_inner;
     const double dr = grid.dy;
     const double dtheta = grid.dx;
 
@@ -227,8 +224,8 @@ Point ConvectionSimulator::velocity(const Point &p)
   RegularGrid::iterator cell = grid.lower_left_cell(p);
 
   //Determine the local x and y coordinates for the velocity
-  double local_x = fast_fmod(p.x, grid.dx)/grid.dx;
-  double local_y = (p.y - cell->location().y)/grid.dy;
+  double local_theta = fast_fmod(p.theta, grid.dx)/grid.dx;
+  double local_r = (p.r - cell->location().r)/grid.dy;
 
   unsigned int ul, ur, dl, dr;
   if (cell->at_top_boundary() )
@@ -245,9 +242,9 @@ Point ConvectionSimulator::velocity(const Point &p)
   dr = cell->right();
 
   //get interpolated vx
-  vel.x = linear_interp_2d (local_x, local_y, u[ul], u[ur],
+  vel.theta = linear_interp_2d (local_theta, local_r, u[ul], u[ur],
                             u[dl], u[dr]);
-  vel.y = linear_interp_2d (local_x, local_y, v[ul], v[ur],
+  vel.r = linear_interp_2d (local_theta, local_r, v[ul], v[ur],
                             v[dl], v[dr]);
 
   return vel;
@@ -258,14 +255,14 @@ inline double ConvectionSimulator::temperature(const Point &p)
 {
   double temp;
   RegularGrid::iterator cell = grid.lower_left_cell(p);
-  double local_x = fast_fmod(p.x, grid.dx)/grid.dx;
-  double local_y = ( p.y - cell->location().y )/grid.dy;
+  double local_theta = fast_fmod(p.theta, grid.dx)/grid.dx;
+  double local_r = ( p.r - cell->location().r )/grid.dy;
 
   if (cell->at_top_boundary() )
-    temp = linear_interp_2d( local_x, local_y, -T[cell->self()], -T[cell->right()],
+    temp = linear_interp_2d( local_theta, local_r, -T[cell->self()], -T[cell->right()],
                              T[cell->self()], T[cell->right()]);
   else
-    temp = linear_interp_2d( local_x, local_y, T[cell->up()], T[cell->upright()],
+    temp = linear_interp_2d( local_theta, local_r, T[cell->up()], T[cell->upright()],
                              T[cell->self()], T[cell->right()]);
 
   return temp;
@@ -295,27 +292,27 @@ void ConvectionSimulator::semi_lagrangian_advect()
     //These points are known, as they are the grid points in question.  They will
     //not change for this cell.
     unsigned int cell_index = cell->self();
-    vel_final.x = u[cell_index];
-    vel_final.y = v[cell_index];
+    vel_final.theta = u[cell_index];
+    vel_final.r = v[cell_index];
     final_point = cell->location();
-    const double final_r = final_point.y + grid.r_inner;
-    const double cos_f = std::cos(final_point.x);
-    const double sin_f = std::sin(final_point.x);
+    const double final_r = final_point.r + grid.r_inner;
+    const double cos_f = std::cos(final_point.theta);
+    const double sin_f = std::sin(final_point.theta);
     final_point_cart.x = final_r * cos_f;
     final_point_cart.y = final_r * sin_f;
-    vel_final_cart.x = -vel_final.x * sin_f + vel_final.y * cos_f;
-    vel_final_cart.y =  vel_final.x * cos_f + vel_final.y * sin_f;
+    vel_final_cart.x = -vel_final.theta * sin_f + vel_final.r * cos_f;
+    vel_final_cart.y =  vel_final.theta * cos_f + vel_final.r * sin_f;
 
 
     //Calculate the initial guess for the takeoff point using a basic predictor
     //with a forward euler step
     takeoff_point_cart.x = final_point_cart.x - vel_final_cart.x*dt;
     takeoff_point_cart.y = final_point_cart.y - vel_final_cart.y*dt;
-    takeoff_point.x = std::atan2(takeoff_point_cart.y, takeoff_point_cart.x);
-    takeoff_point.y = std::sqrt( takeoff_point_cart.x*takeoff_point_cart.x + takeoff_point_cart.y*takeoff_point_cart.y) - grid.r_inner;
+    takeoff_point.theta = std::atan2(takeoff_point_cart.y, takeoff_point_cart.x);
+    takeoff_point.r = std::sqrt( takeoff_point_cart.x*takeoff_point_cart.x + takeoff_point_cart.y*takeoff_point_cart.y) - grid.r_inner;
     //Keep it in the domain
-    takeoff_point.x = fast_fmod(takeoff_point.x + grid.lx, grid.lx);
-    takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
+    takeoff_point.theta = fast_fmod(takeoff_point.theta + grid.lx, grid.lx);
+    takeoff_point.r = dmin( grid.ly, dmax( takeoff_point.r, 0.0) );
 
     //Iterate on the corrector.  Here I only do one iteration for
     //performance reasons, but in principle we could do more to get
@@ -324,22 +321,22 @@ void ConvectionSimulator::semi_lagrangian_advect()
     {
       //Evaluate the velocity at the predictor
       vel_takeoff = velocity(takeoff_point);
-      const double takeoff_r = takeoff_point.y + grid.r_inner;
-      const double cos_t = std::cos(takeoff_point.x);
-      const double sin_t = std::sin(takeoff_point.x);
+      const double takeoff_r = takeoff_point.r + grid.r_inner;
+      const double cos_t = std::cos(takeoff_point.theta);
+      const double sin_t = std::sin(takeoff_point.theta);
       takeoff_point_cart.x = takeoff_r * cos_t;
       takeoff_point_cart.y = takeoff_r * sin_t;
-      vel_takeoff_cart.x = -vel_takeoff.x * sin_t + vel_takeoff.y * cos_t;
-      vel_takeoff_cart.y =  vel_takeoff.x * cos_t + vel_takeoff.y * sin_t;
+      vel_takeoff_cart.x = -vel_takeoff.theta * sin_t + vel_takeoff.r * cos_t;
+      vel_takeoff_cart.y =  vel_takeoff.theta * cos_t + vel_takeoff.r * sin_t;
 
       //Come up with the corrector using a midpoint rule
       takeoff_point_cart.x = final_point_cart.x - (vel_final_cart.x + vel_takeoff_cart.x)*dt/2.0;
       takeoff_point_cart.y = final_point_cart.y - (vel_final_cart.y + vel_takeoff_cart.y)*dt/2.0;
-      takeoff_point.x = std::atan2(takeoff_point_cart.y, takeoff_point_cart.x);
-      takeoff_point.y = std::sqrt( takeoff_point_cart.x*takeoff_point_cart.x + takeoff_point_cart.y*takeoff_point_cart.y) - grid.r_inner;
+      takeoff_point.theta = std::atan2(takeoff_point_cart.y, takeoff_point_cart.x);
+      takeoff_point.r = std::sqrt( takeoff_point_cart.x*takeoff_point_cart.x + takeoff_point_cart.y*takeoff_point_cart.y) - grid.r_inner;
       //Keep in domain
-      takeoff_point.x = fast_fmod(takeoff_point.x + grid.lx, grid.lx);
-      takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
+      takeoff_point.theta = fast_fmod(takeoff_point.theta + grid.lx, grid.lx);
+      takeoff_point.r = dmin( grid.ly, dmax( takeoff_point.r, 0.0) );
     }
     scratch[cell_index] = temperature(takeoff_point);  //Store the temperature we found
   }
@@ -516,7 +513,7 @@ void ConvectionSimulator::assemble_curl_T_vector()
   //Assemble curl_T vector
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    const double r = cell->location().y + grid.r_inner;
+    const double r = cell->location().r + grid.r_inner;
     if(cell->at_bottom_boundary())
       curl_T[cell->self()] = 0.0;
     else if (cell->at_top_boundary())
@@ -555,7 +552,7 @@ void ConvectionSimulator::solve_stokes()
   //more fourier transforms, so this should be considerably cheaper.
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    const double r = cell->location().y + grid.r_inner;
+    const double r = cell->location().r + grid.r_inner;
     if( cell->at_top_boundary() )
       u[cell->self()] = (stream[cell->self()] - stream[cell->down()])/grid.dy;
     else if ( cell->at_bottom_boundary() )

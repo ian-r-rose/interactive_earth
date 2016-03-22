@@ -12,10 +12,17 @@ calculations
 #ifndef REGULAR_GRID_H
 #define REGULAR_GRID_H
 
+
+//Struct for holding a 2D point.
+//Can refer both to x,y and theta,r,
+//though the memory layout is the same.
 struct Point
 {
-  double x;
-  double y;
+  union
+  {
+    struct{ double x,y; };
+    struct{ double theta, r;};
+  };
 };
 
 inline int fast_floor(double x)
