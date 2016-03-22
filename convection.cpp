@@ -161,7 +161,7 @@ void ConvectionSimulator::earthquake(double theta, double r)
 void ConvectionSimulator::propagate_seismic_waves()
 {
   const double reference_speed = 1.0;  //dummy wavespeed
-  const double dt = 0.6*dmin(grid.dx,grid.dy)/reference_speed; // Timestep to satisfy cfl
+  const double dt = 0.6*dmin(grid.r_inner*grid.dx,grid.dy)/reference_speed; // Timestep to satisfy cfl
   double dissipation = 0.5;  //Empirically chosen dissipation
 
   //We can get away with an explicit timestepping scheme for the wave equation,
@@ -583,7 +583,7 @@ void ConvectionSimulator::update_state(double rayleigh)
   length_scale = std::pow(Ra/2./Ra_c, -1./3.)*grid.ly;
   const double Nu = std::pow(Ra/Ra_c/2., 1./3.) / 2.;  //Nusselt
   const double velocity_scale = std::sqrt( Ra * Nu );
-  const double cfl = grid.dy/velocity_scale;
+  const double cfl = dmin(grid.dy, grid.r_inner*grid.dx)/velocity_scale;
 
   //Estimate other state properties based on simple isoviscous scalings
   dt = cfl * 10.0; //Roughly 10x CFL, thanks to semi-lagrangian
