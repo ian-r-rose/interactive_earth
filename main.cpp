@@ -20,7 +20,7 @@ const unsigned int ny = 128;
 //lx to ly should be the same of nx to ny,
 //otherwise the convective features will
 //look kind of squashed and funny.
-const double r_inner = 0.2;
+const double r_inner = 0.5;
 const double lx = 2.*M_PI;
 const double ly = 1.0-r_inner;
 

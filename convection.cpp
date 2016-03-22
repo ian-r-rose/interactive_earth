@@ -269,45 +269,6 @@ inline double ConvectionSimulator::temperature(const Point &p)
   return temp;
 }
 
-void ConvectionSimulator::upwind_advect()
-{
-  double dTdtheta;
-  double dTdr;
-  double vx, vy;
-
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    const double r = cell->location().y+grid.r_inner;
-    vx = u[cell->self()];
-    if (vx <= 0.0) 
-      dTdtheta = (T[cell->right()]-T[cell->self()])/grid.dx/r;
-    else
-      dTdtheta = (T[cell->self()]-T[cell->left()])/grid.dx/r;
-    if( cell->at_top_boundary())
-    {
-      vy = 0;
-      dTdr = (0.0 - T[cell->down()])/grid.dy;
-    }
-    else if (cell->at_bottom_boundary())
-    {
-      vy = 0;
-      dTdr = (T[cell->up()] - 1.0)/grid.dy;
-    }
-    else
-    {
-      vy = v[cell->self()];
-      if (vy <= 0.0) 
-        dTdr = (T[cell->up()]-T[cell->self()])/grid.dy;
-      else
-        dTdr = (T[cell->self()]-T[cell->down()])/grid.dy;
-    }
-    
-    scratch[cell->self()] = T[cell->self()] - dt*(vx*dTdtheta+vy*dTdr);
-  }
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    T[cell->self()] = scratch[cell->self()];
-}
-
 /* Advect the temperature field through the velocity field using
    Semi-lagrangian advection.  This scheme is quite stable, which
    allows me to take VERY large time steps.  The drawback is that it
