@@ -128,7 +128,7 @@ void timestep()
     if(click_state != 0 && in_domain(hx, hy) ) simulator.add_heat(hx, hy, (click_state==1 ? true : false));
 
     //Advect temperature field
-    simulator.upwind_advect();
+    simulator.semi_lagrangian_advect();
 
     //Diffuse temperature
     simulator.diffuse_temperature();

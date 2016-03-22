@@ -321,10 +321,11 @@ void ConvectionSimulator::semi_lagrangian_advect()
   //this point wil not be on the grid.  I find this point using a coarse
   //iterated predictor corrector.
 
-  Point vel_final;  //Velocity at the grid point
-  Point vel_takeoff; //Velocity at the candidate takeoff point
-  Point takeoff_point; //Candidate takeoff point
-  Point final_point; //grid point
+  Point vel_final, vel_final_cart;  //Velocity at the grid point
+  Point vel_takeoff, vel_takeoff_cart; //Velocity at the candidate takeoff point
+  Point takeoff_point, takeoff_point_cart; //Candidate takeoff point
+  Point final_point, final_point_cart; //grid point
+
 
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -334,12 +335,21 @@ void ConvectionSimulator::semi_lagrangian_advect()
     vel_final.x = u[cell_index];
     vel_final.y = v[cell_index];
     final_point = cell->location();
+    const double final_r = final_point.y + grid.r_inner;
+    const double cos_f = std::cos(final_point.x);
+    const double sin_f = std::sin(final_point.x);
+    final_point_cart.x = final_r * cos_f;
+    final_point_cart.y = final_r * sin_f;
+    vel_final_cart.x = -vel_final.x * sin_f + vel_final.y * cos_f;
+    vel_final_cart.y =  vel_final.x * cos_f + vel_final.y * sin_f;
 
 
     //Calculate the initial guess for the takeoff point using a basic predictor
     //with a forward euler step
-    takeoff_point.x = final_point.x - vel_final.x*dt;
-    takeoff_point.y = final_point.y - vel_final.y*dt;
+    takeoff_point_cart.x = final_point_cart.x - vel_final_cart.x*dt;
+    takeoff_point_cart.y = final_point_cart.y - vel_final_cart.y*dt;
+    takeoff_point.x = std::atan2(takeoff_point_cart.y, takeoff_point_cart.x);
+    takeoff_point.y = std::sqrt( takeoff_point_cart.x*takeoff_point_cart.x + takeoff_point_cart.y*takeoff_point_cart.y) - grid.r_inner;
     //Keep it in the domain
     takeoff_point.x = fast_fmod(takeoff_point.x + grid.lx, grid.lx);
     takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
@@ -351,9 +361,19 @@ void ConvectionSimulator::semi_lagrangian_advect()
     {
       //Evaluate the velocity at the predictor
       vel_takeoff = velocity(takeoff_point);
+      const double takeoff_r = takeoff_point.y + grid.r_inner;
+      const double cos_t = std::cos(takeoff_point.x);
+      const double sin_t = std::sin(takeoff_point.x);
+      takeoff_point_cart.x = takeoff_r * cos_t;
+      takeoff_point_cart.y = takeoff_r * sin_t;
+      vel_takeoff_cart.x = -vel_takeoff.x * sin_t + vel_takeoff.y * cos_t;
+      vel_takeoff_cart.y =  vel_takeoff.x * cos_t + vel_takeoff.y * sin_t;
+
       //Come up with the corrector using a midpoint rule
-      takeoff_point.x = final_point.x - (vel_final.x + vel_takeoff.x)*dt/2.0;
-      takeoff_point.y = final_point.y - (vel_final.y + vel_takeoff.y)*dt/2.0;
+      takeoff_point_cart.x = final_point_cart.x - (vel_final_cart.x + vel_takeoff_cart.x)*dt/2.0;
+      takeoff_point_cart.y = final_point_cart.y - (vel_final_cart.y + vel_takeoff_cart.y)*dt/2.0;
+      takeoff_point.x = std::atan2(takeoff_point_cart.y, takeoff_point_cart.x);
+      takeoff_point.y = std::sqrt( takeoff_point_cart.x*takeoff_point_cart.x + takeoff_point_cart.y*takeoff_point_cart.y) - grid.r_inner;
       //Keep in domain
       takeoff_point.x = fast_fmod(takeoff_point.x + grid.lx, grid.lx);
       takeoff_point.y = dmin( grid.ly, dmax( takeoff_point.y, 0.0) );
@@ -605,7 +625,7 @@ void ConvectionSimulator::update_state(double rayleigh)
   const double cfl = grid.dy/velocity_scale;
 
   //Estimate other state properties based on simple isoviscous scalings
-  dt = cfl * 0.2; //Roughly 10x CFL, thanks to semi-lagrangian
+  dt = cfl * 10.0; //Roughly 10x CFL, thanks to semi-lagrangian
   heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
   heat_source = velocity_scale/grid.ly*2.; //Heat a blob of order the ascent time for thta blob
 
