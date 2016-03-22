@@ -119,9 +119,9 @@ void timestep()
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
   {
-    //I have found that it usually looks okay if we only update the velocity solution
-    //every other timestep.  Any more delay and it starts to look funny.
-    if(solve_stokes && i%2==0)
+    //At the moment, the stokes solve is not the limiting factor,
+    //so it does not hurt to do it every timestep
+    if(solve_stokes && i%1==0)
       simulator.solve_stokes();
 
     //Add heat if the user is clicking
