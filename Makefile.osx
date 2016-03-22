@@ -21,7 +21,7 @@ main.o: main.cpp convection.h
 convection.o: convection.cpp convection.h regular_grid.h tridiagonal_matrix_solver.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) convection.cpp
 
-rendering.o: rendering.cpp convection.h regular_grid.h
+rendering.o: rendering.cpp convection.h regular_grid.h color.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) rendering.cpp
 
 .PHONY: clean
