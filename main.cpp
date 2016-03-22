@@ -105,9 +105,8 @@ inline bool in_domain( const float x, const float y )
 {
   const float xx = float(x)/float(xpix);
   const float yy = 1.0f-float(y)/float(ypix);
-  const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
-  //return (r < 1.) && ( r > r_inner);
-  return true;
+  const float r = std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
+  return (r < 1.) && ( r > r_inner);
 }
 
 //Actually perform the timestep
