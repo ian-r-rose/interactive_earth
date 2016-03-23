@@ -37,11 +37,8 @@ const unsigned int ypix = xpix;
 
 //Whether to add heat to the simulation on mouse click.
 int click_state = 0;
-//Location of heat-adding
-double htheta, hr;
-
-//Whether to solve the stokes equation for a given timestep.
-bool solve_stokes = true;
+//Location of heat-adding, chemistry adding, or earthquake generation
+double click_theta, click_r;
 
 //Whether we are in earthquake mode
 bool seismic_mode = false;
@@ -62,8 +59,8 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
   theta = (theta < 0. ? theta + 2.*M_PI : theta );
   const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
 
-  htheta = ltheta * theta / 2. / M_PI;
-  hr = lr*(r-r_inner)/(1.0f-r_inner);
+  click_theta = ltheta * theta / 2. / M_PI;
+  click_r = lr*(r-r_inner)/(1.0f-r_inner);
 }
 
 //Change the Rayleigh number on scrolling
@@ -91,8 +88,8 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
     theta = (theta < 0. ? theta + 2.*M_PI : theta );
     const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
 
-    htheta = ltheta * theta / 2. / M_PI;
-    hr = lr*(r-r_inner)/(1.0f-r_inner);
+    click_theta = ltheta * theta / 2. / M_PI;
+    click_r = lr*(r-r_inner)/(1.0f-r_inner);
 
   }
   else
@@ -120,11 +117,11 @@ void timestep()
   {
     //At the moment, the stokes solve is not the limiting factor,
     //so it does not hurt to do it every timestep
-    if(solve_stokes && i%1==0)
-      simulator.solve_stokes();
+    simulator.solve_stokes();
 
     //Add heat if the user is clicking
-    if(click_state != 0 && in_domain(htheta, hr) ) simulator.add_heat(htheta, hr, (click_state==1 ? true : false));
+    if(click_state != 0 && in_domain(click_theta, click_r) )
+      simulator.add_heat(click_theta, click_r, (click_state==1 ? true : false));
 
     //Advect temperature field
     simulator.semi_lagrangian_advect();
@@ -142,7 +139,8 @@ void timestep()
   else
   {
     //Make earthquakes
-    if(click_state != 0 && in_domain(htheta,hr) ) simulator.earthquake(htheta, hr);
+    if(click_state != 0 && in_domain(click_theta,click_r) )
+      simulator.earthquake(click_theta, click_r);
     //Propagate waves
     simulator.propagate_seismic_waves();
   }
