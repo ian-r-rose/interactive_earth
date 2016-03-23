@@ -159,7 +159,7 @@ void ConvectionSimulator::cleanup_opengl()
 #endif //LEGACY_OPENGL
 }
 
-void ConvectionSimulator::draw()
+void ConvectionSimulator::draw( bool draw_composition )
 {
   double displacement_factor = 0.4;
 #ifndef LEGACY_OPENGL
@@ -172,7 +172,12 @@ void ConvectionSimulator::draw()
   unsigned long v=0;
   for( RegularGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
   {
-    color c = hot(T[cell->self()]);
+    color c;
+    if (draw_composition)
+      c = hot(C[cell->self()]);
+    else
+      c = hot(T[cell->self()]);
+
     double displacement = displacement_factor * D[cell->self()]; //Perturb color if there is displacement
     c.R += displacement;
     c.G += displacement;
@@ -256,8 +261,17 @@ void ConvectionSimulator::draw()
     //Add last strip for periodicity
     if (cell->at_right_boundary() )
     {
-      c_s = hot(T[cell->right()]);
-      c_u = hot(T[cell->upright()]);
+      color c_s, c_u;
+      if (draw_composition)
+      {
+        c_s = hot(C[cell->self()]);
+        c_u = hot(C[cell->up()]);
+      }
+      else
+      {
+        c_s = hot(T[cell->self()]);
+        c_u = hot(T[cell->up()]);
+      }
 
       c_s.R += displacement_factor*D[cell->right()];
       c_s.G += displacement_factor*D[cell->right()];

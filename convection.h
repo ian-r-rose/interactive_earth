@@ -14,13 +14,19 @@ class ConvectionSimulator
 {
   private:
 
+    enum advection_field { temperature, composition };
+
     //Current model parameters
     double Ra;  //Rayleigh number
+    double buoyancy_number; // Density of chemical field relative to temperature variations
     double dt;  //timestep
+    bool include_composition; //whether to include a compositional field
 
-    //Info about how to add heat on clicking
+    //Info about how to add heati/composition on clicking
     double heat_source_radius;
     double heat_source;
+    double composition_source_radius;
+    double composition_source;
 
     //The full grid, which knows how to iterate,
     //get geometric information, etc.
@@ -28,11 +34,12 @@ class ConvectionSimulator
 
     //Vectors which are used in the solve
     double *T;  //Temperature
+    double *C;  //Composition
     double *D;  //Displacement
     double *Dp;  //Previous displacement
     double *scratch;  //Scratch vectors for storing temporary information
     double *stream;  //Stream function solution
-    double *curl_T; //Curl of temperature for the stream function solution
+    double *curl_density; //Curl of temperature for the stream function solution
     double *u; //velocity in the x direction
     double *v; //Velocity in the y direction
 
@@ -42,7 +49,7 @@ class ConvectionSimulator
     //FFTW stuff
     fftw_plan dft_stokes, idft_stokes; //FFTW plans for doing the forward and inverse transforms
     fftw_plan dft_diffusion, idft_diffusion; //FFTW plans for doing the forward and inverse transforms
-    std::complex<double>* curl_T_spectral;  //Curl of temperature in spectral space
+    std::complex<double>* curl_density_spectral;  //Curl of density in spectral space
     std::complex<double>* T_spectral;  //Temperature in spectral space
     std::complex<double> *scratch1_spectral, *scratch2_spectral;  //Scratch complex vectors for temporary stuff
 
@@ -54,19 +61,25 @@ class ConvectionSimulator
 
     //workhorse functions
     void initialize_temperature();  //just like it says
+    void initialize_composition();  //just like it says
     double heat(const Point&, const Point&);  //heating term at a point, given where the click has happened
+    double react(const Point&, const Point&);  //heating term at a point, given where the click has happened
     void setup_stokes_problem();  //Setup for spectral solve
     void setup_diffusion_problem(); //Setup for diffusion solve (needs to be called every time the Ra is changed)
-    void assemble_curl_T_vector(); //Assembling RHS for spectral solve.  Called every timestep
+    void assemble_curl_density_vector(); //Assembling RHS for spectral solve.  Called every timestep
+    void semi_lagrangian_advect( const advection_field field );  //Advect composition or temperature through the velocity field
+    void clip_field( advection_field field, double min, double max); //Clamp the field to be between min and max
 
     //functions for evaluating field at points
     double initial_temperature(const Point&);
-    double temperature(const Point&);
-    Point velocity(const Point&);
+    double initial_composition(const Point&);
+    double evaluate_temperature(const Point&);
+    double evaluate_composition(const Point&);
+    Point evaluate_velocity(const Point&);
 
   public:
     //Constructor and destructor
-    ConvectionSimulator( double inner_radius, int nx, int ny, double Rayleigh);
+    ConvectionSimulator( double inner_radius, int nx, int ny, double Rayleigh, bool include_composition);
     ~ConvectionSimulator();
 
     //Querying physics information about the solver
@@ -79,14 +92,19 @@ class ConvectionSimulator
     void clear_seismic_waves(); //zero out the displacement vectors
 
     void add_heat(double x, double y, bool hot); //Add heat at a point, with the bool indicating whether it is hot or cold
-    void semi_lagrangian_advect();  //Advect temperature through the velocity field
+    void add_composition(double x, double y); //Add composition at a point
+    void semi_lagrangian_advect_temperature();  //Advect temperature through the velocity field
+    void semi_lagrangian_advect_composition();  //Advect composition through the velocity field
     void diffuse_temperature(); //Diffuse temperature
+
     void solve_stokes(); //Solve for velocity field
-    void draw();  //Render using OpenGL
-    void update_state(double rayleigh);  //Update the state of the solver
+
+    void draw(bool);  //Render using OpenGL
 
     void setup_opengl();  //Setup OpenGL data structures
     void cleanup_opengl(); //Cleanup OpenGL data structures
+
+    void update_state(double rayleigh);  //Update the state of the solver
 };
 
 #endif

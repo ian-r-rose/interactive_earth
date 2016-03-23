@@ -10,17 +10,26 @@
 #include <emscripten/emscripten.h>
 #endif
 
-//Number of cells in the x and y directions.
+//Whether to include a chemical field.
+//The simulation will be faster without an additional advected field.
+bool include_composition = false;
+
+//Number of cells in the theta and r directions.
 //This is the primary control on resolution,
-//as well as performance/
-const unsigned int ntheta = 512;
-const unsigned int nr = 64;
+//as well as performance.
+const unsigned int ntheta = 1024;
+const unsigned int nr = 128;
+
+//Aspect ratio of the computational domain
+//is set by the inner radius, where the outer
+//radius is assumed to be 1.0
+const double r_inner = 0.5;
+
 
 //Size of computational domain.  The ratio of
-//ltheta to lr should be the same of ntheta to nr,
-//otherwise the convective features will
-//look kind of squashed and funny.
-const double r_inner = 0.5;
+//ntheta to nr should be roughly the same
+//as ltheta to lr to avoid a funny shaped grid,
+//which will result in a strange looking simulation.
 const double ltheta = 2.*M_PI;
 const double lr = 1.0-r_inner;
 
@@ -43,8 +52,11 @@ double click_theta, click_r;
 //Whether we are in earthquake mode
 bool seismic_mode = false;
 
+//Whether to draw composition or temperature fields
+bool draw_composition = false;
+
 //Global solver
-ConvectionSimulator simulator(r_inner, ntheta,nr, Ra);
+ConvectionSimulator simulator(r_inner, ntheta,nr, Ra, include_composition);
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -110,7 +122,7 @@ inline bool in_domain( const float x, const float y )
 void timestep()
 {
   static int i=0;  //Keep track of timestep number
-  simulator.draw();  //Draw to screen
+  simulator.draw( include_composition && draw_composition );  //Draw to screen
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -120,11 +132,15 @@ void timestep()
     simulator.solve_stokes();
 
     //Add heat if the user is clicking
-    if(click_state != 0 && in_domain(click_theta, click_r) )
+    if(click_state != 0 && ( (include_composition && !draw_composition)||(!include_composition)) && in_domain(click_theta, click_r) )
       simulator.add_heat(click_theta, click_r, (click_state==1 ? true : false));
+    if(click_state != 0 && include_composition && draw_composition && in_domain(click_theta, click_r) )
+      simulator.add_composition(click_theta, click_r);
 
-    //Advect temperature field
-    simulator.semi_lagrangian_advect();
+    //Advect temperature and composition fields
+    simulator.semi_lagrangian_advect_temperature();
+    if (include_composition)
+      simulator.semi_lagrangian_advect_composition();
 
     //Diffuse temperature
     simulator.diffuse_temperature();
@@ -203,6 +219,8 @@ void loop()
         else if(event.key.keysym.sym == SDLK_ESCAPE)
           quit();
 #endif
+        else if(event.key.keysym.sym == SDLK_TAB)
+          draw_composition = ! draw_composition;
         break;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:
