@@ -13,32 +13,32 @@
 //Number of cells in the x and y directions.
 //This is the primary control on resolution,
 //as well as performance/
-const unsigned int nx = 512;
-const unsigned int ny = 64;
+const unsigned int ntheta = 512;
+const unsigned int nr = 64;
 
 //Size of computational domain.  The ratio of
-//lx to ly should be the same of nx to ny,
+//ltheta to lr should be the same of ntheta to nr,
 //otherwise the convective features will
 //look kind of squashed and funny.
 const double r_inner = 0.5;
-const double lx = 2.*M_PI;
-const double ly = 1.0-r_inner;
+const double ltheta = 2.*M_PI;
+const double lr = 1.0-r_inner;
 
 //Initial Rayleigh number of simulation
 const double Ra = 1.e7;
 
 //Factor for how much to blow up the rendered
 //triangles so that they are bigger on screen
-const unsigned int scale = 1;
+const unsigned int scale = 4;
 
 //Total number of pixels in x and y directions
-const unsigned int xpix = nx*scale;
-const unsigned int ypix = nx*scale;
+const unsigned int xpix = int(double(nr)*1./(1.-r_inner))*scale;
+const unsigned int ypix = xpix;
 
 //Whether to add heat to the simulation on mouse click.
 int click_state = 0;
 //Location of heat-adding
-double hx, hy;
+double htheta, hr;
 
 //Whether to solve the stokes equation for a given timestep.
 bool solve_stokes = true;
@@ -47,7 +47,7 @@ bool solve_stokes = true;
 bool seismic_mode = false;
 
 //Global solver
-ConvectionSimulator simulator(r_inner, nx,ny, Ra);
+ConvectionSimulator simulator(r_inner, ntheta,nr, Ra);
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -62,8 +62,8 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
   theta = (theta < 0. ? theta + 2.*M_PI : theta );
   const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
 
-  hx = lx * theta / 2. / M_PI;
-  hy = ly*(r-r_inner)/(1.0f-r_inner);
+  htheta = ltheta * theta / 2. / M_PI;
+  hr = lr*(r-r_inner)/(1.0f-r_inner);
 }
 
 //Change the Rayleigh number on scrolling
@@ -91,8 +91,8 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
     theta = (theta < 0. ? theta + 2.*M_PI : theta );
     const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
 
-    hx = lx * theta / 2. / M_PI;
-    hy = ly*(r-r_inner)/(1.0f-r_inner);
+    htheta = ltheta * theta / 2. / M_PI;
+    hr = lr*(r-r_inner)/(1.0f-r_inner);
 
   }
   else
@@ -124,7 +124,7 @@ void timestep()
       simulator.solve_stokes();
 
     //Add heat if the user is clicking
-    if(click_state != 0 && in_domain(hx, hy) ) simulator.add_heat(hx, hy, (click_state==1 ? true : false));
+    if(click_state != 0 && in_domain(htheta, hr) ) simulator.add_heat(htheta, hr, (click_state==1 ? true : false));
 
     //Advect temperature field
     simulator.semi_lagrangian_advect();
@@ -142,7 +142,7 @@ void timestep()
   else
   {
     //Make earthquakes
-    if(click_state != 0 && in_domain(hx,hy) ) simulator.earthquake(hx, hy);
+    if(click_state != 0 && in_domain(htheta,hr) ) simulator.earthquake(htheta, hr);
     //Propagate waves
     simulator.propagate_seismic_waves();
   }

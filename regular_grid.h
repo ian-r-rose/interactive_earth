@@ -51,6 +51,9 @@ class RegularGrid
         //get the x,y index of the cell
         int xindex() { return id % grid.nx; };
         int yindex() { return id / grid.nx; };
+        //get the r,theta index of the cell: identical to xindex, yindex
+        int thetaindex() { return id % grid.nx; };
+        int rindex() { return id / grid.nx; };
 
         //get grid indices of the neighbors
         int left() { return (id % grid.nx == 0 ? id+grid.nx-1 : id-1); };
@@ -122,14 +125,19 @@ class RegularGrid
     };
 
     //const members so we can query directly
-    const double lx, ly; //Length in x,y directions
-    const int nx, ny; //Number of cells in x,y directions
-    const double dx, dy; //grid cell spacing in x,y directions
+    const union { double lx; double ltheta; }; //length in x/theta direction
+    const union { double ly; double lr; }; //length in y/r direction
+    const union { int nx; int ntheta; }; //Numer of nodes in x/theta direction
+    const union { int ny; int nr; }; //Numer of nodes in y/r direction
+    const union { double dx; double dtheta; }; //node spacing in x/theta direction
+    const union { double dy; double dr; }; //node spacing in y/r direction
     const int ncells; //Total number of cells
     const double r_inner, r_outer;
 
-    RegularGrid(const double inner_radius, const unsigned int numx, const unsigned int numy)
-                  : r_inner(inner_radius), r_outer(1.0), lx(2.0*M_PI), ly(1.0-inner_radius), nx(numx), ny(numy), dx(lx/nx), dy(ly/(ny-1)), ncells(nx*ny) {};
+    RegularGrid(const double inner_radius, const unsigned int num_theta, const unsigned int num_r)
+                  : r_inner(inner_radius), r_outer(1.0), ltheta(2.0*M_PI), lr(1.0-inner_radius),
+                    ntheta(num_theta), nr(num_r), dtheta(ltheta/ntheta), dr(lr/(nr-1)), ncells(ntheta*nr)
+                  {};
     const iterator begin() { return iterator(0, *this); };
     const iterator end() {return iterator(ncells, *this);};
     const reverse_iterator rbegin() { return reverse_iterator(ncells-1, *this); };

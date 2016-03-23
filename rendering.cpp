@@ -16,14 +16,14 @@ void ConvectionSimulator::setup_opengl()
 #ifndef LEGACY_OPENGL
   //Setup the vertices, indices, and colors
   {
-    GLfloat DX = 2.0*M_PI/grid.nx;
-    GLfloat DY = 1.0/(grid.ny-1);
+    GLfloat DX = 2.0*M_PI/grid.ntheta;
+    GLfloat DY = 1.0/(grid.nr-1);
     const short triangles_per_quad = 2;
     const short vertices_per_triangle = 3;
     const short coordinates_per_vertex = 2;
     const short colors_per_vertex = 3;
-    const unsigned long n_triangles = grid.nx * (grid.ny-1) * triangles_per_quad;
-    const unsigned long n_vertices = grid.nx * grid.ny;
+    const unsigned long n_triangles = grid.ntheta * (grid.nr-1) * triangles_per_quad;
+    const unsigned long n_vertices = grid.ntheta * grid.nr;
 
 
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
@@ -166,8 +166,8 @@ void ConvectionSimulator::draw()
   const short triangles_per_quad = 2;
   const short vertices_per_triangle = 3;
   const short colors_per_vertex = 3;
-  const unsigned long n_triangles = grid.nx * (grid.ny-1) * triangles_per_quad;
-  const unsigned long n_vertices = grid.nx * grid.ny;
+  const unsigned long n_triangles = grid.ntheta * (grid.nr-1) * triangles_per_quad;
+  const unsigned long n_vertices = grid.ntheta * grid.nr;
 
   unsigned long v=0;
   for( RegularGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
@@ -222,8 +222,8 @@ void ConvectionSimulator::draw()
 
 #else
 
-  GLfloat DX = 2.0*M_PI/(grid.nx);
-  GLfloat DY = 1.0/(grid.ny-1);
+  GLfloat DX = 2.0*M_PI/(grid.ntheta);
+  GLfloat DY = 1.0/(grid.nr-1);
 
   glClearColor(0.0, 0.0, 0.0, 0.0);
   glClear(GL_COLOR_BUFFER_BIT);

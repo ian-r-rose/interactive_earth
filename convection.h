@@ -14,10 +14,6 @@ class ConvectionSimulator
 {
   private:
 
-    //Information about the grid
-    int nx,ny;
-    int ncells;
-
     //Current model parameters
     double Ra;  //Rayleigh number
     double dt;  //timestep
