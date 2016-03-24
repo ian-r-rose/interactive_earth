@@ -130,7 +130,8 @@ void timestep()
   static int i=0;  //Keep track of timestep number
   simulator.draw( include_composition && draw_composition );  //Draw to screen
   core.draw();
-  axis.draw();
+  if (include_tpw)
+    axis.draw();
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -198,8 +199,9 @@ void init()
 
 
     simulator.setup_opengl();
-    axis.setup();
     core.setup();
+    if (include_tpw)
+      axis.setup();
 }
 
 //Cleanup
@@ -207,7 +209,9 @@ void quit()
 {
     simulator.cleanup_opengl();
     core.cleanup();
-    axis.cleanup();
+    if(include_tpw)
+      axis.cleanup();
+
     SDL_GL_DeleteContext(context);
     SDL_Quit();
     exit(0);
