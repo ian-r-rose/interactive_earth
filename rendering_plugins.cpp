@@ -190,8 +190,8 @@ void Core::cleanup()
 void Axis::setup()
 {
   {
-    const unsigned long n_triangles = 2;
-    const unsigned long n_vertices = 4;
+    const unsigned long n_triangles = 4;
+    const unsigned long n_vertices = 4 /*axis*/ + 6 /*arrowheads*/;
 
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
     vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
@@ -208,13 +208,20 @@ void Axis::setup()
       c += colors_per_vertex;
     }
 
-    //First triangle
+    //Axis
     triangle_vertex_indices[0] = 0;
     triangle_vertex_indices[1] = 1;
     triangle_vertex_indices[2] = 2;
     triangle_vertex_indices[3] = 0;
     triangle_vertex_indices[4] = 2;
     triangle_vertex_indices[5] = 3;
+    //Arrowheads
+    triangle_vertex_indices[6] = 4;
+    triangle_vertex_indices[7] = 5;
+    triangle_vertex_indices[8] = 6;
+    triangle_vertex_indices[9] = 7;
+    triangle_vertex_indices[10] = 8;
+    triangle_vertex_indices[11] = 9;
 
     glGenBuffers(1, &plugin_triangle_vertex_indices);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_triangle_vertex_indices);
@@ -305,14 +312,15 @@ void Axis::setup()
 
 void Axis::draw()
 {
-  const unsigned long n_triangles = 2;
-  const unsigned long n_vertices = 4;
+  const unsigned long n_triangles = 4;
+  const unsigned long n_vertices = 4 /*axis*/ + 6 /*arrowheads*/;
 
   const float d2r = M_PI/180.0;
   const float theta = float( sim.spin_angle() );
   const float r = 0.4;
   const float dtheta = 1. * d2r;
 
+  //Draw the axis
   vertices[0] = r * std::cos(theta - dtheta);
   vertices[1] = r * std::sin(theta - dtheta);
   vertices[2] = -r * std::cos(theta + dtheta);
@@ -321,6 +329,22 @@ void Axis::draw()
   vertices[5] = -r * std::sin(theta - dtheta);
   vertices[6] = r * std::cos(theta + dtheta);
   vertices[7] = r * std::sin(theta + dtheta);
+  //Draw the arrowheads
+
+  //first arrowhead
+  vertices[8] = (r + 0.05) * std::cos(theta);
+  vertices[9] = (r + 0.05) * std::sin(theta);
+  vertices[10] = (r - 0.05) * std::cos(theta + 4.*dtheta);
+  vertices[11] = (r - 0.05) * std::sin(theta + 4.*dtheta);
+  vertices[12] = (r - 0.05) * std::cos(theta - 4.*dtheta);
+  vertices[13] = (r - 0.05) * std::sin(theta - 4.*dtheta);
+  //second arrowhead
+  vertices[14] = -(r + 0.05) * std::cos(theta);
+  vertices[15] = -(r + 0.05) * std::sin(theta);
+  vertices[16] = -(r - 0.05) * std::cos(theta + 4.*dtheta);
+  vertices[17] = -(r - 0.05) * std::sin(theta + 4.*dtheta);
+  vertices[18] = -(r - 0.05) * std::cos(theta - 4.*dtheta);
+  vertices[19] = -(r - 0.05) * std::sin(theta - 4.*dtheta);
 
   glUseProgram(plugin_program);
 
