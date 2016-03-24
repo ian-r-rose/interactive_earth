@@ -11,6 +11,11 @@
 #include <emscripten/emscripten.h>
 #endif
 
+/*********************************************
+    MODIFY THSE PARAMETERS TO CHANGE THE
+    BEHAVIOR OF THE SIMULATION.
+*********************************************/
+
 //Whether to include a chemical field.
 //The simulation will be faster without an additional advected field.
 bool include_composition = false;
@@ -29,6 +34,10 @@ const unsigned int nr = 128;
 //radius is assumed to be 1.0
 const double r_inner = 0.5;
 
+/*********************************************
+    PROBABLY DON'T MODIFY THE REST
+    UNLESS YOU KNOW WHAT YOU ARE DOING.
+*********************************************/
 
 //Size of computational domain.  The ratio of
 //ntheta to nr should be roughly the same
@@ -55,6 +64,9 @@ double click_theta, click_r;
 
 //Whether we are in earthquake mode
 bool seismic_mode = false;
+
+//Whether to solve the advection-diffusion equation
+bool advection_diffusion = true;
 
 //Whether to draw composition or temperature fields
 bool draw_composition = false;
@@ -146,13 +158,17 @@ void timestep()
     if(click_state != 0 && include_composition && draw_composition && in_domain(click_theta, click_r) )
       simulator.add_composition(click_theta, click_r);
 
-    //Advect temperature and composition fields
-    simulator.semi_lagrangian_advect_temperature();
-    if (include_composition)
-      simulator.semi_lagrangian_advect_composition();
+    //The user can do some neat painting by turning off advection and diffusion
+    if (advection_diffusion)
+    {
+      //Advect temperature and composition fields
+      simulator.semi_lagrangian_advect_temperature();
+      if (include_composition)
+        simulator.semi_lagrangian_advect_composition();
 
-    //Diffuse temperature
-    simulator.diffuse_temperature();
+      //Diffuse temperature
+      simulator.diffuse_temperature();
+    }
 
     //Do TPW
     if (include_tpw)
@@ -241,6 +257,8 @@ void loop()
 #endif
         else if(event.key.keysym.sym == SDLK_TAB)
           draw_composition = ! draw_composition;
+        else if(event.key.keysym.sym == SDLK_BACKSPACE)
+          advection_diffusion = !advection_diffusion;
         break;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:
