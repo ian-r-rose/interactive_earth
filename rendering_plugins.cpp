@@ -317,8 +317,9 @@ void Axis::draw()
 
   const float d2r = M_PI/180.0;
   const float theta = float( sim.spin_angle() );
-  const float r = 0.4;
-  const float dtheta = 1. * d2r;
+  const float r = 0.8 * r_inner;
+  const float arrowhead = 0.1*r_inner;
+  const float dtheta = 0.5/r_inner * d2r;
 
   //Draw the axis
   vertices[0] = r * std::cos(theta - dtheta);
@@ -332,19 +333,19 @@ void Axis::draw()
   //Draw the arrowheads
 
   //first arrowhead
-  vertices[8] = (r + 0.05) * std::cos(theta);
-  vertices[9] = (r + 0.05) * std::sin(theta);
-  vertices[10] = (r - 0.05) * std::cos(theta + 4.*dtheta);
-  vertices[11] = (r - 0.05) * std::sin(theta + 4.*dtheta);
-  vertices[12] = (r - 0.05) * std::cos(theta - 4.*dtheta);
-  vertices[13] = (r - 0.05) * std::sin(theta - 4.*dtheta);
+  vertices[8] = (r + arrowhead) * std::cos(theta);
+  vertices[9] = (r + arrowhead) * std::sin(theta);
+  vertices[10] = (r - arrowhead) * std::cos(theta + 4.*dtheta);
+  vertices[11] = (r - arrowhead) * std::sin(theta + 4.*dtheta);
+  vertices[12] = (r - arrowhead) * std::cos(theta - 4.*dtheta);
+  vertices[13] = (r - arrowhead) * std::sin(theta - 4.*dtheta);
   //second arrowhead
-  vertices[14] = -(r + 0.05) * std::cos(theta);
-  vertices[15] = -(r + 0.05) * std::sin(theta);
-  vertices[16] = -(r - 0.05) * std::cos(theta + 4.*dtheta);
-  vertices[17] = -(r - 0.05) * std::sin(theta + 4.*dtheta);
-  vertices[18] = -(r - 0.05) * std::cos(theta - 4.*dtheta);
-  vertices[19] = -(r - 0.05) * std::sin(theta - 4.*dtheta);
+  vertices[14] = -(r + arrowhead) * std::cos(theta);
+  vertices[15] = -(r + arrowhead) * std::sin(theta);
+  vertices[16] = -(r - arrowhead) * std::cos(theta + 4.*dtheta);
+  vertices[17] = -(r - arrowhead) * std::sin(theta + 4.*dtheta);
+  vertices[18] = -(r - arrowhead) * std::cos(theta - 4.*dtheta);
+  vertices[19] = -(r - arrowhead) * std::sin(theta - 4.*dtheta);
 
   glUseProgram(plugin_program);
 
