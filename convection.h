@@ -43,6 +43,8 @@ class ConvectionSimulator
     double *u; //velocity in the x direction
     double *v; //Velocity in the y direction
 
+    double spin;
+
     TridiagonalMatrixSolver<std::complex<double> > **stokes_matrices;
     TridiagonalMatrixSolver<std::complex<double> > **diffusion_matrices;
 
@@ -86,6 +88,7 @@ class ConvectionSimulator
     double rayleigh_number() const;  //return Ra
     double timescale() const;  //Characteristic timescale, which is scaled to plume ascent time
     double nusselt_number(); //Calculate nusselt number at a timestep
+    double spin_angle() const; //return angle of spin axis (with respect to x axis) in radians
 
     void earthquake(double x, double y);  //Add source term for wave equation
     void propagate_seismic_waves(); //evolve the wave equation
@@ -96,6 +99,7 @@ class ConvectionSimulator
     void semi_lagrangian_advect_temperature();  //Advect temperature through the velocity field
     void semi_lagrangian_advect_composition();  //Advect composition through the velocity field
     void diffuse_temperature(); //Diffuse temperature
+    void true_polar_wander(); //Perform TPW
 
     void solve_stokes(); //Solve for velocity field
 

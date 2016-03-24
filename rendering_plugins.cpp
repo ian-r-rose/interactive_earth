@@ -198,7 +198,7 @@ void Axis::setup()
     triangle_vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
 
     color arrow_color;
-    arrow_color.R = 1.0; arrow_color.G=1.0; arrow_color.B=1.0;
+    arrow_color.R = 0.1; arrow_color.G=0.1; arrow_color.B=0.5;
     unsigned short c = 0;
     for (unsigned short i=0; i<n_vertices; ++i)
     {
@@ -309,8 +309,7 @@ void Axis::draw()
   const unsigned long n_vertices = 4;
 
   const float d2r = M_PI/180.0;
-  static float theta = 1.0 * d2r;
-  theta += 1.0 * d2r;
+  const float theta = float( sim.spin_angle() );
   const float r = 0.4;
   const float dtheta = 1. * d2r;
 

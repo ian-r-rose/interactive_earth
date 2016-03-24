@@ -15,6 +15,9 @@
 //The simulation will be faster without an additional advected field.
 bool include_composition = false;
 
+//Whether to do TPW calculation
+bool include_tpw = true;
+
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
 //as well as performance.
@@ -58,7 +61,8 @@ bool draw_composition = false;
 
 //Global solver
 ConvectionSimulator simulator(r_inner, ntheta,nr, Ra, include_composition);
-Axis plugin(simulator);
+Axis axis(simulator);
+Core core(simulator);
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -125,7 +129,8 @@ void timestep()
 {
   static int i=0;  //Keep track of timestep number
   simulator.draw( include_composition && draw_composition );  //Draw to screen
-  plugin.draw();
+  core.draw();
+  axis.draw();
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -147,6 +152,10 @@ void timestep()
 
     //Diffuse temperature
     simulator.diffuse_temperature();
+
+    //Do TPW
+    if (include_tpw)
+      simulator.true_polar_wander();
 
     //Output scaling information
     std::cout<<"Ra: "<<std::setprecision(3)<<simulator.rayleigh_number()
@@ -189,14 +198,16 @@ void init()
 
 
     simulator.setup_opengl();
-    plugin.setup();
+    axis.setup();
+    core.setup();
 }
 
 //Cleanup
 void quit()
 {
     simulator.cleanup_opengl();
-    plugin.cleanup();
+    core.cleanup();
+    axis.cleanup();
     SDL_GL_DeleteContext(context);
     SDL_Quit();
     exit(0);

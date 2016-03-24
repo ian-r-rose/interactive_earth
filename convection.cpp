@@ -55,6 +55,7 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
   initialize_temperature();
   if(include_composition)
     initialize_composition();
+  spin = 0.0;
 
   //Initialize displacement to zero
   clear_seismic_waves();
@@ -661,6 +662,64 @@ void ConvectionSimulator::solve_stokes()
 
 }
 
+void ConvectionSimulator::true_polar_wander()
+{
+
+  double moment_of_inertia[3] = {0., 0., 0.};
+  double omega[2] = { std::cos(spin), std::sin(spin) };
+
+  //First, calculate the moment of inertia tensor
+  for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    double density;
+    if (include_composition)
+      density = -(T[cell->self()] - buoyancy_number * C[cell->self()] );
+    else
+      density = -T[cell->self()];
+
+    const double r = cell->radius();
+    const double theta = cell->location().theta;
+    const double x = r * std::cos(theta);
+    const double y = r * std::sin(theta);
+    const double volume = r * grid.dr * grid.dtheta;
+    moment_of_inertia[0] += density * y * y * volume; // E_11
+    moment_of_inertia[1] += density * x * x * volume; // E_22
+    moment_of_inertia[2] -= density * x * y * volume; // E_21 E12
+  }
+
+  //Not strictly necessary, but doesn't hurt to subtract the trace
+  double reference_moment = (moment_of_inertia[0]+moment_of_inertia[1])/2.;
+  moment_of_inertia[0] -= reference_moment;
+  moment_of_inertia[1] -= reference_moment;
+
+  double omega_dot[2];
+  double E_dot_omega[2];
+  double omega_dot_E_dot_omega_omega[2];
+
+  double small_dt = dt/10.;
+  for (unsigned int i=0; i<10; ++i)
+  {
+    //Compute rotational stress
+    E_dot_omega[0] = moment_of_inertia[0]*omega[0] + moment_of_inertia[2]*omega[1];
+    E_dot_omega[1] = moment_of_inertia[2]*omega[0] + moment_of_inertia[1]*omega[1];
+    omega_dot_E_dot_omega_omega[0] = (omega[0]*E_dot_omega[0] + omega[1]*E_dot_omega[1])*omega[0];
+    omega_dot_E_dot_omega_omega[1] = (omega[0]*E_dot_omega[0] + omega[1]*E_dot_omega[1])*omega[1];
+
+    double Fr = 0.003;
+    double factor = 2./19.; //Tuning factor to make the rate look good.
+
+    omega_dot[0] = factor * Ra/Fr * ( E_dot_omega[0] - omega_dot_E_dot_omega_omega[0] );
+    omega_dot[1] = factor * Ra/Fr * ( E_dot_omega[1] - omega_dot_E_dot_omega_omega[1] );
+
+    omega[0] += omega_dot[0]*small_dt;
+    omega[1] += omega_dot[1]*small_dt;
+    double omega_norm = std::sqrt(omega[0]*omega[0]+omega[1]*omega[1]);
+    omega[0]/=omega_norm;
+    omega[1]/=omega_norm;
+  }
+
+  spin = std::atan2( omega[1], omega[0] );
+}
 
 void ConvectionSimulator::update_state(double rayleigh)
 {
@@ -688,6 +747,11 @@ void ConvectionSimulator::update_state(double rayleigh)
 
   setup_diffusion_problem();  //need to recompute the auxiliary vectors for the diffusion problem
 
+}
+
+double ConvectionSimulator::spin_angle() const
+{
+  return spin;
 }
 
 
