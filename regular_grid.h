@@ -76,7 +76,7 @@ class RegularGrid
         //Get some location information.  This is more complicated than a nonstaggered grid,
         //as different of the properties will be found on different parts of the cell.
         Point location() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy;  return p;} //lower left
-
+        double radius() { return grid.r_inner + (rindex()*grid.dr); }
 
 
       private:

@@ -208,7 +208,7 @@ void ConvectionSimulator::propagate_seismic_waves()
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     double laplacian;
-    const double r = cell->location().r + grid.r_inner;
+    const double r = cell->radius();
     const double dr = grid.dr;
     const double dtheta = grid.dtheta;
 
@@ -588,7 +588,7 @@ void ConvectionSimulator::assemble_curl_density_vector()
   {
     for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     {
-      const double r = cell->location().r + grid.r_inner;
+      const double r = cell->radius();
       double dTdtheta, dCdtheta;
 
       if(cell->at_bottom_boundary() || cell->at_top_boundary())
@@ -609,7 +609,7 @@ void ConvectionSimulator::assemble_curl_density_vector()
   {
     for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     {
-      const double r = cell->location().r + grid.r_inner;
+      const double r = cell->radius();
       if(cell->at_bottom_boundary() || cell-> at_top_boundary())
         curl_density[cell->self()] = 0.0;
       else
@@ -647,7 +647,7 @@ void ConvectionSimulator::solve_stokes()
   //more fourier transforms, so this should be considerably cheaper.
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    const double r = cell->location().r + grid.r_inner;
+    const double r = cell->radius();
     if( cell->at_top_boundary() )
       u[cell->self()] = (stream[cell->self()] - stream[cell->down()])/grid.dr;
     else if ( cell->at_bottom_boundary() )
