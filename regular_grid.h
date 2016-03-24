@@ -44,22 +44,22 @@ class RegularGrid
     {
       public:
 
-        Cell (unsigned int i, const RegularGrid &g): id(i), grid(g) {};
-        Cell (Cell &c): id(c.id), grid(c.grid) {};
+        Cell (unsigned int i, const RegularGrid &g): id(i), grid(g) {}
+        Cell (Cell &c): id(c.id), grid(c.grid) {}
         Cell &operator=(const Cell &rhs) { id=rhs.id; return *this;}
 
         //get the x,y index of the cell
-        int xindex() { return id % grid.nx; };
-        int yindex() { return id / grid.nx; };
+        int xindex() { return id % grid.nx; }
+        int yindex() { return id / grid.nx; }
         //get the r,theta index of the cell: identical to xindex, yindex
-        int thetaindex() { return id % grid.nx; };
-        int rindex() { return id / grid.nx; };
+        int thetaindex() { return id % grid.nx; }
+        int rindex() { return id / grid.nx; }
 
         //get grid indices of the neighbors
-        int left() { return (id % grid.nx == 0 ? id+grid.nx-1 : id-1); };
-        int right() { return ( (id+1)%grid.nx == 0 ? id-grid.nx+1 : id+1); };
-        int up() { return (id + grid.nx >= grid.ncells ? id-grid.nx*(grid.ny-1) : id + grid.nx); };
-        int down() { return ( id-grid.nx < 0 ? id+grid.nx*(grid.ny-1) : id-grid.nx) ; };
+        int left() { return (id % grid.nx == 0 ? id+grid.nx-1 : id-1); }
+        int right() { return ( (id+1)%grid.nx == 0 ? id-grid.nx+1 : id+1); }
+        int up() { return (id + grid.nx >= grid.ncells ? id-grid.nx*(grid.ny-1) : id + grid.nx); }
+        int down() { return ( id-grid.nx < 0 ? id+grid.nx*(grid.ny-1) : id-grid.nx) ; }
         int upleft() { return id + (id + grid.nx >= grid.ncells ? -grid.nx*(grid.ny-1) : grid.nx) + (id % grid.nx == 0 ? grid.nx-1 : -1); }
         int upright() { return id + (id + grid.nx >= grid.ncells ? -grid.nx*(grid.ny-1) : grid.nx) + ( (id+1)%grid.nx == 0 ? -grid.nx+1 : 1); }
         int downleft() { return id + (id-grid.nx < 0 ? grid.nx*(grid.ny-1) : -grid.nx) + ( id%grid.nx == 0 ? grid.nx-1 : -1); }
@@ -67,15 +67,16 @@ class RegularGrid
         int self() { return id; };
 
         //query for boundary information
-        bool at_top_boundary() {return (id + grid.nx >= grid.ncells);};
-        bool at_bottom_boundary() {return (id-grid.nx < 0);};
-        bool at_left_boundary() {return (id%grid.nx == 0);};
-        bool at_right_boundary() {return (id+1)%grid.nx == 0;};
+        bool at_top_boundary() {return (id + grid.nx >= grid.ncells);}
+        bool at_bottom_boundary() {return (id-grid.nx < 0);}
+        bool at_left_boundary() {return (id%grid.nx == 0);}
+        bool at_right_boundary() {return (id+1)%grid.nx == 0;}
         bool at_boundary() {return at_top_boundary() || at_bottom_boundary() || at_left_boundary() || at_right_boundary(); }
 
         //Get some location information.  This is more complicated than a nonstaggered grid,
         //as different of the properties will be found on different parts of the cell.
-        Point location() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy;  return p;}; //lower left
+        Point location() { Point p; p.x = xindex()*grid.dx; p.y = yindex()*grid.dy;  return p;} //lower left
+
 
 
       private:
@@ -137,20 +138,20 @@ class RegularGrid
     RegularGrid(const double inner_radius, const unsigned int num_theta, const unsigned int num_r)
                   : r_inner(inner_radius), r_outer(1.0), ltheta(2.0*M_PI), lr(1.0-inner_radius),
                     ntheta(num_theta), nr(num_r), dtheta(ltheta/ntheta), dr(lr/(nr-1)), ncells(ntheta*nr)
-                  {};
-    const iterator begin() { return iterator(0, *this); };
-    const iterator end() {return iterator(ncells, *this);};
-    const reverse_iterator rbegin() { return reverse_iterator(ncells-1, *this); };
-    const reverse_iterator rend() {return reverse_iterator(-1, *this);};
+                  {}
+    const iterator begin() { return iterator(0, *this); }
+    const iterator end() {return iterator(ncells, *this);}
+    const reverse_iterator rbegin() { return reverse_iterator(ncells-1, *this); }
+    const reverse_iterator rend() {return reverse_iterator(-1, *this);}
 
     //Get handles to cell id and cell iterators at a point
     inline int cell_id( const Point &p) { int xindex = fast_floor(p.x/dx); int yindex=fast_floor(p.y/dy);
-                                   return keep_in_domain(xindex, yindex); };
+                                   return keep_in_domain(xindex, yindex); }
     inline int keep_in_domain( int xindex, int yindex) { return nx*(yindex < 0 ? 0 : (yindex >= ny ? ny-1: yindex))
-                              + (xindex % nx + nx) %nx ; };
-    iterator cell_at_point( const Point &p) { return iterator(cell_id(p), *this); };
+                              + (xindex % nx + nx) %nx ; }
+    iterator cell_at_point( const Point &p) { return iterator(cell_id(p), *this); }
 
-    iterator lower_left_cell( const Point &p) { return cell_at_point(p); };
+    iterator lower_left_cell( const Point &p) { return cell_at_point(p); }
 
 };
 
