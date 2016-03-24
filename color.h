@@ -1,11 +1,14 @@
-//Basic utilities for tryin out colormaps
+#ifndef COLOR_H
+#define COLOR_H
+
+//Basic utilities for trying out colormaps
 
 struct color
 {
   double R, G, B;
 };
 
-color hot(double x)
+inline color hot(double x)
 {
   color c;
   double red_cutoff = 0.3;
@@ -15,3 +18,5 @@ color hot(double x)
   c.B = (x < green_cutoff ? 0.0 : (x-green_cutoff)/(1.0-green_cutoff));
   return c;
 }
+
+#endif

@@ -12,10 +12,10 @@ LINK_FLAGS=
 
 
 
-convection: convection.o main.o rendering.o
-	$(CXX) $(CXX_FLAGS) convection.o rendering.o main.o -o interactive_earth $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
+convection: convection.o main.o rendering.o rendering_plugins.o
+	$(CXX) $(CXX_FLAGS) convection.o rendering.o main.o rendering_plugins.o -o interactive_earth $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
-main.o: main.cpp convection.h
+main.o: main.cpp convection.h rendering_plugins.h
 	$(CXX) $(CXX_FLAGS) -c main.cpp  $(LINK_FLAGS) $(INCLUDE_DIRS) $(DEFINES) 
 
 convection.o: convection.cpp convection.h regular_grid.h tridiagonal_matrix_solver.h
@@ -23,6 +23,9 @@ convection.o: convection.cpp convection.h regular_grid.h tridiagonal_matrix_solv
 
 rendering.o: rendering.cpp convection.h regular_grid.h color.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) rendering.cpp
+
+rendering_plugins.o: rendering_plugins.cpp convection.h rendering_plugins.h
+	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) rendering_plugins.cpp
 
 .PHONY: clean
 clean:

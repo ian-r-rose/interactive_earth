@@ -2,6 +2,7 @@
 #include "SDL2/SDL_opengl.h"
 #include "SDL2/SDL.h"
 #include "convection.h"
+#include "rendering_plugins.h"
 #include <cmath>
 #include <iostream>
 #include <iomanip>
@@ -57,6 +58,7 @@ bool draw_composition = false;
 
 //Global solver
 ConvectionSimulator simulator(r_inner, ntheta,nr, Ra, include_composition);
+Axis plugin(simulator);
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -123,6 +125,7 @@ void timestep()
 {
   static int i=0;  //Keep track of timestep number
   simulator.draw( include_composition && draw_composition );  //Draw to screen
+  plugin.draw();
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -186,12 +189,14 @@ void init()
 
 
     simulator.setup_opengl();
+    plugin.setup();
 }
 
 //Cleanup
 void quit()
 {
     simulator.cleanup_opengl();
+    plugin.cleanup();
     SDL_GL_DeleteContext(context);
     SDL_Quit();
     exit(0);

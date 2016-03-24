@@ -3,12 +3,12 @@
 #include "color.h"
 
 #ifndef LEGACY_OPENGL
-GLuint program;
-GLuint vbo_vertices;
-GLuint vbo_colors;
-GLuint ibo_triangle_vertex_indices;
-GLint attribute_coord2d;
-GLint attribute_v_color;
+static GLuint program;
+static GLuint vbo_vertices;
+static GLuint vbo_colors;
+static GLuint ibo_triangle_vertex_indices;
+static GLint attribute_coord2d;
+static GLint attribute_v_color;
 #endif //LEGACY_OPENGL
 
 void ConvectionSimulator::setup_opengl()
@@ -69,6 +69,9 @@ void ConvectionSimulator::setup_opengl()
     glGenBuffers(1, &vbo_colors);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
     glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*colors_per_vertex, vertex_colors, GL_DYNAMIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
   }
 
   GLint compile_ok = GL_FALSE, link_ok = GL_FALSE;
@@ -194,6 +197,9 @@ void ConvectionSimulator::draw( bool draw_composition )
   glClear(GL_COLOR_BUFFER_BIT);
 
   glUseProgram(program);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_triangle_vertex_indices);
+
   glEnableVertexAttribArray(attribute_coord2d);
   /* Describe our vertices array*/
   glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
@@ -222,8 +228,10 @@ void ConvectionSimulator::draw( bool draw_composition )
   glDrawElements(GL_TRIANGLES, n_triangles*vertices_per_triangle, GL_UNSIGNED_INT, 0);
 
   glDisableVertexAttribArray(attribute_coord2d);
-//  glDisableVertexAttribArray(attribute_v_color);
+  glDisableVertexAttribArray(attribute_v_color);
 
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 #else
 
