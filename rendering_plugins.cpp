@@ -11,7 +11,7 @@ static const short triangles_per_quad = 2;
 void Core::setup()
 {
   {
-    const unsigned long n_triangles = 360;
+    const unsigned long n_triangles = ntheta;
     const unsigned long n_vertices = n_triangles+1;
 
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
@@ -19,7 +19,7 @@ void Core::setup()
     triangle_vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
 
     const float dtheta = 2.*M_PI/n_triangles;
-    const float r = 0.5;//r_inner;
+    const float r = r_inner;
     
     color core_color = hot(1.0);
 
@@ -137,7 +137,7 @@ void Core::setup()
 
 void Core::draw()
 {
-  const unsigned long n_triangles = 360;
+  const unsigned long n_triangles = ntheta;
   const unsigned long n_vertices = n_triangles+1;
 
   glUseProgram(plugin_program);

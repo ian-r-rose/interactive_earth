@@ -3,6 +3,9 @@
 
 #include "convection.h"
 
+extern const double r_inner;
+extern const unsigned int nr, ntheta;
+
 /******************************************
    Interface for rendering plugins.
    There is space in the center of the
