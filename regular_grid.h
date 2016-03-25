@@ -145,9 +145,9 @@ class RegularGrid
     const reverse_iterator rend() {return reverse_iterator(-1, *this);}
 
     //Get handles to cell id and cell iterators at a point
-    inline int cell_id( const Point &p) { int xindex = fast_floor(p.x/dx); int yindex=fast_floor(p.y/dy);
+    inline int cell_id( const Point &p) const { int xindex = fast_floor(p.x/dx); int yindex=fast_floor(p.y/dy);
                                    return keep_in_domain(xindex, yindex); }
-    inline int keep_in_domain( int xindex, int yindex) { return nx*(yindex < 0 ? 0 : (yindex >= ny ? ny-1: yindex))
+    inline int keep_in_domain( int xindex, int yindex) const { return nx*(yindex < 0 ? 0 : (yindex >= ny ? ny-1: yindex))
                               + (xindex % nx + nx) %nx ; }
     iterator cell_at_point( const Point &p) { return iterator(cell_id(p), *this); }
 

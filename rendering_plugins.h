@@ -70,4 +70,25 @@ class Axis : RenderingPlugin
     GLint plugin_attribute_v_color;
 };
 
+class Seismograph : RenderingPlugin
+{
+  public:
+    Seismograph( const ConvectionSimulator &sim ) : RenderingPlugin(sim) {}
+    void setup();
+    void draw();
+    void cleanup();
+  private:
+    //Data for rendering with OpenGL
+    GLfloat* vertices;
+    GLfloat* vertex_colors;
+    GLuint* line_vertex_indices;
+
+    GLuint plugin_program;
+    GLuint plugin_vertices;
+    GLuint plugin_vertex_colors;
+    GLuint plugin_line_vertex_indices;
+    GLint plugin_attribute_coord2d;
+    GLint plugin_attribute_v_color;
+};
+
 #endif

@@ -21,7 +21,7 @@
 bool include_composition = false;
 
 //Whether to do TPW calculation
-bool include_tpw = true;
+bool include_tpw = false;
 
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
@@ -75,6 +75,7 @@ bool draw_composition = false;
 ConvectionSimulator simulator(r_inner, ntheta,nr, Ra, include_composition);
 Axis axis(simulator);
 Core core(simulator);
+Seismograph seismograph(simulator);
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -144,6 +145,8 @@ void timestep()
   core.draw();
   if (include_tpw)
     axis.draw();
+  if (seismic_mode)
+    seismograph.draw();
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -218,6 +221,7 @@ void init()
     core.setup();
     if (include_tpw)
       axis.setup();
+    seismograph.setup();
 }
 
 //Cleanup
@@ -227,6 +231,7 @@ void quit()
     core.cleanup();
     if(include_tpw)
       axis.cleanup();
+    seismograph.cleanup();
 
     SDL_GL_DeleteContext(context);
     SDL_Quit();

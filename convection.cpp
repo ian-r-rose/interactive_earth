@@ -760,6 +760,12 @@ double ConvectionSimulator::rayleigh_number() const
   return Ra;
 }
 
+double ConvectionSimulator::seismometer_reading() const
+{
+  Point p; p.theta = M_PI/2.; p.r = 1.0;
+  return D[grid.cell_id(p)];
+}
+
 double ConvectionSimulator::timescale() const
 {
   double Ra_c = 657.;  //critical rayleigh number

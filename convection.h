@@ -89,6 +89,7 @@ class ConvectionSimulator
     double timescale() const;  //Characteristic timescale, which is scaled to plume ascent time
     double nusselt_number(); //Calculate nusselt number at a timestep
     double spin_angle() const; //return angle of spin axis (with respect to x axis) in radians
+    double seismometer_reading() const;
 
     void earthquake(double x, double y);  //Add source term for wave equation
     void propagate_seismic_waves(); //evolve the wave equation
