@@ -410,14 +410,14 @@ void Seismograph::setup()
 {
   {
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
-    vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
+    vertex_colors = new GLfloat[ n_vertices * (colors_per_vertex+1) ];
     line_vertex_indices = new GLuint[ n_lines * vertices_per_line ];
 
     //Begin with vertices all recording zero
     unsigned int v = 0;
     for (unsigned int i=0; i<n_vertices; ++i)
     {
-      vertices[v + 0] = -0.8f*r_inner + float(i)/float(n_vertices) * 1.6f*r_inner;
+      vertices[v + 0] = -0.9f*r_inner + float(i)/float(n_vertices) * 1.8f*r_inner;
       vertices[v + 1] = 0.f;
       v += coordinates_per_vertex;
     }
@@ -430,7 +430,15 @@ void Seismograph::setup()
       vertex_colors[c + 0] = line_color.R;
       vertex_colors[c + 1] = line_color.G;
       vertex_colors[c + 2] = line_color.B;
-      c += colors_per_vertex;
+
+      //Add transparency to the edges
+      if ( i < n_vertices/6)
+        vertex_colors[c + 3] = 6*float(i)/float(n_vertices);
+      else if ( i > 4 * n_vertices/6 )
+        vertex_colors[c + 3] = 6*float(n_vertices - i)/float(n_vertices);
+      else
+        vertex_colors[c + 3] = 1.0;
+      c += colors_per_vertex+1;
     }
 
     for (unsigned int i =0; i<n_lines; ++i)
@@ -449,7 +457,7 @@ void Seismograph::setup()
 
     glGenBuffers(1, &plugin_vertex_colors);
     glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*colors_per_vertex, vertex_colors, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*(colors_per_vertex+1), vertex_colors, GL_DYNAMIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -466,8 +474,8 @@ void Seismograph::setup()
     "#version 120\n"  // OpenGL 2.1
 #endif
     "attribute vec2 plugin_coord2d;"
-    "attribute vec3 plugin_v_color;"
-    "varying vec3 f_color;"
+    "attribute vec4 plugin_v_color;"
+    "varying vec4 f_color;"
     "void main(void) {"
     "  f_color = plugin_v_color;"
     "  gl_Position = vec4(plugin_coord2d, 0.0, 1.0);"
@@ -489,9 +497,9 @@ void Seismograph::setup()
 #else
     "#version 120\n"  // OpenGL 2.1
 #endif
-    "varying vec3 f_color;"
+    "varying vec4 f_color;"
     "void main(void) {"
-    "  gl_FragColor = vec4(f_color, 1.0);"
+    "  gl_FragColor = f_color;"
     "}";
   glShaderSource(fs, 1, &fs_source, NULL);
   glCompileShader(fs);
@@ -563,7 +571,7 @@ void Seismograph::draw()
   glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
   glVertexAttribPointer(
     plugin_attribute_v_color, // attribute
-    3,                 // number of elements per verte (r,g,b)
+    4,                 // number of elements per verte (r,g,b,a)
     GL_FLOAT,          // the type of each element
     GL_FALSE,          // take our values as-is
     0,                 // no extra data between each position
