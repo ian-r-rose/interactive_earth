@@ -143,7 +143,7 @@ void timestep()
   static int i=0;  //Keep track of timestep number
   simulator.draw( include_composition && draw_composition );  //Draw to screen
   core.draw();
-  if (include_tpw)
+  if (include_tpw && !seismic_mode)
     axis.draw();
   if (seismic_mode)
     seismograph.draw();
