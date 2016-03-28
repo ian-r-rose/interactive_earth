@@ -399,9 +399,6 @@ void Axis::cleanup()
 void Seismograph::setup()
 {
   {
-    const unsigned int n_lines = 200;
-    const unsigned int n_vertices = n_lines+1;
-
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
     vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
     line_vertex_indices = new GLuint[ n_lines * vertices_per_line ];
@@ -521,9 +518,6 @@ void Seismograph::setup()
 
 void Seismograph::draw()
 {
-  const unsigned long n_lines = 200;
-  const unsigned long n_vertices = n_lines+1;
-
   //Begin with vertices all recording zero
   unsigned int v = 0;
   for (unsigned int i=0; i<n_vertices; ++i)
@@ -533,7 +527,11 @@ void Seismograph::draw()
   }
   vertices[2*(n_vertices) - 1] = sim.seismometer_reading() * 0.5*r_inner;
 
-  glLineWidth(5.0);
+  glEnable(GL_BLEND);
+  glEnable(GL_LINE_SMOOTH);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  glLineWidth(2.0);
   glUseProgram(plugin_program);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_line_vertex_indices);
@@ -568,7 +566,10 @@ void Seismograph::draw()
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
+
   glLineWidth(1.0);
+  glDisable(GL_BLEND);
+  glDisable(GL_LINE_SMOOTH);
 }
 
 void Seismograph::cleanup()

@@ -73,11 +73,15 @@ class Axis : RenderingPlugin
 class Seismograph : RenderingPlugin
 {
   public:
-    Seismograph( const ConvectionSimulator &sim ) : RenderingPlugin(sim) {}
+    Seismograph( const ConvectionSimulator &sim ) : RenderingPlugin(sim),
+                                                    n_lines(500), n_vertices(n_lines+1) {}
     void setup();
     void draw();
     void cleanup();
   private:
+    const unsigned int n_lines;
+    const unsigned int n_vertices;
+
     //Data for rendering with OpenGL
     GLfloat* vertices;
     GLfloat* vertex_colors;
