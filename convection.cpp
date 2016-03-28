@@ -677,6 +677,11 @@ void ConvectionSimulator::true_polar_wander()
     else
       density = -T[cell->self()];
 
+    //The TPW calculation can go wonky when the temperature gets
+    //cold enough that the sign changes. Not really sure what is
+    //going on at the moment, but this fixes it
+    density = dmin(density, 0.0);
+
     const double r = cell->radius();
     const double theta = cell->location().theta;
     const double x = r * std::cos(theta);
