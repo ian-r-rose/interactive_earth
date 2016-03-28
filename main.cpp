@@ -252,6 +252,7 @@ void loop()
         {
           seismic_mode = !seismic_mode;
           simulator.clear_seismic_waves();
+          seismograph.clear_record();
         }
         //Quitting should be handled by navigating to another
         //webpage or closing the browser when using, emscripten,

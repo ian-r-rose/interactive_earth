@@ -78,6 +78,9 @@ class Seismograph : RenderingPlugin
     void setup();
     void draw();
     void cleanup();
+
+    void clear_record();
+
   private:
     const unsigned int n_lines;
     const unsigned int n_vertices;

@@ -396,6 +396,16 @@ void Axis::cleanup()
   glDeleteBuffers(1, &plugin_triangle_vertex_indices);
 }
 
+void Seismograph::clear_record()
+{
+  unsigned int v = 0;
+  for (unsigned int i=0; i<n_vertices; ++i)
+  {
+    vertices[v + 1] = 0.f;
+    v += coordinates_per_vertex;
+  }
+}
+
 void Seismograph::setup()
 {
   {
