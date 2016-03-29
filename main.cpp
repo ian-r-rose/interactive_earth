@@ -120,7 +120,7 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
     const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
 
     click_theta = ltheta * theta / 2. / M_PI;
-    click_r = lr*(r-r_inner)/(1.0f-r_inner);
+    click_r = (r-r_inner);
 
   }
   else
@@ -129,12 +129,9 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
   }
 }
 
-inline bool in_domain( const float x, const float y )
+inline bool in_domain( const float theta, const float r )
 {
-  const float xx = float(x)/float(xpix);
-  const float yy = 1.0f-float(y)/float(ypix);
-  const float r = std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
-  return (r < 1.) && ( r > r_inner);
+  return (r+r_inner < 1.) && ( r > 0.);
 }
 
 //Actually perform the timestep
