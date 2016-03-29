@@ -13,7 +13,7 @@ LINK_FLAGS = --memory-init-file 0 -s ALLOW_MEMORY_GROWTH=0
 
 
 convection: convection.o main.o rendering.o rendering_plugins.o
-	$(CXX) $(CXX_FLAGS) convection.o rendering.o main.o rendering_plugins.o -o interactive_earth $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
+	$(CXX) $(CXX_FLAGS) convection.o rendering.o main.o rendering_plugins.o -o interactive_earth.html $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
 main.o: main.cpp convection.h regular_grid.h rendering_plugins.h
 	$(CXX) $(CXX_FLAGS) -c main.cpp $(INCLUDE_DIRS) $(DEFINES) 
