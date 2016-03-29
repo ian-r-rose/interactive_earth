@@ -56,6 +56,8 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
   if(include_composition)
     initialize_composition();
   spin = 0.0;
+  seismometer_location.theta = M_PI/2.;
+  seismometer_location.r = 0.5;
 
   //Initialize displacement to zero
   clear_seismic_waves();
@@ -174,6 +176,13 @@ void ConvectionSimulator::clear_seismic_waves()
     D[cell->self()] = 0.;
     Dp[cell->self()] = 0.;
   }
+}
+
+/* Place the seismometer at a point (theta,r)*/
+void ConvectionSimulator::place_seismometer(double theta, double r)
+{
+  seismometer_location.theta = theta;
+  seismometer_location.r = r;
 }
 
 
@@ -767,9 +776,15 @@ double ConvectionSimulator::rayleigh_number() const
 
 double ConvectionSimulator::seismometer_reading() const
 {
-  Point p; p.theta = M_PI/2.; p.r = 1.0;
-  return D[grid.cell_id(p)];
+  return D[grid.cell_id(seismometer_location)];
 }
+
+void ConvectionSimulator::seismometer_position( double &theta, double&r) const
+{
+  theta = seismometer_location.theta;
+  r = seismometer_location.r;
+}
+
 
 double ConvectionSimulator::timescale() const
 {

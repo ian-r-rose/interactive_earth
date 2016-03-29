@@ -6,6 +6,13 @@
 extern const double r_inner;
 extern const unsigned int nr, ntheta;
 
+//Useful constants
+static const short vertices_per_triangle = 3;
+static const short vertices_per_line = 2;
+static const short coordinates_per_vertex = 2;
+static const short colors_per_vertex = 3;
+static const short triangles_per_quad = 2;
+
 /******************************************
    Interface for rendering plugins.
    There is space in the center of the
@@ -74,7 +81,9 @@ class Seismograph : RenderingPlugin
 {
   public:
     Seismograph( const ConvectionSimulator &sim ) : RenderingPlugin(sim),
-                                                    n_lines(500), n_vertices(n_lines+1) {}
+                                                    n_lines(500),
+                                                    n_vertices(n_lines+1 /*endpoint*/ + vertices_per_triangle /*seismometer*/)
+                                                    {}
     void setup();
     void draw();
     void cleanup();

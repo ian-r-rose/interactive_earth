@@ -187,8 +187,10 @@ void timestep()
   else
   {
     //Make earthquakes
-    if(click_state != 0 && in_domain(click_theta,click_r) )
+    if(click_state == 1 && in_domain(click_theta,click_r) )
       simulator.earthquake(click_theta, click_r);
+    else if(click_state == -1 && in_domain(click_theta,click_r) )
+      simulator.place_seismometer(click_theta, click_r);
     //Propagate waves
     simulator.propagate_seismic_waves();
   }

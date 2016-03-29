@@ -44,6 +44,7 @@ class ConvectionSimulator
     double *v; //Velocity in the y direction
 
     double spin;
+    Point seismometer_location;
 
     TridiagonalMatrixSolver<std::complex<double> > **stokes_matrices;
     TridiagonalMatrixSolver<std::complex<double> > **diffusion_matrices;
@@ -89,11 +90,13 @@ class ConvectionSimulator
     double timescale() const;  //Characteristic timescale, which is scaled to plume ascent time
     double nusselt_number(); //Calculate nusselt number at a timestep
     double spin_angle() const; //return angle of spin axis (with respect to x axis) in radians
-    double seismometer_reading() const;
+    double seismometer_reading() const; //Return the displacement at the seismometer
+    void seismometer_position( double &theta, double &r) const; //Query the current location of the seismometer
 
     void earthquake(double x, double y);  //Add source term for wave equation
     void propagate_seismic_waves(); //evolve the wave equation
     void clear_seismic_waves(); //zero out the displacement vectors
+    void place_seismometer( double x, double y); //Add seismometer for monitoring waves at a point
 
     void add_heat(double x, double y, bool hot); //Add heat at a point, with the bool indicating whether it is hot or cold
     void add_composition(double x, double y); //Add composition at a point

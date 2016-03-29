@@ -2,13 +2,6 @@
 #include "rendering_plugins.h"
 #include "color.h"
 
-//Useful constants
-static const short vertices_per_triangle = 3;
-static const short vertices_per_line = 2;
-static const short coordinates_per_vertex = 2;
-static const short colors_per_vertex = 3;
-static const short triangles_per_quad = 2;
-
 void Core::setup()
 {
   {
@@ -399,7 +392,7 @@ void Axis::cleanup()
 void Seismograph::clear_record()
 {
   unsigned int v = 0;
-  for (unsigned int i=0; i<n_vertices; ++i)
+  for (unsigned int i=0; i<n_lines+1; ++i)
   {
     vertices[v + 1] = 0.f;
     v += coordinates_per_vertex;
@@ -411,11 +404,11 @@ void Seismograph::setup()
   {
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
     vertex_colors = new GLfloat[ n_vertices * (colors_per_vertex+1) ];
-    line_vertex_indices = new GLuint[ n_lines * vertices_per_line ];
+    line_vertex_indices = new GLuint[ n_lines * vertices_per_line + 1 * vertices_per_triangle /*seismometer*/];
 
     //Begin with vertices all recording zero
     unsigned int v = 0;
-    for (unsigned int i=0; i<n_vertices; ++i)
+    for (unsigned int i=0; i<n_lines+1; ++i)
     {
       vertices[v + 0] = -0.9f*r_inner + float(i)/float(n_vertices) * 1.8f*r_inner;
       vertices[v + 1] = 0.f;
@@ -425,17 +418,17 @@ void Seismograph::setup()
     color line_color;
     line_color.R = 0.0; line_color.G=0.0; line_color.B=0.0;
     unsigned int c = 0;
-    for (unsigned int i=0; i<n_vertices; ++i)
+    for (unsigned int i=0; i<n_lines+1; ++i)
     {
       vertex_colors[c + 0] = line_color.R;
       vertex_colors[c + 1] = line_color.G;
       vertex_colors[c + 2] = line_color.B;
 
       //Add transparency to the edges
-      if ( i < n_vertices/6)
+      if ( i < (n_lines+1)/6)
         vertex_colors[c + 3] = 6*float(i)/float(n_vertices);
-      else if ( i > 4 * n_vertices/6 )
-        vertex_colors[c + 3] = 6*float(n_vertices - i)/float(n_vertices);
+      else if ( i > 4 * (n_lines+1)/6 )
+        vertex_colors[c + 3] = 6*float(n_lines+1 - i)/float(n_lines+1);
       else
         vertex_colors[c + 3] = 1.0;
       c += colors_per_vertex+1;
@@ -447,9 +440,23 @@ void Seismograph::setup()
       line_vertex_indices[vertices_per_line*i + 1] = i+1; 
     }
 
+    //Fill the vertex information about the seismometer
+    line_vertex_indices[ (n_lines*vertices_per_line) + 0 ] = n_vertices - 3;
+    line_vertex_indices[ (n_lines*vertices_per_line) + 1 ] = n_vertices - 2;
+    line_vertex_indices[ (n_lines*vertices_per_line) + 2 ] = n_vertices - 1;
+
+    for (int i=vertices_per_triangle; i>0; --i)
+    {
+      vertex_colors[(n_vertices-i)*(colors_per_vertex+1) + 0] = 0.2;//line_color.R;
+      vertex_colors[(n_vertices-i)*(colors_per_vertex+1)+ 1] = 0.2;//line_color.G;
+      vertex_colors[(n_vertices-i)*(colors_per_vertex+1) + 2] = 0.2;//line_color.B;
+      vertex_colors[(n_vertices-i)*(colors_per_vertex+1) + 3] = 0.8;
+    }
+
+
     glGenBuffers(1, &plugin_line_vertex_indices);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_line_vertex_indices);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*n_lines*vertices_per_line, line_vertex_indices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*(n_lines*vertices_per_line + vertices_per_triangle), line_vertex_indices, GL_STATIC_DRAW);
 
     glGenBuffers(1, &plugin_vertices);
     glBindBuffer(GL_ARRAY_BUFFER, plugin_vertices);
@@ -457,7 +464,7 @@ void Seismograph::setup()
 
     glGenBuffers(1, &plugin_vertex_colors);
     glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*(colors_per_vertex+1), vertex_colors, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*(colors_per_vertex+1), vertex_colors, GL_STATIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -538,12 +545,24 @@ void Seismograph::draw()
 {
   //Begin with vertices all recording zero
   unsigned int v = 0;
-  for (unsigned int i=0; i<n_vertices; ++i)
+  for (unsigned int i=0; i<n_lines+1; ++i)
   {
     vertices[v + 1] = vertices[v+3];
     v += coordinates_per_vertex;
   }
-  vertices[2*(n_vertices) - 1] = sim.seismometer_reading() * 0.5*r_inner;
+  vertices[(n_lines+1)*coordinates_per_vertex - 1] = sim.seismometer_reading() * 0.5*r_inner;
+
+  //Fill the vertex information about the seismometer
+  double theta, r;
+  sim.seismometer_position(theta, r);
+  r += r_inner;
+
+  vertices[ (n_lines+1)*coordinates_per_vertex + 0] = r*std::cos(theta)-0.02;
+  vertices[ (n_lines+1)*coordinates_per_vertex + 1] = r*std::sin(theta)+0.02;
+  vertices[ (n_lines+2)*coordinates_per_vertex + 0] = r*std::cos(theta)+0.02;
+  vertices[ (n_lines+2)*coordinates_per_vertex + 1] = r*std::sin(theta)+0.02;
+  vertices[ (n_lines+3)*coordinates_per_vertex + 0] = r*std::cos(theta);
+  vertices[ (n_lines+3)*coordinates_per_vertex + 1] = r*std::sin(theta)-0.02;
 
   glEnable(GL_BLEND);
   glEnable(GL_LINE_SMOOTH);
@@ -578,6 +597,9 @@ void Seismograph::draw()
     0);
 
   glDrawElements(GL_LINES, n_lines*vertices_per_line, GL_UNSIGNED_INT, 0);
+
+  //Draw seismometer
+  glDrawElements(GL_TRIANGLES, vertices_per_triangle, GL_UNSIGNED_INT, (void*)(((n_lines)*vertices_per_line)*sizeof(GLuint)));
 
   glDisableVertexAttribArray(plugin_attribute_coord2d);
   glDisableVertexAttribArray(plugin_attribute_v_color);
