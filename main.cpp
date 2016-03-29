@@ -198,6 +198,7 @@ void timestep()
 void init()
 {
     SDL_Init(SDL_INIT_VIDEO);
+    SDL_SetHint(SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, "1");
 
 
     window = SDL_CreateWindow(
