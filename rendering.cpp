@@ -1,13 +1,14 @@
+#include <cmath>
 #include "convection.h"
 #include "color.h"
 
 #ifndef LEGACY_OPENGL
-GLuint program;
-GLuint vbo_vertices;
-GLuint vbo_colors;
-GLuint ibo_triangle_vertex_indices;
-GLint attribute_coord2d;
-GLint attribute_v_color;
+static GLuint program;
+static GLuint vbo_vertices;
+static GLuint vbo_colors;
+static GLuint ibo_triangle_vertex_indices;
+static GLint attribute_coord2d;
+static GLint attribute_v_color;
 #endif //LEGACY_OPENGL
 
 void ConvectionSimulator::setup_opengl()
@@ -15,39 +16,42 @@ void ConvectionSimulator::setup_opengl()
 #ifndef LEGACY_OPENGL
   //Setup the vertices, indices, and colors
   {
-    GLfloat DX = 2.0/(grid.nx-1);
-    GLfloat DY = 2.0/(grid.ny-1);
+    GLfloat DX = 2.0*M_PI/grid.ntheta;
+    GLfloat DY = 1.0/(grid.nr-1);
     const short triangles_per_quad = 2;
     const short vertices_per_triangle = 3;
     const short coordinates_per_vertex = 2;
     const short colors_per_vertex = 3;
-    const unsigned long n_triangles = (grid.nx-1) * (grid.ny-1) * triangles_per_quad;
-    const unsigned long n_vertices = grid.nx * grid.ny;
-    
+    const unsigned long n_triangles = grid.ntheta * (grid.nr-1) * triangles_per_quad;
+    const unsigned long n_vertices = grid.ntheta * grid.nr;
+
 
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
     vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
     triangle_vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
-    
+
     unsigned long v=0, i=0;
-    for( StaggeredGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     {
       //Vertex for this cell
-      vertices[v + 0] = cell->xindex()*DX-1.0f;
-      vertices[v + 1] = cell->yindex()*DY-1.0f;
+      const float r_inner = grid.r_inner;
+      const float r = r_inner + (cell->yindex()*DY * (1.0f - r_inner) );
+      const float theta = cell->xindex()*DX;
+      vertices[v + 0] = r * std::cos(theta);
+      vertices[v + 1] = r * std::sin(theta);
 
-      if ( !cell->at_top_boundary() && !cell->at_right_boundary() )
+      if ( !cell->at_top_boundary() )
       {
         //First triangle
         triangle_vertex_indices[i + 0] = cell->self();
-        triangle_vertex_indices[i + 1] = cell->self()+grid.nx+1;
-        triangle_vertex_indices[i + 2] = cell->self()+grid.nx;
+        triangle_vertex_indices[i + 1] = cell->upright();
+        triangle_vertex_indices[i + 2] = cell->up();
 
         //Second triangle
         triangle_vertex_indices[i + 3] = cell->self();
-        triangle_vertex_indices[i + 4] = cell->self() + 1;
-        triangle_vertex_indices[i + 5] = cell->self() + grid.nx + 1;
-   
+        triangle_vertex_indices[i + 4] = cell->right();
+        triangle_vertex_indices[i + 5] = cell->upright();
+
         i += triangles_per_quad * vertices_per_triangle;
       }
 
@@ -65,6 +69,9 @@ void ConvectionSimulator::setup_opengl()
     glGenBuffers(1, &vbo_colors);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
     glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*colors_per_vertex, vertex_colors, GL_DYNAMIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
   }
 
   GLint compile_ok = GL_FALSE, link_ok = GL_FALSE;
@@ -155,20 +162,25 @@ void ConvectionSimulator::cleanup_opengl()
 #endif //LEGACY_OPENGL
 }
 
-void ConvectionSimulator::draw()
+void ConvectionSimulator::draw( bool draw_composition )
 {
   double displacement_factor = 0.4;
 #ifndef LEGACY_OPENGL
   const short triangles_per_quad = 2;
   const short vertices_per_triangle = 3;
   const short colors_per_vertex = 3;
-  const unsigned long n_triangles = (grid.nx-1) * (grid.ny-1) * triangles_per_quad;
-  const unsigned long n_vertices = grid.nx * grid.ny;
+  const unsigned long n_triangles = grid.ntheta * (grid.nr-1) * triangles_per_quad;
+  const unsigned long n_vertices = grid.ntheta * grid.nr;
 
   unsigned long v=0;
-  for( StaggeredGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
   {
-    color c = hot(T[cell->self()]);
+    color c;
+    if (draw_composition)
+      c = hot(C[cell->self()]);
+    else
+      c = hot(T[cell->self()]);
+
     double displacement = displacement_factor * D[cell->self()]; //Perturb color if there is displacement
     c.R += displacement;
     c.G += displacement;
@@ -180,11 +192,14 @@ void ConvectionSimulator::draw()
 
     v += colors_per_vertex;
   }
-    
-  glClearColor(1.0, 1.0, 1.0, 1.0);
+
+  glClearColor(0.0, 0.0, 0.0, 1.0);
   glClear(GL_COLOR_BUFFER_BIT);
 
   glUseProgram(program);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_triangle_vertex_indices);
+
   glEnableVertexAttribArray(attribute_coord2d);
   /* Describe our vertices array*/
   glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
@@ -213,46 +228,80 @@ void ConvectionSimulator::draw()
   glDrawElements(GL_TRIANGLES, n_triangles*vertices_per_triangle, GL_UNSIGNED_INT, 0);
 
   glDisableVertexAttribArray(attribute_coord2d);
-//  glDisableVertexAttribArray(attribute_v_color);
+  glDisableVertexAttribArray(attribute_v_color);
 
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-#else 
+#else
 
-  double DX = 2.0/grid.nx;
-  double DY = 2.0/grid.ny;
+  GLfloat DX = 2.0*M_PI/(grid.ntheta);
+  GLfloat DY = 1.0/(grid.nr-1);
 
   glClearColor(0.0, 0.0, 0.0, 0.0);
   glClear(GL_COLOR_BUFFER_BIT);
   glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
   glBegin(GL_TRIANGLE_STRIP);
-  for( StaggeredGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
+  for( RegularGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
   {
-    if (cell->at_left_boundary())
+    if (cell->at_left_boundary() && cell->self() != 0.)
       glBegin(GL_TRIANGLE_STRIP);
 
-    if( !cell->at_right_boundary() )
-    {
-      color c_s = hot(T[cell->self()]);
-      color c_u = hot(T[cell->up()]);
+    color c_s = hot(T[cell->self()]);
+    color c_u = hot(T[cell->up()]);
 
-      c_s.R += displacement_factor*D[cell->self()];
-      c_s.G += displacement_factor*D[cell->self()];
-      c_s.B += displacement_factor*D[cell->self()];
-      c_u.R += displacement_factor*D[cell->self()];
-      c_u.G += displacement_factor*D[cell->self()];
-      c_u.B += displacement_factor*D[cell->self()];
+    c_s.R += displacement_factor*D[cell->self()];
+    c_s.G += displacement_factor*D[cell->self()];
+    c_s.B += displacement_factor*D[cell->self()];
+    c_u.R += displacement_factor*D[cell->up()];
+    c_u.G += displacement_factor*D[cell->up()];
+    c_u.B += displacement_factor*D[cell->up()];
+
+    const float r = grid.r_inner + (cell->yindex()*DY * (1.0f - grid.r_inner) );
+    const float r_up = grid.r_inner + ((cell->yindex()+1)*DY * (1.0f - grid.r_inner) );
+    const float theta = cell->xindex()*DX;
+
+    glColor3f(c_s.R, c_s.G, c_s.B);
+    glVertex2f(r * std::cos(theta), r * std::sin(theta));
+    glColor3f(c_u.R, c_u.G, c_u.B);
+    glVertex2f(r_up * std::cos(theta), r_up * std::sin(theta));
+
+    //Add last strip for periodicity
+    if (cell->at_right_boundary() )
+    {
+      color c_s, c_u;
+      if (draw_composition)
+      {
+        c_s = hot(C[cell->self()]);
+        c_u = hot(C[cell->up()]);
+      }
+      else
+      {
+        c_s = hot(T[cell->self()]);
+        c_u = hot(T[cell->up()]);
+      }
+
+      c_s.R += displacement_factor*D[cell->right()];
+      c_s.G += displacement_factor*D[cell->right()];
+      c_s.B += displacement_factor*D[cell->right()];
+      c_u.R += displacement_factor*D[cell->upright()];
+      c_u.G += displacement_factor*D[cell->upright()];
+      c_u.B += displacement_factor*D[cell->upright()];
+
+      const float r = grid.r_inner + (cell->yindex()*DY * (1.0f - grid.r_inner) );
+      const float r_up = grid.r_inner + ((cell->yindex()+1)*DY * (1.0f - grid.r_inner) );
+      const float theta = 0.0;
 
       glColor3f(c_s.R, c_s.G, c_s.B);
-      glVertex2f(cell->xindex()*DX-1.0, cell->yindex()*DY-1.0);
+      glVertex2f(r * std::cos(theta), r * std::sin(theta));
       glColor3f(c_u.R, c_u.G, c_u.B);
-      glVertex2f((cell->xindex())*DX-1.0, (cell->yindex()+1)*DY-1.0);
-    }
-    else
+      glVertex2f(r_up * std::cos(theta), r_up * std::sin(theta));
       glEnd();
+    }
   }
   glFlush();
 
 #endif //LEGACY_OPENGL
 
 }
-  
+

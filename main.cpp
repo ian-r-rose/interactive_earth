@@ -2,6 +2,7 @@
 #include "SDL2/SDL_opengl.h"
 #include "SDL2/SDL.h"
 #include "convection.h"
+#include "rendering_plugins.h"
 #include <cmath>
 #include <iostream>
 #include <iomanip>
@@ -10,45 +11,71 @@
 #include <emscripten/emscripten.h>
 #endif
 
-//Number of cells in the x and y directions.
+/*********************************************
+    MODIFY THSE PARAMETERS TO CHANGE THE
+    BEHAVIOR OF THE SIMULATION.
+*********************************************/
+
+//Whether to include a chemical field.
+//The simulation will be faster without an additional advected field.
+bool include_composition = false;
+
+//Whether to do TPW calculation
+bool include_tpw = false;
+
+//Number of cells in the theta and r directions.
 //This is the primary control on resolution,
-//as well as performance/
-const unsigned int nx = 512;
-const unsigned int ny = 128;
+//as well as performance.
+const unsigned int ntheta = 1024;
+const unsigned int nr = 128;
+
+//Aspect ratio of the computational domain
+//is set by the inner radius, where the outer
+//radius is assumed to be 1.0
+const double r_inner = 0.5;
+
+/*********************************************
+    PROBABLY DON'T MODIFY THE REST
+    UNLESS YOU KNOW WHAT YOU ARE DOING.
+*********************************************/
 
 //Size of computational domain.  The ratio of
-//lx to ly should be the same of nx to ny,
-//otherwise the convective features will
-//look kind of squashed and funny.
-const double lx = 4.0;
-const double ly = 1.0;
+//ntheta to nr should be roughly the same
+//as ltheta to lr to avoid a funny shaped grid,
+//which will result in a strange looking simulation.
+const double ltheta = 2.*M_PI;
+const double lr = 1.0-r_inner;
 
 //Initial Rayleigh number of simulation
 const double Ra = 1.e7;
 
-//Factor for how much to blow up the rendered 
+//Factor for how much to blow up the rendered
 //triangles so that they are bigger on screen
-const unsigned int scale = 2;
+const unsigned int scale = 4;
 
 //Total number of pixels in x and y directions
-const unsigned int xpix = nx*scale;
-const unsigned int ypix = ny*scale;
+const unsigned int xpix = int(double(nr)*1./(1.-r_inner))*scale;
+const unsigned int ypix = xpix;
 
 //Whether to add heat to the simulation on mouse click.
 int click_state = 0;
-//Location of heat-adding
-double hx, hy;
-
-//Whether to solve the stokes equation for a given timestep.
-bool solve_stokes = true;
+//Location of heat-adding, chemistry adding, or earthquake generation
+double click_theta, click_r;
 
 //Whether we are in earthquake mode
 bool seismic_mode = false;
 
-//Pointer for the solver so that the various event handlers
-//can access it.  Did it this way due to the way GLUT is 
-//organized, not really necessary now that I am using SDL.
-ConvectionSimulator* handle = NULL;
+//Whether to solve the advection-diffusion equation
+bool advection_diffusion = true;
+
+//Whether to draw composition or temperature fields
+bool draw_composition = false;
+
+//Global solver
+ConvectionSimulator simulator(r_inner, ntheta,nr, Ra, include_composition);
+Axis axis(simulator);
+Core core(simulator);
+Seismograph seismograph(simulator);
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -57,31 +84,44 @@ SDL_Window *window=NULL;
 //Update where to add heat
 inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 {
-  hx = lx*(double(event->x)/double(xpix));
-  hy = ly*(1.0-double(event->y)/double(ypix));
+  const float xx = float(event->x)/float(xpix);
+  const float yy = 1.0f-float(event->y)/float(ypix);
+  float theta = std::atan2( yy-0.5f, xx-0.5f );
+  theta = (theta < 0. ? theta + 2.*M_PI : theta );
+  const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
+
+  click_theta = ltheta * theta / 2. / M_PI;
+  click_r = lr*(r-r_inner)/(1.0f-r_inner);
 }
 
 //Change the Rayleigh number on scrolling
 inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 {
-  double rayleigh = handle->rayleigh_number();
+  double rayleigh = simulator.rayleigh_number();
   double factor = std::pow(10.0, 1./100.* (event->y < 0 ? -1. : 1.0) );
-  handle->update_state( rayleigh * factor );
+  simulator.update_state( rayleigh * factor );
 }
-  
+
 //Toggle whether to add heat, and whether it should
 //be positive or negative
 inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 {
   if(event->state==SDL_PRESSED)
   {
-     if(event->button == SDL_BUTTON_LEFT)
-       click_state = 1;
-     if(event->button == SDL_BUTTON_RIGHT)
-       click_state = -1;
-     hx = lx*(double(event->x)/double(xpix));
-     hy = ly*(1.0-double(event->y)/double(ypix));
-     
+    if(event->button == SDL_BUTTON_LEFT)
+      click_state = 1;
+    if(event->button == SDL_BUTTON_RIGHT)
+      click_state = -1;
+
+    const float xx = float(event->x)/float(xpix);
+    const float yy = 1.0f-float(event->y)/float(ypix);
+    float theta = std::atan2( yy-0.5f, xx-0.5f );
+    theta = (theta < 0. ? theta + 2.*M_PI : theta );
+    const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
+
+    click_theta = ltheta * theta / 2. / M_PI;
+    click_r = (r-r_inner);
+
   }
   else
   {
@@ -89,33 +129,54 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
   }
 }
 
+inline bool in_domain( const float theta, const float r )
+{
+  return (r+r_inner < 1.) && ( r > 0.);
+}
+
 //Actually perform the timestep
 void timestep()
 {
   static int i=0;  //Keep track of timestep number
-  handle->draw();  //Draw to screen
+  simulator.draw( include_composition && draw_composition );  //Draw to screen
+  core.draw();
+  if (include_tpw && !seismic_mode)
+    axis.draw();
+  if (seismic_mode)
+    seismograph.draw();
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
   {
-    //The stokes solve is typically the most expensive part.  I have found
-    //That it usually looks okay if we only update the velocity solution 
-    //every other timestep.  Any more delay and it starts to look funny.
-    if(solve_stokes && i%2==0)
-      handle->solve_stokes();
+    //At the moment, the stokes solve is not the limiting factor,
+    //so it does not hurt to do it every timestep
+    simulator.solve_stokes();
 
     //Add heat if the user is clicking
-    if(click_state != 0) handle->add_heat(hx, hy, (click_state==1 ? true : false));
+    if(click_state != 0 && ( (include_composition && !draw_composition)||(!include_composition)) && in_domain(click_theta, click_r) )
+      simulator.add_heat(click_theta, click_r, (click_state==1 ? true : false));
+    if(click_state != 0 && include_composition && draw_composition && in_domain(click_theta, click_r) )
+      simulator.add_composition(click_theta, click_r);
 
-    //Advect temperature field
-    handle->semi_lagrangian_advect();
+    //The user can do some neat painting by turning off advection and diffusion
+    if (advection_diffusion)
+    {
+      //Advect temperature and composition fields
+      simulator.semi_lagrangian_advect_temperature();
+      if (include_composition)
+        simulator.semi_lagrangian_advect_composition();
 
-    //Diffuse temperature
-    handle->diffuse_temperature();
+      //Diffuse temperature
+      simulator.diffuse_temperature();
+    }
+
+    //Do TPW
+    if (include_tpw)
+      simulator.true_polar_wander();
 
     //Output scaling information
-    std::cout<<"Ra: "<<std::setprecision(3)<<handle->rayleigh_number()
-             <<"\tNu: "<<handle->nusselt_number()<<std::endl;
+    std::cout<<"Ra: "<<std::setprecision(3)<<simulator.rayleigh_number()
+             <<"\tNu: "<<simulator.nusselt_number()<<std::endl;
     //increment timestep
     ++i;
   }
@@ -123,9 +184,12 @@ void timestep()
   else
   {
     //Make earthquakes
-    if(click_state != 0) handle->earthquake(hx, hy);
+    if(click_state == 1 && in_domain(click_theta,click_r) )
+      simulator.earthquake(click_theta, click_r);
+    else if(click_state == -1 && in_domain(click_theta,click_r) )
+      simulator.place_seismometer(click_theta, click_r);
     //Propagate waves
-    handle->propagate_seismic_waves();
+    simulator.propagate_seismic_waves();
   }
 }
 
@@ -134,12 +198,13 @@ void timestep()
 void init()
 {
     SDL_Init(SDL_INIT_VIDEO);
+    SDL_SetHint(SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, "1");
 
 
     window = SDL_CreateWindow(
-       "Convection", 
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 
-        scale*nx, scale*ny, 
+       "Convection",
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        xpix, ypix,
         SDL_WINDOW_OPENGL);
     context = SDL_GL_CreateContext(window);
     if (!context)
@@ -152,13 +217,22 @@ void init()
     }
 
 
-    handle->setup_opengl();
+    simulator.setup_opengl();
+    core.setup();
+    if (include_tpw)
+      axis.setup();
+    seismograph.setup();
 }
 
 //Cleanup
 void quit()
 {
-    handle->cleanup_opengl();
+    simulator.cleanup_opengl();
+    core.cleanup();
+    if(include_tpw)
+      axis.cleanup();
+    seismograph.cleanup();
+
     SDL_GL_DeleteContext(context);
     SDL_Quit();
     exit(0);
@@ -177,7 +251,8 @@ void loop()
         if(event.key.keysym.sym == SDLK_SPACE)
         {
           seismic_mode = !seismic_mode;
-          handle->clear_seismic_waves();
+          simulator.clear_seismic_waves();
+          seismograph.clear_record();
         }
         //Quitting should be handled by navigating to another
         //webpage or closing the browser when using, emscripten,
@@ -186,6 +261,10 @@ void loop()
         else if(event.key.keysym.sym == SDLK_ESCAPE)
           quit();
 #endif
+        else if(event.key.keysym.sym == SDLK_TAB)
+          draw_composition = ! draw_composition;
+        else if(event.key.keysym.sym == SDLK_BACKSPACE)
+          advection_diffusion = !advection_diffusion;
         break;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:
@@ -207,9 +286,6 @@ void loop()
 
 int main(int argc, char** argv)
 {
-    ConvectionSimulator stokes(lx, ly, nx,ny, Ra);
-    handle = &stokes;
- 
     init();
 
     //The browser needs to handle the event loop if we are using
