@@ -157,7 +157,11 @@ void ConvectionSimulator::add_heat(double theta, double r, bool hot)
 {
   Point p; p.theta = theta; p.r=r;
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    T[cell->self()] = T[cell->self()] + (hot ? 1.0 : -1.0)*heat(p, cell->location())*dt;
+  {
+    double temperature = T[cell->self()] + (hot ? 1.0 : -1.0)*heat(p, cell->location())*dt;
+    temperature = dmax(dmin(temperature,1.0), 0.0);
+    T[cell->self()] = temperature;
+  }
 }
 
 /* Loop over all the cells and add composition, similar to add_heat*/
@@ -165,7 +169,11 @@ void ConvectionSimulator::add_composition(double theta, double r)
 {
   Point p; p.theta = theta; p.r=r;
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    C[cell->self()] = C[cell->self()] + react(p, cell->location())*dt;
+  {
+    double composition = C[cell->self()] + react(p, cell->location())*dt;
+    composition = dmax(dmin(composition,1.0), 0.0);
+    C[cell->self()] = composition;
+  }
 }
 
 /* Loop over the cells and zero out the displacement vectors */
