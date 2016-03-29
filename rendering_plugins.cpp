@@ -184,7 +184,7 @@ void Core::cleanup()
 void Axis::setup()
 {
   {
-    const unsigned long n_triangles = 4;
+    const unsigned long n_triangles = 2 /*axis*/ + 2 /*arrowheads*/;
     const unsigned long n_vertices = 4 /*axis*/ + 6 /*arrowheads*/;
 
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
@@ -192,7 +192,7 @@ void Axis::setup()
     triangle_vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
 
     color arrow_color;
-    arrow_color.R = 0.1; arrow_color.G=0.1; arrow_color.B=0.5;
+    arrow_color.R = 0.15; arrow_color.G=0.15; arrow_color.B=0.15;
     unsigned short c = 0;
     for (unsigned short i=0; i<n_vertices; ++i)
     {
@@ -306,7 +306,7 @@ void Axis::setup()
 
 void Axis::draw()
 {
-  const unsigned long n_triangles = 4;
+  const unsigned long n_triangles = 2 /*axis*/ + 2 /*arrowheads*/;
   const unsigned long n_vertices = 4 /*axis*/ + 6 /*arrowheads*/;
 
   const float d2r = M_PI/180.0;
@@ -340,6 +340,10 @@ void Axis::draw()
   vertices[17] = -(r - arrowhead) * std::sin(theta + 4.*dtheta);
   vertices[18] = -(r - arrowhead) * std::cos(theta - 4.*dtheta);
   vertices[19] = -(r - arrowhead) * std::sin(theta - 4.*dtheta);
+
+  glEnable(GL_BLEND);
+  glEnable(GL_POLYGON_SMOOTH);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   glUseProgram(plugin_program);
 
@@ -375,6 +379,9 @@ void Axis::draw()
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+  glDisable(GL_BLEND);
+  glDisable(GL_POLYGON_SMOOTH);
 }
 
 void Axis::cleanup()
