@@ -49,13 +49,9 @@ const double lr = 1.0-r_inner;
 //Initial Rayleigh number of simulation
 const double Ra = 1.e7;
 
-//Factor for how much to blow up the rendered
-//triangles so that they are bigger on screen
-const unsigned int scale = 4;
-
 //Total number of pixels in x and y directions
-const unsigned int xpix = int(double(nr)*1./(1.-r_inner))*scale;
-const unsigned int ypix = xpix;
+int xpix;
+int ypix;
 
 //Whether to add heat to the simulation on mouse click.
 int click_state = 0;
@@ -200,12 +196,53 @@ void init()
     SDL_Init(SDL_INIT_VIDEO);
     SDL_SetHint(SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, "1");
 
+#ifndef __EMSCRIPTEN__
+    //Get the number of displays
+    int n_displays = SDL_GetNumVideoDisplays();
+    if (n_displays < 1)
+       std::cerr<<"SDL : Could not find displays"<<std::endl;
+
+    //Identify the largest display
+    unsigned int max_display_dimension = 0;
+    SDL_Rect draw_rect;
+    float screen_fraction = 0.8;
+    for (unsigned int i=0; i < n_displays; ++i)
+    {
+      SDL_Rect r;
+      SDL_GetDisplayBounds( i, &r );
+      if ( r.w > max_display_dimension )
+      {
+        max_display_dimension = r.w;
+        draw_rect = r;
+      }
+      if ( r.h > max_display_dimension )
+      {
+        max_display_dimension = r.h;
+        draw_rect = r;
+      }
+    }
+    //set the size of the window
+    xpix = int( screen_fraction * float( (draw_rect.w < draw_rect.h ? draw_rect.w : draw_rect.h )) );
+    ypix = xpix;
+
+    window = SDL_CreateWindow(
+       "Convection",
+        draw_rect.x + draw_rect.w/2 - xpix/2 , draw_rect.y + draw_rect.h/2 - ypix/2,
+        xpix, ypix,
+        SDL_WINDOW_OPENGL);
+#else
+    int width, height, isFullscreen;
+    emscripten_get_canvas_size( &width, &height, &isFullscreen );
+    xpix = (width < height ? width : height);
+    ypix = xpix;
 
     window = SDL_CreateWindow(
        "Convection",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         xpix, ypix,
         SDL_WINDOW_OPENGL);
+#endif
+
     context = SDL_GL_CreateContext(window);
     if (!context)
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext(): %s\n", SDL_GetError());
