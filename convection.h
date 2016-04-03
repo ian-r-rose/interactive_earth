@@ -2,6 +2,7 @@
 #define STOKES_H
 
 #include <complex>
+#include <vector>
 #include "fftw3.h"
 #include "regular_grid.h"
 #include "GL/glew.h"
@@ -56,6 +57,8 @@ class ConvectionSimulator
     std::complex<double>* T_spectral;  //Temperature in spectral space
     std::complex<double> *scratch1_spectral, *scratch2_spectral;  //Scratch complex vectors for temporary stuff
 
+    //Parallelization stuff
+    std::vector<unsigned int> partitioning;
 
     //Data for rendering with OpenGL
     GLfloat* vertices;
@@ -70,7 +73,7 @@ class ConvectionSimulator
     void setup_stokes_problem();  //Setup for spectral solve
     void setup_diffusion_problem(); //Setup for diffusion solve (needs to be called every time the Ra is changed)
     void assemble_curl_density_vector(); //Assembling RHS for spectral solve.  Called every timestep
-    void semi_lagrangian_advect( const advection_field field );  //Advect composition or temperature through the velocity field
+    void semi_lagrangian_advect( const advection_field field, const unsigned int start, const unsigned int finish );  //Advect composition or temperature through the velocity field
     void clip_field( advection_field field, double min, double max); //Clamp the field to be between min and max
 
     //functions for evaluating field at points

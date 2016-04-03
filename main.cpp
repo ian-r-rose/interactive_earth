@@ -26,8 +26,8 @@ bool include_tpw = false;
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
 //as well as performance.
-const unsigned int ntheta = 1024;
-const unsigned int nr = 128;
+const unsigned int ntheta = 2048;
+const unsigned int nr = 256;
 
 //Aspect ratio of the computational domain
 //is set by the inner radius, where the outer
@@ -187,6 +187,8 @@ void timestep()
     //Propagate waves
     simulator.propagate_seismic_waves();
   }
+  if ( i  == 100 )
+    exit(0);
 }
 
 

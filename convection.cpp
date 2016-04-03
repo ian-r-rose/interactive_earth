@@ -1,4 +1,5 @@
 #include <cmath>
+#include <thread>
 #include "convection.h"
 
 //standard math library functions can be unpredictibly slow in
@@ -66,6 +67,15 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
   //diffustion problems.
   setup_stokes_problem();
   setup_diffusion_problem();
+
+  //Setup partitioning for multithreading
+  unsigned int n_threads = 8;
+  partitioning.resize(n_threads+1);
+  for (unsigned int i=0; i<n_threads; ++i)
+  {
+    partitioning[i] = grid.ncells/n_threads * i;
+  }
+  partitioning[n_threads] = grid.ncells;
 }
 
 /* Destructor for the solver.*/
@@ -348,14 +358,28 @@ inline double ConvectionSimulator::evaluate_composition(const Point &p)
 
 void ConvectionSimulator::semi_lagrangian_advect_temperature()
 {
+  std::vector< std::thread > threads(0);
+  threads.reserve(partitioning.size()-1);
   advection_field field = temperature;
-  semi_lagrangian_advect( field );
+
+  for (unsigned int i=0; i<partitioning.size()-1; ++i)
+    threads.push_back( std::thread( &ConvectionSimulator::semi_lagrangian_advect, this, field , partitioning[i], partitioning[i+1]));
+  for (unsigned int i=0; i<partitioning.size()-1; ++i)
+    threads[i].join();
+
+  //Copy the scratch vector into the temperature or composition vector.
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    T[cell->self()] = scratch[cell->self()];
 }
 
 void ConvectionSimulator::semi_lagrangian_advect_composition()
 {
   advection_field field = composition;
-  semi_lagrangian_advect( field );
+  semi_lagrangian_advect( field , 0, grid.ncells);
+
+  //Copy the scratch vector into the temperature or composition vector.
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+      C[cell->self()] = scratch[cell->self()];
 }
 
 /* Advect the temperature field through the velocity field using
@@ -364,7 +388,9 @@ void ConvectionSimulator::semi_lagrangian_advect_composition()
    is kind of slow.  Here I do it in a very coarse way to make up for
    that.  A more accurate implementation would use better-than-linear
    interpolation and use more iterations. */
-void ConvectionSimulator::semi_lagrangian_advect( const advection_field field )
+void ConvectionSimulator::semi_lagrangian_advect( const advection_field field,
+                                                  const unsigned int start,
+                                                  const unsigned int finish )
 {
   //The goal is to find the temperature at the Lagrangian point which will
   //be advected to the current grid point in one time step.  In general,
@@ -377,11 +403,12 @@ void ConvectionSimulator::semi_lagrangian_advect( const advection_field field )
   Point final_point, final_point_cart; //grid point
 
 
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  for( unsigned int cell_index = start; cell_index < finish; ++cell_index)
   {
     //These points are known, as they are the grid points in question.  They will
     //not change for this cell.
-    unsigned int cell_index = cell->self();
+    RegularGrid::iterator cell(cell_index, grid);
+
     vel_final.theta = u[cell_index];
     vel_final.r = v[cell_index];
     final_point = cell->location();
@@ -434,13 +461,6 @@ void ConvectionSimulator::semi_lagrangian_advect( const advection_field field )
       scratch[cell->self()] = evaluate_composition(takeoff_point);  //Store the composition we found
   }
 
-  //Copy the scratch vector into the temperature or composition vector.
-  if (field == temperature)
-    for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-      T[cell->self()] = scratch[cell->self()];
-  else if (field == composition)
-    for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-      C[cell->self()] = scratch[cell->self()];
 }
 
 /* Solve the diffusion equation implicitly with reverse Euler.
