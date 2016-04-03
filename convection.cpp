@@ -156,8 +156,10 @@ inline double ConvectionSimulator::react(const Point &p1, const Point &p2 )
 void ConvectionSimulator::add_heat(double theta, double r, bool hot)
 {
   Point p; p.theta = theta; p.r=r;
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  #pragma omp parallel for
+  for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
   {
+    RegularGrid::iterator cell(cell_index, grid);
     double temperature = T[cell->self()] + (hot ? 1.0 : -1.0)*heat(p, cell->location())*dt;
     temperature = dmax(dmin(temperature,1.0), 0.0);
     T[cell->self()] = temperature;
@@ -168,8 +170,10 @@ void ConvectionSimulator::add_heat(double theta, double r, bool hot)
 void ConvectionSimulator::add_composition(double theta, double r)
 {
   Point p; p.theta = theta; p.r=r;
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  #pragma omp parallel for
+  for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
   {
+    RegularGrid::iterator cell(cell_index, grid);
     double composition = C[cell->self()] + react(p, cell->location())*dt;
     composition = dmax(dmin(composition,1.0), 0.0);
     C[cell->self()] = composition;
@@ -223,8 +227,11 @@ void ConvectionSimulator::propagate_seismic_waves()
 
   //We can get away with an explicit timestepping scheme for the wave equation,
   //so no complicated tridiagonal matrix inversion or any such nonsense here
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  #pragma omp parallel for
+  for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
   {
+    RegularGrid::iterator cell(cell_index, grid);
+
     double laplacian;
     const double r = cell->radius();
     const double dr = grid.dr;
@@ -371,17 +378,18 @@ void ConvectionSimulator::semi_lagrangian_advect( const advection_field field )
   //this point wil not be on the grid.  I find this point using a coarse
   //iterated predictor corrector.
 
-  Point vel_final, vel_final_cart;  //Velocity at the grid point
-  Point vel_takeoff, vel_takeoff_cart; //Velocity at the candidate takeoff point
-  Point takeoff_point, takeoff_point_cart; //Candidate takeoff point
-  Point final_point, final_point_cart; //grid point
-
-
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  #pragma omp parallel for
+  for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
   {
+    RegularGrid::iterator cell(cell_index, grid);
+
+    Point vel_final, vel_final_cart;  //Velocity at the grid point
+    Point vel_takeoff, vel_takeoff_cart; //Velocity at the candidate takeoff point
+    Point takeoff_point, takeoff_point_cart; //Candidate takeoff point
+    Point final_point, final_point_cart; //grid point
+
     //These points are known, as they are the grid points in question.  They will
     //not change for this cell.
-    unsigned int cell_index = cell->self();
     vel_final.theta = u[cell_index];
     vel_final.r = v[cell_index];
     final_point = cell->location();
@@ -462,7 +470,8 @@ void ConvectionSimulator::diffuse_temperature()
   //Execute the forward fourier transform
   fftw_execute(dft_diffusion);  //X direction
 
-  for (unsigned int l = 0; l <= grid.ntheta/2.; ++l)
+  #pragma omp parallel for
+  for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
     diffusion_matrices[l]->solve( T_spectral+l, grid.ntheta, scratch1_spectral+l);
 
   //Execute the inverse Fourier transform
@@ -493,7 +502,7 @@ void ConvectionSimulator::setup_diffusion_problem()
   lower_diag[grid.nr-1] = 0.0; //fix for upper B.C.
 
   //Diagonals include a term for the frequency in the x-direction
-  for (unsigned int l = 0; l <= grid.ntheta/2.; ++l)
+  for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
   {
      double factor = (l*l);
      diag[0] = 1.0; diag[grid.nr-1] = 1.0;
@@ -544,7 +553,7 @@ void ConvectionSimulator::setup_stokes_problem()
   upper_diag[0] = 0.0;  //fix for lower B.C.
   lower_diag[grid.nr-1] = 0.0; //fix for upper B.C.
 
-  for (unsigned int l = 0; l <= grid.ntheta/2.; ++l)
+  for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
   {
      double factor = (l*l);
      diag[0] = 1.0; diag[grid.nr-1] = 1.0;
@@ -604,8 +613,10 @@ void ConvectionSimulator::assemble_curl_density_vector()
   //Assemble curl_density vector
   if (include_composition)
   {
-    for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    #pragma omp parallel for
+    for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
     {
+      RegularGrid::iterator cell(cell_index, grid);
       const double r = cell->radius();
       double dTdtheta, dCdtheta;
 
@@ -625,8 +636,10 @@ void ConvectionSimulator::assemble_curl_density_vector()
   }
   else
   {
-    for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    #pragma omp parallel for
+    for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
     {
+      RegularGrid::iterator cell(cell_index, grid);
       const double r = cell->radius();
       if(cell->at_bottom_boundary() || cell-> at_top_boundary())
         curl_density[cell->self()] = 0.0;
@@ -647,7 +660,8 @@ void ConvectionSimulator::solve_stokes()
   //Execute the forward fourier transform
   fftw_execute(dft_stokes);  //X direction
 
-  for (unsigned int l = 0; l <= grid.ntheta/2.; ++l)
+  #pragma omp parallel for
+  for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
   {
      stokes_matrices[l]->solve( curl_density_spectral+l, grid.ntheta, scratch1_spectral+l);
      stokes_matrices[l]->solve( scratch1_spectral+l, grid.ntheta, scratch2_spectral+l);
@@ -663,8 +677,10 @@ void ConvectionSimulator::solve_stokes()
   //Come up with the velocities by taking finite differences of the stream function.
   //I could also take these derivatives in spectral space, but that would mean
   //more fourier transforms, so this should be considerably cheaper.
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  #pragma omp parallel for
+  for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
   {
+    RegularGrid::iterator cell(cell_index, grid);
     const double r = cell->radius();
     if( cell->at_top_boundary() )
       u[cell->self()] = (stream[cell->self()] - stream[cell->down()])/grid.dr;
