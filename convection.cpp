@@ -487,7 +487,6 @@ void ConvectionSimulator::setup_diffusion_problem()
 {
   //Setup the tridiagonal matrices in the y direction
   double *upper_diag = new double[grid.nr];
-  double *diag = new double[grid.nr];
   double *lower_diag = new double[grid.nr];
 
   const double dr = grid.dr;
@@ -502,9 +501,11 @@ void ConvectionSimulator::setup_diffusion_problem()
   lower_diag[grid.nr-1] = 0.0; //fix for upper B.C.
 
   //Diagonals include a term for the frequency in the x-direction
+  #pragma omp parallel for
   for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
   {
      double factor = (l*l);
+     double *diag = new double[grid.nr];
      diag[0] = 1.0; diag[grid.nr-1] = 1.0;
      for (unsigned int i=1; i<grid.nr-1; ++i)
      {
@@ -513,10 +514,10 @@ void ConvectionSimulator::setup_diffusion_problem()
      }
 
      diffusion_matrices[l]->initialize(lower_diag, diag, upper_diag);
+     delete[] diag;
   }
 
   delete[] upper_diag;
-  delete[] diag;
   delete[] lower_diag;
 
   int n[1];
