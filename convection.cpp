@@ -206,15 +206,15 @@ void ConvectionSimulator::earthquake(double theta, double r)
   const double x1 = (r+grid.r_inner)*std::cos(theta), y1 = (r+grid.r_inner)*std::sin(theta);
 
   const double earthquake_radius = grid.dr*4.;  //Somewhat arbitrary radius
-  const double prefactor = 2. / std::sqrt( 3. * earthquake_radius * M_PI * M_PI);
+  const double prefactor = 2.e-1/M_E;
 
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     Point p2 = cell->location();
     const double x2 = (p2.r+grid.r_inner)*std::cos(p2.theta), y2 = (p2.r+grid.r_inner)*std::sin(p2.theta);
     const double rsq = (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
-    const double dist = rsq/earthquake_radius/earthquake_radius;
-    D[cell->self()] += prefactor * (1.0 - dist) * std::exp( -dist/2. );
+    const double dist = rsq/2./earthquake_radius/earthquake_radius;
+    D[cell->self()] += prefactor * (1.-dist)  * std::exp( -dist );
   }
 }
 

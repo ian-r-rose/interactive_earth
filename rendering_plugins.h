@@ -81,7 +81,7 @@ class Seismograph : RenderingPlugin
 {
   public:
     Seismograph( const ConvectionSimulator &sim ) : RenderingPlugin(sim),
-                                                    n_lines(500),
+                                                    n_lines(1000),
                                                     n_vertices(n_lines+1 /*endpoint*/ + vertices_per_triangle /*seismometer*/)
                                                     {}
     void setup();

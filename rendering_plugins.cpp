@@ -557,7 +557,7 @@ void Seismograph::draw()
     vertices[v + 1] = vertices[v+3];
     v += coordinates_per_vertex;
   }
-  vertices[(n_lines+1)*coordinates_per_vertex - 1] = sim.seismometer_reading() * 0.5*r_inner;
+  vertices[(n_lines+1)*coordinates_per_vertex - 1] = sim.seismometer_reading() * 0.7*r_inner;
 
   //Fill the vertex information about the seismometer
   double theta, r;

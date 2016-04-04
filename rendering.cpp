@@ -164,7 +164,7 @@ void ConvectionSimulator::cleanup_opengl()
 
 void ConvectionSimulator::draw( bool draw_composition )
 {
-  double displacement_factor = 0.4;
+  double displacement_factor = 1.0;
 #ifndef LEGACY_OPENGL
   const short triangles_per_quad = 2;
   const short vertices_per_triangle = 3;
