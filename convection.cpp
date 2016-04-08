@@ -735,8 +735,13 @@ void ConvectionSimulator::true_polar_wander()
   double E_dot_omega[2];
   double omega_dot_E_dot_omega_omega[2];
 
-  double small_dt = dt/10.;
-  for (unsigned int i=0; i<10; ++i)
+  //Break up the advectin into a bunch of small forward Euler steps.
+  //This is way inefficient, but overall not the most expensive thing
+  //in the model, so probably not a big deal.
+  //TODO: figure out a better way to timestep the nonlinear ODE
+  unsigned int n_euler_steps=100;
+  double small_dt = dt/n_euler_steps;
+  for (unsigned int i=0; i<n_euler_steps; ++i)
   {
     //Compute rotational stress
     E_dot_omega[0] = moment_of_inertia[0]*omega[0] + moment_of_inertia[2]*omega[1];
