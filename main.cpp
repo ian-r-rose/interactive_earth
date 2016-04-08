@@ -21,7 +21,7 @@
 bool include_composition = false;
 
 //Whether to do TPW calculation
-bool include_tpw = false;
+bool include_tpw = true;
 
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
@@ -33,6 +33,10 @@ const unsigned int nr = 128;
 //is set by the inner radius, where the outer
 //radius is assumed to be 1.0
 const double r_inner = 0.5;
+
+//Render the simulation flattened, as if
+//acting under centrifugal forces.
+const double flattening = 0.2;
 
 /*********************************************
     PROBABLY DON'T MODIFY THE REST

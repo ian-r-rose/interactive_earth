@@ -5,6 +5,7 @@
 
 extern const double r_inner;
 extern const unsigned int nr, ntheta;
+extern const double flattening;
 
 //Useful constants
 static const short vertices_per_triangle = 3;

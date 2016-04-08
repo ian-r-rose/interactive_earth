@@ -27,8 +27,6 @@ void Core::setup()
     unsigned long v = 2, c=3, i=0; //start at the next vertex index
     for (unsigned long n = 0; n < n_triangles; ++n)
     {
-      vertices[v + 0] = r * std::cos(dtheta * n);
-      vertices[v + 1] = r * std::sin(dtheta * n);
       vertex_colors[c + 0] = core_color.R;
       vertex_colors[c + 1] = core_color.G;
       vertex_colors[c + 2] = core_color.B;
@@ -47,8 +45,6 @@ void Core::setup()
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*n_triangles*vertices_per_triangle, triangle_vertex_indices, GL_STATIC_DRAW);
 
     glGenBuffers(1, &plugin_vertices);
-    glBindBuffer(GL_ARRAY_BUFFER, plugin_vertices);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*coordinates_per_vertex, vertices, GL_STATIC_DRAW);
 
     glGenBuffers(1, &plugin_vertex_colors);
     glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
@@ -133,6 +129,24 @@ void Core::draw()
 {
   const unsigned long n_triangles = ntheta;
   const unsigned long n_vertices = n_triangles+1;
+  const float dtheta = 2.*M_PI/n_triangles;
+
+  const float angle = sim.spin_angle();
+  const float a = 1.0f;
+  const float b = 1.0f-flattening;
+
+  unsigned long v = 2; //start at the next vertex index after the one in the center
+  for (unsigned long n = 0; n < n_triangles; ++n)
+  {
+    const float theta = dtheta*n;
+    //Vertices of the inner ellipse
+    vertices[v + 0] = r_inner*(a+b)/2. * std::cos(theta) +
+                      r_inner*(a-b)/2. * std::cos(-theta+ 2.*(angle+M_PI/2.));
+    vertices[v + 1] = r_inner*(a+b)/2. * std::sin(theta) +
+                      r_inner*(a-b)/2. * std::sin(-theta+ 2.*(angle+M_PI/2.));
+
+    v += coordinates_per_vertex;
+  }
 
   glUseProgram(plugin_program);
 
@@ -141,6 +155,7 @@ void Core::draw()
   glEnableVertexAttribArray(plugin_attribute_coord2d);
 
   glBindBuffer(GL_ARRAY_BUFFER, plugin_vertices);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*coordinates_per_vertex, vertices, GL_DYNAMIC_DRAW);
   glVertexAttribPointer(
     plugin_attribute_coord2d, // attribute
     2,                 // number of elements per vertex (x,y)
@@ -311,7 +326,7 @@ void Axis::draw()
 
   const float d2r = M_PI/180.0;
   const float theta = float( sim.spin_angle() );
-  const float r = 0.8 * r_inner;
+  const float r = 0.8 * r_inner * (1.0f-flattening);
   const float arrowhead = 0.1*r_inner;
   const float dtheta = 0.5/r_inner * d2r;
 
@@ -417,7 +432,7 @@ void Seismograph::setup()
     unsigned int v = 0;
     for (unsigned int i=0; i<n_lines+1; ++i)
     {
-      vertices[v + 0] = -0.9f*r_inner + float(i)/float(n_vertices) * 1.8f*r_inner;
+      vertices[v + 0] = -0.9f*r_inner*(1.0f-flattening) + float(i)/float(n_vertices) * 1.8f*r_inner*(1.0f-flattening);
       vertices[v + 1] = 0.f;
       v += coordinates_per_vertex;
     }
@@ -564,12 +579,24 @@ void Seismograph::draw()
   sim.seismometer_position(theta, r);
   r += r_inner;
 
-  vertices[ (n_lines+1)*coordinates_per_vertex + 0] = r*std::cos(theta)-0.02;
-  vertices[ (n_lines+1)*coordinates_per_vertex + 1] = r*std::sin(theta)+0.02;
-  vertices[ (n_lines+2)*coordinates_per_vertex + 0] = r*std::cos(theta)+0.02;
-  vertices[ (n_lines+2)*coordinates_per_vertex + 1] = r*std::sin(theta)+0.02;
-  vertices[ (n_lines+3)*coordinates_per_vertex + 0] = r*std::cos(theta);
-  vertices[ (n_lines+3)*coordinates_per_vertex + 1] = r*std::sin(theta)-0.02;
+  //Information about ellipticity
+  const float angle = sim.spin_angle();
+  const float a = 1.0f;
+  const float b = 1.0f-flattening;
+
+  //Position of the seismometer in (possibly) elliptical space 
+  const float seis_x = r*(a+b)/2. * std::cos(theta) +
+                       r*(a-b)/2. * std::cos(-theta+ 2.*(angle+M_PI/2.));
+  const float seis_y = r*(a+b)/2. * std::sin(theta) +
+                       r*(a-b)/2. * std::sin(-theta+ 2.*(angle+M_PI/2.));
+
+  //Seismometer vertices
+  vertices[ (n_lines+1)*coordinates_per_vertex + 0] = seis_x-0.02;
+  vertices[ (n_lines+1)*coordinates_per_vertex + 1] = seis_y+0.02;
+  vertices[ (n_lines+2)*coordinates_per_vertex + 0] = seis_x+0.02;
+  vertices[ (n_lines+2)*coordinates_per_vertex + 1] = seis_y+0.02;
+  vertices[ (n_lines+3)*coordinates_per_vertex + 0] = seis_x;
+  vertices[ (n_lines+3)*coordinates_per_vertex + 1] = seis_y-0.02;
 
   glEnable(GL_BLEND);
   glEnable(GL_LINE_SMOOTH);

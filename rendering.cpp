@@ -11,6 +11,9 @@ static GLint attribute_coord2d;
 static GLint attribute_v_color;
 #endif //LEGACY_OPENGL
 
+
+extern const double flattening;
+
 void ConvectionSimulator::setup_opengl()
 {
 #ifndef LEGACY_OPENGL
@@ -30,16 +33,9 @@ void ConvectionSimulator::setup_opengl()
     vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
     triangle_vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
 
-    unsigned long v=0, i=0;
+    unsigned long i=0;
     for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     {
-      //Vertex for this cell
-      const float r_inner = grid.r_inner;
-      const float r = r_inner + (cell->yindex()*DY * (1.0f - r_inner) );
-      const float theta = cell->xindex()*DX;
-      vertices[v + 0] = r * std::cos(theta);
-      vertices[v + 1] = r * std::sin(theta);
-
       if ( !cell->at_top_boundary() )
       {
         //First triangle
@@ -54,8 +50,6 @@ void ConvectionSimulator::setup_opengl()
 
         i += triangles_per_quad * vertices_per_triangle;
       }
-
-      v += coordinates_per_vertex;
     }
 
     glGenBuffers(1, &ibo_triangle_vertex_indices);
@@ -63,15 +57,9 @@ void ConvectionSimulator::setup_opengl()
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*n_triangles*vertices_per_triangle, triangle_vertex_indices, GL_STATIC_DRAW);
 
     glGenBuffers(1, &vbo_vertices);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*coordinates_per_vertex, vertices, GL_STATIC_DRAW);
-
     glGenBuffers(1, &vbo_colors);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*colors_per_vertex, vertex_colors, GL_DYNAMIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
   }
 
   GLint compile_ok = GL_FALSE, link_ok = GL_FALSE;
@@ -169,12 +157,32 @@ void ConvectionSimulator::draw( bool draw_composition )
   const short triangles_per_quad = 2;
   const short vertices_per_triangle = 3;
   const short colors_per_vertex = 3;
+  const short coordinates_per_vertex = 2;
   const unsigned long n_triangles = grid.ntheta * (grid.nr-1) * triangles_per_quad;
   const unsigned long n_vertices = grid.ntheta * grid.nr;
 
-  unsigned long v=0;
-  for( RegularGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
+  //Parameters for ellipticity, if required.
+  //angle is the angle of the semimajor axis, which
+  //defaults to the spin axis+90 degrees.
+  //a and b are the semimajor and semiminor axes.
+  const float angle = this->spin_angle() + M_PI/2.;
+  const float a = 1.0f;
+  const float b = 1.0f-flattening;
+
+  unsigned long v=0, i=0;
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
+    //Coordinates for this cell
+    const float r = cell->radius();
+    const float theta = cell->location().theta;
+
+    //This is kind of cool: add ellipticity to the domain rendering
+    //using an epicycle on the normal rendering.
+    //TODO: offsetting the epicycle seems to work with 2*angle.
+    //Why not 1*angle? Figure this out.
+    vertices[v + 0] = r*(a+b)/2. * std::cos(theta) + r*(a-b)/2. * std::cos(-theta+ 2.*angle);
+    vertices[v + 1] = r*(a+b)/2. * std::sin(theta) + r*(a-b)/2. * std::sin(-theta+ 2.*angle);
+
     color c;
     if (draw_composition)
       c = hot(C[cell->self()]);
@@ -186,11 +194,12 @@ void ConvectionSimulator::draw( bool draw_composition )
     c.G += displacement;
     c.B += displacement;
 
-    vertex_colors[v + 0] = c.R;
-    vertex_colors[v + 1] = c.G;
-    vertex_colors[v + 2] = c.B;
+    vertex_colors[i + 0] = c.R;
+    vertex_colors[i + 1] = c.G;
+    vertex_colors[i + 2] = c.B;
 
-    v += colors_per_vertex;
+    i += colors_per_vertex;
+    v += coordinates_per_vertex;
   }
 
   glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -203,6 +212,7 @@ void ConvectionSimulator::draw( bool draw_composition )
   glEnableVertexAttribArray(attribute_coord2d);
   /* Describe our vertices array*/
   glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*coordinates_per_vertex, vertices, GL_DYNAMIC_DRAW);
   glVertexAttribPointer(
     attribute_coord2d, // attribute
     2,                 // number of elements per vertex (x,y)
