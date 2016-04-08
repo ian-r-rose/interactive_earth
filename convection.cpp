@@ -16,8 +16,7 @@ inline double dmax (double x, double y) { return x > y ? x : y; }
   nr : number of cells in r direction
   Rayleigh : initial Rayleigh number
 */
-ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int nr, double Rayleigh, bool include_composition):
-                          Ra(Rayleigh),
+ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int nr, bool include_composition):
                           grid(inner_radius, ntheta, nr),
                           include_composition (include_composition)
 {
@@ -51,7 +50,7 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
 
   //Initialize the state
   buoyancy_number = 1.0;
-  update_state(Rayleigh);
+  update_state(1.e99);
   initialize_temperature();
   if(include_composition)
     initialize_composition();

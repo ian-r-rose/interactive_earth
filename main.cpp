@@ -50,9 +50,6 @@ const double flattening = 0.0;
 const double ltheta = 2.*M_PI;
 const double lr = 1.0-r_inner;
 
-//Initial Rayleigh number of simulation
-const double Ra = 1.e7;
-
 //Total number of pixels in x and y directions
 int xpix;
 int ypix;
@@ -72,7 +69,7 @@ bool advection_diffusion = true;
 bool draw_composition = false;
 
 //Global solver
-ConvectionSimulator simulator(r_inner, ntheta,nr, Ra, include_composition);
+ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
 Axis axis(simulator);
 Core core(simulator);
 Seismograph seismograph(simulator);
