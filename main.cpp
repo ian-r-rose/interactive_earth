@@ -81,14 +81,42 @@ Seismograph seismograph(simulator);
 SDL_GLContext context;
 SDL_Window *window=NULL;
 
+//Given an x and y location, compute the r, theta location of the 
+//simulator domain. Can handle the case of ellipticity.
+inline void compute_simulator_location( const float x, const float y, float *theta, float *r )
+{
+  //Scale the click coordinates so that they are
+  //in the correct place if the domain is elliptical
+  float xpp = x, ypp = y;
+  if (flattening > 1.e-2)
+  {
+    //Rotate the click position so that the ellipse
+    //corresponds to the Cartesian axes.
+    float rot_angle = simulator.spin_angle() - M_PI/2.;
+    float xp = x * std::cos(-rot_angle) - y * std::sin(-rot_angle);
+    float yp = x * std::sin(-rot_angle) + y * std::cos(-rot_angle);
+
+    //Do the inverse flattening
+    yp = yp / (1.-flattening);
+    xp = xp;
+
+    //Rotate back to the initial angle
+    xpp = xp * std::cos(rot_angle) - yp * std::sin(rot_angle);
+    ypp = xp * std::sin(rot_angle) + yp * std::cos(rot_angle);
+  }
+  *theta = std::atan2( ypp, xpp );
+  *theta = (*theta < 0. ? *theta + 2.*M_PI : *theta );
+  *r = 2.*std::sqrt( xpp*xpp + ypp*ypp );
+}
+
 //Update where to add heat
 inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 {
-  const float xx = float(event->x)/float(xpix);
-  const float yy = 1.0f-float(event->y)/float(ypix);
-  float theta = std::atan2( yy-0.5f, xx-0.5f );
-  theta = (theta < 0. ? theta + 2.*M_PI : theta );
-  const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
+  float x = float(event->x)/float(xpix)-0.5f;
+  float y = 1.0f-float(event->y)/float(ypix)-0.5f;
+
+  float theta, r;
+  compute_simulator_location( x, y, &theta, &r);
 
   click_theta = ltheta * theta / 2. / M_PI;
   click_r = lr*(r-r_inner)/(1.0f-r_inner);
@@ -113,15 +141,14 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
     if(event->button == SDL_BUTTON_RIGHT)
       click_state = -1;
 
-    const float xx = float(event->x)/float(xpix);
-    const float yy = 1.0f-float(event->y)/float(ypix);
-    float theta = std::atan2( yy-0.5f, xx-0.5f );
-    theta = (theta < 0. ? theta + 2.*M_PI : theta );
-    const float r = 2.*std::sqrt( (xx-0.5f)*(xx-0.5f) + (yy-0.5f)*(yy-0.5f) );
+    float x = float(event->x)/float(xpix)-0.5f;
+    float y = 1.0f-float(event->y)/float(ypix)-0.5f;
 
-    click_theta = ltheta * theta / 2. / M_PI;
-    click_r = (r-r_inner);
+    float theta, r;
+    compute_simulator_location(x, y, &theta, &r);
 
+    click_theta = theta;
+    click_r = r-r_inner;
   }
   else
   {
