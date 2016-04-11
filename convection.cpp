@@ -223,6 +223,7 @@ void ConvectionSimulator::propagate_seismic_waves()
   const double reference_speed = 1.0;  //dummy wavespeed
   const double tstep = 0.6*dmin(grid.r_inner*grid.dtheta,grid.dr)/reference_speed; // Timestep to satisfy cfl
   double dissipation = 0.5;  //Empirically chosen dissipation
+  double dispersion = 1.0e-1; //Used to damp out any total displacment that is caused by lots of earthquake sources
 
   //We can get away with an explicit timestepping scheme for the wave equation,
   //so no complicated tridiagonal matrix inversion or any such nonsense here
@@ -257,7 +258,9 @@ void ConvectionSimulator::propagate_seismic_waves()
 
     //Explicitly propagate wave
     scratch[cell->self()] = (2.0 * D[cell->self()] - Dp[cell->self()]
-                             + tstep*tstep*speed*speed*laplacian + tstep*dissipation*D[cell->self()])
+                             + tstep*tstep*speed*speed*laplacian
+                             + tstep*dissipation*D[cell->self()]
+                             - tstep*tstep*dispersion*D[cell->self()])
                              /(1.0 + dissipation*tstep);
   }
 
