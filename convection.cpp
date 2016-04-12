@@ -54,7 +54,7 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
   initialize_temperature();
   if(include_composition)
     initialize_composition();
-  spin = 0.0;
+  spin = M_PI/2.;
   seismometer_location.theta = M_PI/2.;
   seismometer_location.r = 0.5;
 
