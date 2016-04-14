@@ -21,7 +21,8 @@
 bool include_composition = false;
 
 //Whether to do TPW calculation
-bool include_tpw = false;
+bool include_tpw = true;
+const bool use_geographic_frame = false;
 
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
@@ -36,7 +37,7 @@ const double r_inner = 0.5;
 
 //Render the simulation flattened, as if
 //acting under centrifugal forces.
-const double flattening = 0.0;
+const double flattening = 0.2;
 
 /*********************************************
     PROBABLY DON'T MODIFY THE REST
@@ -101,7 +102,8 @@ inline void compute_simulator_location( const float x, const float y, float *the
     xpp = xp * std::cos(rot_angle) - yp * std::sin(rot_angle);
     ypp = xp * std::sin(rot_angle) + yp * std::cos(rot_angle);
   }
-  *theta = std::atan2( ypp, xpp );
+  float angular_offset = ( use_geographic_frame ? 0.0 : simulator.spin_angle() + M_PI/2.);
+  *theta = std::atan2( ypp, xpp ) + angular_offset;
   *theta = (*theta < 0. ? *theta + 2.*M_PI : *theta );
   *r = 2.*std::sqrt( xpp*xpp + ypp*ypp );
 }

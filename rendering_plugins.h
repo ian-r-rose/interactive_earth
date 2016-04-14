@@ -6,6 +6,7 @@
 extern const double r_inner;
 extern const unsigned int nr, ntheta;
 extern const double flattening;
+extern const bool use_geographic_frame;
 
 //Useful constants
 static const short vertices_per_triangle = 3;

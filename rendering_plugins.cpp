@@ -131,7 +131,7 @@ void Core::draw()
   const unsigned long n_vertices = n_triangles+1;
   const float dtheta = 2.*M_PI/n_triangles;
 
-  const float angle = sim.spin_angle();
+  const float semimajor_axis_angle = (use_geographic_frame ? sim.spin_angle() + M_PI/2. : 0.0f);
   const float a = 1.0f;
   const float b = 1.0f-flattening;
 
@@ -141,9 +141,9 @@ void Core::draw()
     const float theta = dtheta*n;
     //Vertices of the inner ellipse
     vertices[v + 0] = r_inner*(a+b)/2. * std::cos(theta) +
-                      r_inner*(a-b)/2. * std::cos(-theta+ 2.*(angle+M_PI/2.));
+                      r_inner*(a-b)/2. * std::cos(-theta+ 2.*(semimajor_axis_angle));
     vertices[v + 1] = r_inner*(a+b)/2. * std::sin(theta) +
-                      r_inner*(a-b)/2. * std::sin(-theta+ 2.*(angle+M_PI/2.));
+                      r_inner*(a-b)/2. * std::sin(-theta+ 2.*(semimajor_axis_angle));
 
     v += coordinates_per_vertex;
   }
@@ -325,7 +325,7 @@ void Axis::draw()
   const unsigned long n_vertices = 4 /*axis*/ + 6 /*arrowheads*/;
 
   const float d2r = M_PI/180.0;
-  const float theta = float( sim.spin_angle() );
+  const float theta = (use_geographic_frame ? sim.spin_angle() : M_PI/2.);
   const float r = 0.8 * r_inner * (1.0f-flattening);
   const float arrowhead = 0.1*r_inner;
   const float dtheta = 0.5/r_inner * d2r;
@@ -577,6 +577,7 @@ void Seismograph::draw()
   //Fill the vertex information about the seismometer
   double theta, r;
   sim.seismometer_position(theta, r);
+  theta -= sim.spin_angle()+M_PI/2.;
   r += r_inner;
 
   //Information about ellipticity
