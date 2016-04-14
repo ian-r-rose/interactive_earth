@@ -577,19 +577,19 @@ void Seismograph::draw()
   //Fill the vertex information about the seismometer
   double theta, r;
   sim.seismometer_position(theta, r);
-  theta -= sim.spin_angle()+M_PI/2.;
+  theta -= (use_geographic_frame ? 0.0 : sim.spin_angle()+M_PI/2.);
   r += r_inner;
 
   //Information about ellipticity
-  const float angle = sim.spin_angle();
+  const float semimajor_axis_angle = (use_geographic_frame ? sim.spin_angle() + M_PI/2. : 0.);
   const float a = 1.0f;
   const float b = 1.0f-flattening;
 
   //Position of the seismometer in (possibly) elliptical space 
   const float seis_x = r*(a+b)/2. * std::cos(theta) +
-                       r*(a-b)/2. * std::cos(-theta+ 2.*(angle+M_PI/2.));
+                       r*(a-b)/2. * std::cos(-theta+ 2.*(semimajor_axis_angle));
   const float seis_y = r*(a+b)/2. * std::sin(theta) +
-                       r*(a-b)/2. * std::sin(-theta+ 2.*(angle+M_PI/2.));
+                       r*(a-b)/2. * std::sin(-theta+ 2.*(semimajor_axis_angle));
 
   //Seismometer vertices
   vertices[ (n_lines+1)*coordinates_per_vertex + 0] = seis_x-0.02;

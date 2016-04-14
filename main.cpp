@@ -90,7 +90,7 @@ inline void compute_simulator_location( const float x, const float y, float *the
   {
     //Rotate the click position so that the ellipse
     //corresponds to the Cartesian axes.
-    float rot_angle = simulator.spin_angle() - M_PI/2.;
+    float rot_angle = use_geographic_frame ? simulator.spin_angle() + M_PI/2. : 0.0;
     float xp = x * std::cos(-rot_angle) - y * std::sin(-rot_angle);
     float yp = x * std::sin(-rot_angle) + y * std::cos(-rot_angle);
 
