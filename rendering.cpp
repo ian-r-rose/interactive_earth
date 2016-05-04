@@ -204,7 +204,7 @@ void ConvectionSimulator::draw( bool draw_composition )
     v += coordinates_per_vertex;
   }
 
-  glClearColor(0.0, 0.0, 0.0, 1.0);
+  glClearColor(17.0/255., 17.0/255., 17.0/255., 1.0);
   glClear(GL_COLOR_BUFFER_BIT);
 
   glUseProgram(program);
@@ -250,7 +250,7 @@ void ConvectionSimulator::draw( bool draw_composition )
   GLfloat DX = 2.0*M_PI/(grid.ntheta);
   GLfloat DY = 1.0/(grid.nr-1);
 
-  glClearColor(0.0, 0.0, 0.0, 0.0);
+  glClearColor(17.0/255., 17.0/255., 17.0/255., 1.0);
   glClear(GL_COLOR_BUFFER_BIT);
   glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
   glBegin(GL_TRIANGLE_STRIP);

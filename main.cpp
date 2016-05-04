@@ -273,6 +273,7 @@ void init()
         SDL_WINDOW_OPENGL);
 #endif
 
+    SDL_SetWindowBordered(window, SDL_FALSE);
     context = SDL_GL_CreateContext(window);
     if (!context)
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext(): %s\n", SDL_GetError());
