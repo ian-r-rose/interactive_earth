@@ -21,7 +21,7 @@
 bool include_composition = false;
 
 //Whether to do TPW calculation
-bool include_tpw = true;
+bool include_tpw = false;
 const bool use_geographic_frame = false;
 
 //Number of cells in the theta and r directions.
@@ -37,7 +37,8 @@ const double r_inner = 0.5;
 
 //Render the simulation flattened, as if
 //acting under centrifugal forces.
-const double flattening = 0.2;
+const double flattening = 0.0;
+int mode = 1;
 
 /*********************************************
     PROBABLY DON'T MODIFY THE REST
@@ -64,7 +65,7 @@ double click_theta, click_r;
 bool seismic_mode = false;
 
 //Whether to solve the advection-diffusion equation
-bool advection_diffusion = true;
+bool advection = false;
 
 //Whether to draw composition or temperature fields
 bool draw_composition = false;
@@ -176,7 +177,7 @@ void timestep()
   {
     //At the moment, the stokes solve is not the limiting factor,
     //so it does not hurt to do it every timestep
-    simulator.solve_stokes();
+    //simulator.solve_stokes();
 
     //Add heat if the user is clicking
     if(click_state != 0 && ( (include_composition && !draw_composition)||(!include_composition)) && in_domain(click_theta, click_r) )
@@ -185,16 +186,15 @@ void timestep()
       simulator.add_composition(click_theta, click_r);
 
     //The user can do some neat painting by turning off advection and diffusion
-    if (advection_diffusion)
+    if (advection)
     {
       //Advect temperature and composition fields
       simulator.semi_lagrangian_advect_temperature();
       if (include_composition)
         simulator.semi_lagrangian_advect_composition();
 
-      //Diffuse temperature
-      simulator.diffuse_temperature();
     }
+    simulator.diffuse_temperature();
 
     //Do TPW
     if (include_tpw)
@@ -331,10 +331,12 @@ void loop()
 #endif
         else if(event.key.keysym.sym == SDLK_TAB)
           draw_composition = ! draw_composition;
-        else if(event.key.keysym.sym == SDLK_BACKSPACE)
-          advection_diffusion = !advection_diffusion;
         else if(event.key.keysym.sym == SDLK_DELETE)
           { simulator.initialize_temperature(); if(include_composition) simulator.initialize_composition(); }
+        else if(event.key.keysym.sym == SDLK_PAGEUP)
+          simulator.make_temperature_mode(mode++);
+        else if(event.key.keysym.sym == SDLK_PAGEDOWN)
+          simulator.make_temperature_mode(mode--);
         break;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:

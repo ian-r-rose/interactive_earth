@@ -93,6 +93,7 @@ class ConvectionSimulator
 
     void initialize_temperature();  //just like it says
     void initialize_composition();  //just like it says
+    void make_temperature_mode(int n);
 
     void earthquake(double x, double y);  //Add source term for wave equation
     void propagate_seismic_waves(); //evolve the wave equation

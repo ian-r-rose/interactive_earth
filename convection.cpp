@@ -117,6 +117,13 @@ double ConvectionSimulator::initial_composition(const Point &p)
   return 0.0;
 }
 
+void ConvectionSimulator::make_temperature_mode(int n)
+{
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    T[cell->self()] = std::cos( n * cell->location().theta ) * std::sin ( n * cell->location().r * 2.*M_PI);
+}
+
+
 /* Loop over all the cells and set the initial temperature */
 void ConvectionSimulator::initialize_temperature()
 {
@@ -774,10 +781,11 @@ void ConvectionSimulator::update_state(double rayleigh)
 
   //The resolution basically sets the maximum Ra we can use.  Estimate the minimum length scale,
   //and if that is smaller than the resolution, cap the Rayleigh number.
-  const double boundary_layer_cells = 2.;  //grid cells per boundary layer
+  /*const double boundary_layer_cells = 2.;  //grid cells per boundary layer
   if (length_scale < boundary_layer_cells *grid.dr)
     Ra = 2.*Ra_c*std::pow( grid.lr/boundary_layer_cells/grid.dr, 3.0);
-  else Ra = rayleigh;
+  else Ra = rayleigh;*/
+  Ra = 1.e7;
 
   length_scale = std::pow(Ra/2./Ra_c, -1./3.)*grid.lr;
   const double Nu = std::pow(Ra/Ra_c/2., 1./3.) / 2.;  //Nusselt
