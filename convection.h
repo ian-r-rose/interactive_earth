@@ -63,8 +63,6 @@ class ConvectionSimulator
     GLuint* triangle_vertex_indices;
 
     //workhorse functions
-    void initialize_temperature();  //just like it says
-    void initialize_composition();  //just like it says
     double heat(const Point&, const Point&);  //heating term at a point, given where the click has happened
     double react(const Point&, const Point&);  //heating term at a point, given where the click has happened
     void setup_stokes_problem();  //Setup for spectral solve
@@ -92,6 +90,9 @@ class ConvectionSimulator
     double spin_angle() const; //return angle of spin axis (with respect to x axis) in radians
     double seismometer_reading() const; //Return the displacement at the seismometer
     void seismometer_position( double &theta, double &r) const; //Query the current location of the seismometer
+
+    void initialize_temperature();  //just like it says
+    void initialize_composition();  //just like it says
 
     void earthquake(double x, double y);  //Add source term for wave equation
     void propagate_seismic_waves(); //evolve the wave equation

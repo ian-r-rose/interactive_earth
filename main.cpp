@@ -332,6 +332,8 @@ void loop()
           draw_composition = ! draw_composition;
         else if(event.key.keysym.sym == SDLK_BACKSPACE)
           advection_diffusion = !advection_diffusion;
+        else if(event.key.keysym.sym == SDLK_DELETE)
+          { simulator.initialize_temperature(); if(include_composition) simulator.initialize_composition(); }
         break;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:
