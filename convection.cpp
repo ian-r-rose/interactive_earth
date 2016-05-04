@@ -774,7 +774,7 @@ void ConvectionSimulator::update_state(double rayleigh)
 
   //The resolution basically sets the maximum Ra we can use.  Estimate the minimum length scale,
   //and if that is smaller than the resolution, cap the Rayleigh number.
-  const double boundary_layer_cells = 4.;  //grid cells per boundary layer
+  const double boundary_layer_cells = 2.;  //grid cells per boundary layer
   if (length_scale < boundary_layer_cells *grid.dr)
     Ra = 2.*Ra_c*std::pow( grid.lr/boundary_layer_cells/grid.dr, 3.0);
   else Ra = rayleigh;
