@@ -7,7 +7,7 @@ It enables a mantle convection model to be run much more quickly than the codes 
 It solves the same governing equations, but makes comprimises for accuracy for the sake of achieving speed.
 This speed enables the code to be very responsive to user input.
 
-The simulations can be run in a browser without running any local code [here](http://ian-r-rose.github.io/interactive_earth/thermal_hires.html).
+The simulations can be run in a browser without running any local code [here](http://ian-r-rose.angithub.io/interactive_earth/thermal_hires.html).
 
 More about the project can be found [here](http://ian-r-rose.github.io/interactive_earth/about.html).
 
@@ -30,7 +30,7 @@ An introduction to the underlying science can be found [here](http://ian-r-rose.
 Interactive Earth may be run in the web browser by compiling it to Javascript
 using [emscripten](http://kripken.github.io/emscripten-site).
 This takes a bit more work, since you must compile ```SDL2``` and ```fftw3``` manually as well,
-but can be done. The finished product can be seen [here](http://kripken.github.io/emscripten-site).
+but can be done. The finished product can be seen [here](http://ian-r-rose.github.io/interactive_earth/index.html).
 
 ## User input
 With the simulation running, the user can make the following changes:
