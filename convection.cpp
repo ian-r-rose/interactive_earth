@@ -1,5 +1,6 @@
 #include <cmath>
 #include "convection.h"
+#include <iostream>
 
 //standard math library functions can be unpredictibly slow in
 //some implementations, it seems, and not even available in others.
@@ -16,88 +17,80 @@ inline double dmax (double x, double y) { return x > y ? x : y; }
   nr : number of cells in r direction
   Rayleigh : initial Rayleigh number
 */
-ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int nr, bool include_composition):
-                          grid(inner_radius, ntheta, nr),
-                          include_composition (include_composition)
+ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int nr):
+                          grid(inner_radius, ntheta, nr)
 {
   //Allocate memory for data vectors
   T = new double[grid.ncells];
-  D = new double[grid.ncells];
-  Dp = new double[grid.ncells];
+  V = new double[grid.ncells];
   stream = new double[grid.ncells];
-  curl_density = new double[grid.ncells];
+  vorticity_source = new double[grid.ncells];
   u = new double[grid.ncells];
   v = new double[grid.ncells];
   scratch = new double[grid.ncells];
 
-  if(include_composition)
-    C = new double[grid.ncells];
-
   //I actually allocate more memory than necessary for the
   //spectral vector, but this way it makes the indexing simpler
-  curl_density_spectral = new std::complex<double>[grid.ncells];
+  vorticity_source_spectral = new std::complex<double>[grid.ncells];
   T_spectral = new std::complex<double>[grid.ncells];
+  V_spectral = new std::complex<double>[grid.ncells];
   scratch1_spectral = new std::complex<double>[grid.ncells];
   scratch2_spectral = new std::complex<double>[grid.ncells];
 
-  stokes_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.ntheta/2+1];
-  diffusion_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.ntheta/2+1];
+  poisson_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.ntheta/2+1];
+  temperature_diffusion_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.ntheta/2+1];
+  vorticity_diffusion_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.ntheta/2+1];
   for (unsigned int i=0; i<=grid.ntheta/2; ++i)
   {
-    stokes_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.nr);
-    diffusion_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.nr);
+    poisson_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.nr);
+    temperature_diffusion_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.nr);
+    vorticity_diffusion_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.nr);
   }
 
   //Initialize the state
-  buoyancy_number = 1.0;
-  update_state(1.e99);
+  update_state(1.e6, 1.0, 1.0);
   initialize_temperature();
-  if(include_composition)
-    initialize_composition();
-  spin = M_PI/2.;
-  seismometer_location.theta = M_PI/2.;
-  seismometer_location.r = 0.5;
-
-  //Initialize displacement to zero
-  clear_seismic_waves();
+  initialize_vorticity();
 
   //Do some setup work for solving stokes and
   //diffustion problems.
-  setup_stokes_problem();
-  setup_diffusion_problem();
+  setup_poisson_problem();
+  setup_vorticity_diffusion_problem();
+  setup_temperature_diffusion_problem();
 }
 
 /* Destructor for the solver.*/
 ConvectionSimulator::~ConvectionSimulator()
 {
   delete[] T;
-  delete[] D;
-  delete[] Dp;
+  delete[] V;
   delete[] stream;
-  delete[] curl_density;
+  delete[] vorticity_source;
   delete[] u;
   delete[] v;
   delete[] scratch;
-  delete[] curl_density_spectral;
+  delete[] vorticity_source_spectral;
   delete[] T_spectral;
+  delete[] V_spectral;
   delete[] scratch1_spectral;
   delete[] scratch2_spectral;
 
-  if(include_composition)
-    delete[] C;
-
   for (unsigned int i=0; i<=grid.ntheta/2; ++i)
   {
-    delete stokes_matrices[i];
-    delete diffusion_matrices[i];
+    delete poisson_matrices[i];
+    delete temperature_diffusion_matrices[i];
+    delete vorticity_diffusion_matrices[i];
   }
-  delete[] stokes_matrices;
-  delete[] diffusion_matrices;
+  delete[] poisson_matrices;
+  delete[] vorticity_diffusion_matrices;
+  delete[] temperature_diffusion_matrices;
 
-  fftw_destroy_plan(dft_diffusion);
-  fftw_destroy_plan(idft_diffusion);
-  fftw_destroy_plan(dft_stokes);
-  fftw_destroy_plan(idft_stokes);
+  fftw_destroy_plan(dft_temperature_diffusion);
+  fftw_destroy_plan(idft_temperature_diffusion);
+  fftw_destroy_plan(dft_vorticity_diffusion);
+  fftw_destroy_plan(idft_vorticity_diffusion);
+  fftw_destroy_plan(dft_poisson);
+  fftw_destroy_plan(idft_poisson);
   fftw_cleanup();
 }
 
@@ -110,9 +103,9 @@ double ConvectionSimulator::initial_temperature(const Point &p)
   return grid.r_inner/(1.+grid.r_inner);
 }
 
-/* Functional form of initial composition.
+/* Functional form of initial vorticity.
    Just start with zero.*/
-double ConvectionSimulator::initial_composition(const Point &p)
+double ConvectionSimulator::initial_vorticity(const Point &p)
 {
   return 0.0;
 }
@@ -124,11 +117,11 @@ void ConvectionSimulator::initialize_temperature()
     T[cell->self()] = initial_temperature(cell->location());
 }
 
-/* Loop over all the cells and set the initial composition */
-void ConvectionSimulator::initialize_composition()
+/* Loop over all the cells and set the initial vorticity */
+void ConvectionSimulator::initialize_vorticity()
 {
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    C[cell->self()] = initial_composition(cell->location());
+    V[cell->self()] = initial_vorticity(cell->location());
 }
 
 /* Given a heat source centered on p1, calculate the heating at
@@ -139,15 +132,6 @@ inline double ConvectionSimulator::heat(const Point &p1, const Point &p2 )
   const double x2 = (p2.r+grid.r_inner)*std::cos(p2.theta), y2 = (p2.r+grid.r_inner)*std::sin(p2.theta);
   const double rsq = (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
   return heat_source*std::exp( -rsq/2.0/heat_source_radius/heat_source_radius );
-}
-
-/* Given a heat source centered on p1, calculate the composition addition at point p2*/ 
-inline double ConvectionSimulator::react(const Point &p1, const Point &p2 )
-{
-  const double x1 = (p1.r+grid.r_inner)*std::cos(p1.theta), y1 = (p1.r+grid.r_inner)*std::sin(p1.theta);
-  const double x2 = (p2.r+grid.r_inner)*std::cos(p2.theta), y2 = (p2.r+grid.r_inner)*std::sin(p2.theta);
-  const double rsq = (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
-  return rsq < composition_source_radius*composition_source_radius ? composition_source : 0.0;
 }
 
 /* Loop over all the cells and add heat according to where the current heat
@@ -165,121 +149,18 @@ void ConvectionSimulator::add_heat(double theta, double r, bool hot)
   }
 }
 
-/* Loop over all the cells and add composition, similar to add_heat*/
-void ConvectionSimulator::add_composition(double theta, double r)
+/* Loop over all the cells and add vorticity, similar to add_heat*/
+void ConvectionSimulator::add_vorticity(double theta, double r, bool ccw)
 {
   Point p; p.theta = theta; p.r=r;
   #pragma omp parallel for
   for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
   {
-    RegularGrid::iterator cell(cell_index, grid);
-    double composition = C[cell->self()] + react(p, cell->location())*dt;
-    composition = dmax(dmin(composition,1.0), 0.0);
-    C[cell->self()] = composition;
+    //RegularGrid::iterator cell(cell_index, grid);
+    //double vorticity = V[cell->self()] + react(p, cell->location())*dt;
+    //V[cell->self()] = vorticity;
   }
 }
-
-/* Loop over the cells and zero out the displacement vectors */
-void ConvectionSimulator::clear_seismic_waves()
-{
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    D[cell->self()] = 0.;
-    Dp[cell->self()] = 0.;
-  }
-}
-
-/* Place the seismometer at a point (theta,r)*/
-void ConvectionSimulator::place_seismometer(double theta, double r)
-{
-  seismometer_location.theta = theta;
-  seismometer_location.r = r;
-}
-
-
-/* Add an earthquake at the point x,y.  I use a functional form of a
-  Mexican hat wavelet.  At some point it may be good to revisit what
-  functional form is best.  */
-void ConvectionSimulator::earthquake(double theta, double r)
-{
-  const double x1 = (r+grid.r_inner)*std::cos(theta), y1 = (r+grid.r_inner)*std::sin(theta);
-
-  const double earthquake_radius = grid.dr*4.;  //Somewhat arbitrary radius
-  const double prefactor = 2.e-1/M_E;
-
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    Point p2 = cell->location();
-    const double x2 = (p2.r+grid.r_inner)*std::cos(p2.theta), y2 = (p2.r+grid.r_inner)*std::sin(p2.theta);
-    const double rsq = (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
-    const double dist = rsq/2./earthquake_radius/earthquake_radius;
-    D[cell->self()] += prefactor * (1.-dist)  * std::exp( -dist );
-  }
-}
-
-/* Explicitly propagate the wave equation. */
-void ConvectionSimulator::propagate_seismic_waves()
-{
-  const double reference_speed = 1.0;  //dummy wavespeed
-  const double tstep = 0.6*dmin(grid.r_inner*grid.dtheta,grid.dr)/reference_speed; // Timestep to satisfy cfl
-  double dissipation = 0.5;  //Empirically chosen dissipation
-  double dispersion = 1.0e-1; //Used to damp out any total displacment that is caused by lots of earthquake sources
-
-  //We can get away with an explicit timestepping scheme for the wave equation,
-  //so no complicated tridiagonal matrix inversion or any such nonsense here
-  #pragma omp parallel for
-  for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
-  {
-    RegularGrid::iterator cell(cell_index, grid);
-
-    double laplacian;
-    const double r = cell->radius();
-    const double dr = grid.dr;
-    const double dtheta = grid.dtheta;
-
-    //Make the wavespeed temperature dependent.  This is a HUGE
-    //temperature dependence so it is pretty obvious.
-    double speed = reference_speed*(1.0 - 0.7*T[cell->self()]);
-    speed = ( speed < 0.1 ? 0.1 : (speed > 1.0 ? 1.0 : speed));
-
-    //Five point laplacian stencil
-    if( cell->at_top_boundary() )
-      laplacian = (1./dr/dr + 0.5/r/dr)*D[cell->down()] + (1./dr/dr - 0.5/r/dr)*D[cell->down()]
-                  + 1./r/r/dtheta/dtheta * ( D[cell->right()] + D[cell->left()] ) -
-                  (2./r/r/dtheta/dtheta + 2./dr/dr)*D[cell->self()];
-    else if ( cell->at_bottom_boundary() )
-      laplacian = (1./dr/dr + 0.5/r/dr)*D[cell->up()] + (1./dr/dr - 0.5/r/dr)*D[cell->up()]
-                  + 1./r/r/dtheta/dtheta * ( D[cell->right()] + D[cell->left()] ) -
-                  (2./r/r/dtheta/dtheta + 2./dr/dr)*D[cell->self()];
-    else
-      laplacian = (1./dr/dr + 0.5/r/dr)*D[cell->up()] + (1./dr/dr - 0.5/r/dr)*D[cell->down()]
-                  + 1./r/r/dtheta/dtheta * ( D[cell->right()] + D[cell->left()] ) -
-                  (2./r/r/dtheta/dtheta + 2./dr/dr)*D[cell->self()];
-
-    //Explicitly propagate wave
-    scratch[cell->self()] = (2.0 * D[cell->self()] - Dp[cell->self()]
-                             + tstep*tstep*speed*speed*laplacian
-                             + tstep*dissipation*D[cell->self()]
-                             - tstep*tstep*dispersion*D[cell->self()])
-                             /(1.0 + dissipation*tstep);
-  }
-
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    //Current displacement becomes previous displacement
-    Dp[cell->self()] = D[cell->self()];
-    //Copy over new displacement
-    D[cell->self()] = scratch[cell->self()];
-
-    //clip field to tamp down on instabilities and keep it in reasonable values
-    if(D[cell->self()] > 1.0) D[cell->self()] = 1.0;
-    if(D[cell->self()] < -1.0) D[cell->self()] = -1.0;
-  }
-}
-
-
-
-
 
 /* Interpolate the velocity onto an arbitrary point
    A bit complicated*/
@@ -335,8 +216,8 @@ inline double ConvectionSimulator::evaluate_temperature(const Point &p)
   return temp;
 }
 
-/* Interpolate the composition onto an arbitrary point. */
-inline double ConvectionSimulator::evaluate_composition(const Point &p)
+/* Interpolate the vorticity onto an arbitrary point. */
+inline double ConvectionSimulator::evaluate_vorticity(const Point &p)
 {
   if (p.r < 0.0 || p.r > grid.lr ) return 0.0;
 
@@ -346,11 +227,11 @@ inline double ConvectionSimulator::evaluate_composition(const Point &p)
   double local_r = ( p.r - cell->location().r )/grid.dr;
 
   if (cell->at_top_boundary() )
-    comp = linear_interp_2d( local_theta, local_r, C[cell->self()], C[cell->right()],
-                             C[cell->self()], C[cell->right()]);
+    comp = linear_interp_2d( local_theta, local_r, V[cell->self()], V[cell->right()],
+                             V[cell->self()], V[cell->right()]);
   else
-    comp = linear_interp_2d( local_theta, local_r, C[cell->up()], C[cell->upright()],
-                             C[cell->self()], C[cell->right()]);
+    comp = linear_interp_2d( local_theta, local_r, V[cell->up()], V[cell->upright()],
+                             V[cell->self()], V[cell->right()]);
 
   return comp;
 }
@@ -361,9 +242,9 @@ void ConvectionSimulator::semi_lagrangian_advect_temperature()
   semi_lagrangian_advect( field );
 }
 
-void ConvectionSimulator::semi_lagrangian_advect_composition()
+void ConvectionSimulator::semi_lagrangian_advect_vorticity()
 {
-  advection_field field = composition;
+  advection_field field = vorticity;
   semi_lagrangian_advect( field );
 }
 
@@ -440,20 +321,20 @@ void ConvectionSimulator::semi_lagrangian_advect( const advection_field field )
     }
     if (field == temperature)
       scratch[cell->self()] = evaluate_temperature(takeoff_point);  //Store the temperature we found
-    else if (field == composition)
-      scratch[cell->self()] = evaluate_composition(takeoff_point);  //Store the composition we found
+    else if (field == vorticity)
+      scratch[cell->self()] = evaluate_vorticity(takeoff_point);  //Store the vorticity we found
   }
 
-  //Copy the scratch vector into the temperature or composition vector.
+  //Copy the scratch vector into the temperature or vorticity vector.
   if (field == temperature)
     for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
       T[cell->self()] = scratch[cell->self()];
-  else if (field == composition)
+  else if (field == vorticity)
     for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-      C[cell->self()] = scratch[cell->self()];
+      V[cell->self()] = scratch[cell->self()];
 }
 
-/* Solve the diffusion equation implicitly with reverse Euler.
+/* Solve the temperature diffusion equation implicitly with reverse Euler.
    I do the x and y direction separately, with the x direction
    done spectrally using FFTs, and the y direction with finite
    differences, solving the resulting tridiagonal system using
@@ -470,22 +351,52 @@ void ConvectionSimulator::diffuse_temperature()
   }
 
   //Execute the forward fourier transform
-  fftw_execute(dft_diffusion);  //X direction
+  fftw_execute(dft_temperature_diffusion);  //X direction
 
   #pragma omp parallel for
   for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
-    diffusion_matrices[l]->solve( T_spectral+l, grid.ntheta, scratch1_spectral+l);
+    temperature_diffusion_matrices[l]->solve( T_spectral+l, grid.ntheta, scratch1_spectral+l);
 
   //Execute the inverse Fourier transform
-  fftw_execute(idft_diffusion);  //X direction
+  fftw_execute(idft_temperature_diffusion);  //X direction
 
   //Renormalize
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     T[cell->self()] = scratch[cell->self()]/grid.ntheta;
 }
 
+/* Solve the vorticity diffusion equation implicitly with reverse Euler.
+   I do the x and y direction separately, with the x direction
+   done spectrally using FFTs, and the y direction with finite
+   differences, solving the resulting tridiagonal system using
+   the O(N) Thomas algorithm. */
+void ConvectionSimulator::diffuse_vorticity()
+{
+  //Apply boundary conditions
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    if (cell->at_top_boundary())
+      V[cell->self()] = 0.0;
+    else if (cell->at_bottom_boundary())
+      V[cell->self()] = 0.0;
+  }
 
-void ConvectionSimulator::setup_diffusion_problem()
+  //Execute the forward fourier transform
+  fftw_execute(dft_vorticity_diffusion);  //X direction
+
+  #pragma omp parallel for
+  for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
+    vorticity_diffusion_matrices[l]->solve( T_spectral+l, grid.ntheta, scratch1_spectral+l);
+
+  //Execute the inverse Fourier transform
+  fftw_execute(idft_vorticity_diffusion);  //X direction
+
+  //Renormalize
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    V[cell->self()] = scratch[cell->self()]/grid.ntheta;
+}
+
+void ConvectionSimulator::setup_temperature_diffusion_problem()
 {
   //Setup the tridiagonal matrices in the y direction
   double *upper_diag = new double[grid.nr];
@@ -515,7 +426,7 @@ void ConvectionSimulator::setup_diffusion_problem()
        diag[i] = 1. + 2.*dt/dr/dr + factor*dt/r/r;
      }
 
-     diffusion_matrices[l]->initialize(lower_diag, diag, upper_diag);
+     temperature_diffusion_matrices[l]->initialize(lower_diag, diag, upper_diag);
      delete[] diag;
   }
 
@@ -527,10 +438,62 @@ void ConvectionSimulator::setup_diffusion_problem()
 
   //transform in the x direction with a full dft
   n[0] = grid.ntheta; stride = 1; dist = grid.ntheta; howmany = grid.nr;
-  dft_diffusion = fftw_plan_many_dft_r2c(1, n, howmany, T, NULL, stride, dist,
+  dft_temperature_diffusion = fftw_plan_many_dft_r2c(1, n, howmany, T, NULL, stride, dist,
                                          reinterpret_cast<fftw_complex*>(T_spectral),
                                          NULL, stride, dist, FFTW_ESTIMATE);
-  idft_diffusion = fftw_plan_many_dft_c2r(1, n, howmany,
+  idft_temperature_diffusion = fftw_plan_many_dft_c2r(1, n, howmany,
+                                          reinterpret_cast<fftw_complex*>(scratch1_spectral),
+                                          NULL, stride, dist, scratch, NULL,
+                                          stride, dist, FFTW_ESTIMATE);
+
+}
+
+void ConvectionSimulator::setup_vorticity_diffusion_problem()
+{
+  //Setup the tridiagonal matrices in the y direction
+  double *upper_diag = new double[grid.nr];
+  double *lower_diag = new double[grid.nr];
+
+  const double dr = grid.dr;
+  //Upper and lower diagonals are the same for each frequency
+  for( unsigned int i=0; i < grid.nr; ++i )
+  {
+    const double r = grid.r_inner + i*dr;
+    upper_diag[i] = -dt/dr/dr * (1. + 0.5*dr/r) * Pr;
+    lower_diag[i] = -dt/dr/dr * (1. - 0.5*dr/r) * Pr;
+  }
+  upper_diag[0] = 0.0;  //fix for lower B.C.
+  lower_diag[grid.nr-1] = 0.0; //fix for upper B.C.
+
+  //Diagonals include a term for the frequency in the x-direction
+  #pragma omp parallel for
+  for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
+  {
+     double factor = (l*l);
+     double *diag = new double[grid.nr];
+     diag[0] = 1.0; diag[grid.nr-1] = 1.0;
+     for (unsigned int i=1; i<grid.nr-1; ++i)
+     {
+       const double r = grid.r_inner + i*dr;
+       diag[i] = (1. + 2.*dt/dr/dr + factor*dt/r/r) * Pr;
+     }
+
+     vorticity_diffusion_matrices[l]->initialize(lower_diag, diag, upper_diag);
+     delete[] diag;
+  }
+
+  delete[] upper_diag;
+  delete[] lower_diag;
+
+  int n[1];
+  int stride, dist, howmany;
+
+  //transform in the x direction with a full dft
+  n[0] = grid.ntheta; stride = 1; dist = grid.ntheta; howmany = grid.nr;
+  dft_vorticity_diffusion = fftw_plan_many_dft_r2c(1, n, howmany, V, NULL, stride, dist,
+                                         reinterpret_cast<fftw_complex*>(V_spectral),
+                                         NULL, stride, dist, FFTW_ESTIMATE);
+  idft_vorticity_diffusion = fftw_plan_many_dft_c2r(1, n, howmany,
                                           reinterpret_cast<fftw_complex*>(scratch1_spectral),
                                           NULL, stride, dist, scratch, NULL,
                                           stride, dist, FFTW_ESTIMATE);
@@ -540,7 +503,7 @@ void ConvectionSimulator::setup_diffusion_problem()
 /* Setup the stokes solve with the stream function formulation.
    We assemble the vector that stores the frequencies of the
    eigenmodes, as well as tell FFTW how to do the transforms */
-void ConvectionSimulator::setup_stokes_problem()
+void ConvectionSimulator::setup_poisson_problem()
 {
   double *upper_diag = new double[grid.nr];
   double *diag = new double[grid.nr];
@@ -566,7 +529,7 @@ void ConvectionSimulator::setup_stokes_problem()
        diag[i] = -2./dr/dr - factor/r/r;
      }
 
-     stokes_matrices[l]->initialize(lower_diag, diag, upper_diag);
+     poisson_matrices[l]->initialize(lower_diag, diag, upper_diag);
   }
 
   delete[] upper_diag;
@@ -578,10 +541,10 @@ void ConvectionSimulator::setup_stokes_problem()
 
   //transform in the x direction with a full dft
   n[0] = grid.ntheta; stride = 1; dist = grid.ntheta; howmany = grid.ny;
-  dft_stokes = fftw_plan_many_dft_r2c(1, n, howmany, curl_density, NULL, stride, dist,
-                                      reinterpret_cast<fftw_complex*>(curl_density_spectral),
+  dft_poisson = fftw_plan_many_dft_r2c(1, n, howmany, V, NULL, stride, dist,
+                                      reinterpret_cast<fftw_complex*>(V_spectral),
                                       NULL, stride, dist, FFTW_ESTIMATE);
-  idft_stokes = fftw_plan_many_dft_c2r(1, n, howmany,
+  idft_poisson = fftw_plan_many_dft_c2r(1, n, howmany,
                                        reinterpret_cast<fftw_complex*>(scratch2_spectral),
                                        NULL, stride, dist, scratch, NULL,
                                        stride, dist, FFTW_ESTIMATE);
@@ -609,69 +572,29 @@ double ConvectionSimulator::nusselt_number()
 }
 
 
-//The curl of the temperature is what is relevant for the stream
-//function calculation.  This calculates that curl.
-void ConvectionSimulator::assemble_curl_density_vector()
+void ConvectionSimulator::assemble_vorticity_source_vector()
 {
-  //Assemble curl_density vector
-  if (include_composition)
+  #pragma omp parallel for
+  for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
   {
-    #pragma omp parallel for
-    for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
-    {
-      RegularGrid::iterator cell(cell_index, grid);
-      const double r = cell->radius();
-      double dTdtheta, dCdtheta;
-
-      if(cell->at_bottom_boundary() || cell->at_top_boundary())
-      {
-        dTdtheta = 0.0;
-        dCdtheta = 0.0;
-      }
-      else
-      {
-        dTdtheta = (T[cell->right()]-T[cell->left()])/2./grid.dtheta;
-        dCdtheta = (C[cell->right()]-C[cell->left()])/2./grid.dtheta;
-      }
-
-      curl_density[cell->self()] = Ra*( dTdtheta - buoyancy_number * dCdtheta )/r;
-    }
-  }
-  else
-  {
-    #pragma omp parallel for
-    for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
-    {
-      RegularGrid::iterator cell(cell_index, grid);
-      const double r = cell->radius();
-      if(cell->at_bottom_boundary() || cell-> at_top_boundary())
-        curl_density[cell->self()] = 0.0;
-      else
-        curl_density[cell->self()] = Ra*(T[cell->right()] - T[cell->left()])
-                                   /r/2.0/grid.dtheta;
-    }
+    RegularGrid::iterator cell(cell_index, grid);
+    const double r = cell->radius();
   }
 }
 
 
 /* Actually solve the biharmonic equation for the Stokes system.*/
-void ConvectionSimulator::solve_stokes()
+void ConvectionSimulator::solve_poisson()
 {
-  //Come up with the RHS of the spectral solve
-  assemble_curl_density_vector();
-
   //Execute the forward fourier transform
-  fftw_execute(dft_stokes);  //X direction
+  fftw_execute(dft_poisson);  //X direction
 
   #pragma omp parallel for
   for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
-  {
-     stokes_matrices[l]->solve( curl_density_spectral+l, grid.ntheta, scratch1_spectral+l);
-     stokes_matrices[l]->solve( scratch1_spectral+l, grid.ntheta, scratch2_spectral+l);
-  }
+     poisson_matrices[l]->solve( V_spectral+l, grid.ntheta, scratch1_spectral+l);
 
   //Execute the inverse Fourier transform
-  fftw_execute(idft_stokes);  //X direction
+  fftw_execute(idft_poisson);  //X direction
 
   //Renormalize
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
@@ -694,134 +617,45 @@ void ConvectionSimulator::solve_stokes()
 
     v[cell->self()] = -(stream[cell->right()] - stream[cell->left()])/2.0/grid.dtheta/r;
   }
-
-
 }
 
-void ConvectionSimulator::true_polar_wander()
+void ConvectionSimulator::update_state(double rayleigh, double ekman, double prandtl)
 {
+  const double Ra_c = 657.;
 
-  double moment_of_inertia[3] = {0., 0., 0.};
-  double omega[2] = { std::cos(spin), std::sin(spin) };
+  Ra = rayleigh;
+  Ek = ekman;
+  Pr = prandtl;
 
-  //First, calculate the moment of inertia tensor
-  for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    double density;
-    if (include_composition)
-      density = -(T[cell->self()] - buoyancy_number * C[cell->self()] );
-    else
-      density = -T[cell->self()];
-
-    //The TPW calculation can go wonky when the temperature gets
-    //cold enough that the sign changes. Not really sure what is
-    //going on at the moment, but this fixes it
-    density = dmin(density, 0.0);
-
-    const double r = cell->radius();
-    const double theta = cell->location().theta;
-    const double x = r * std::cos(theta);
-    const double y = r * std::sin(theta);
-    const double volume = r * grid.dr * grid.dtheta;
-    moment_of_inertia[0] += density * y * y * volume; // E_11
-    moment_of_inertia[1] += density * x * x * volume; // E_22
-    moment_of_inertia[2] -= density * x * y * volume; // E_21 E12
-  }
-
-  //Not strictly necessary, but doesn't hurt to subtract the trace
-  double reference_moment = (moment_of_inertia[0]+moment_of_inertia[1])/2.;
-  moment_of_inertia[0] -= reference_moment;
-  moment_of_inertia[1] -= reference_moment;
-
-  double omega_dot[2];
-  double E_dot_omega[2];
-  double omega_dot_E_dot_omega_omega[2];
-
-  //Break up the advectin into a bunch of small forward Euler steps.
-  //This is way inefficient, but overall not the most expensive thing
-  //in the model, so probably not a big deal.
-  //TODO: figure out a better way to timestep the nonlinear ODE
-  unsigned int n_euler_steps=100;
-  double small_dt = dt/n_euler_steps;
-  for (unsigned int i=0; i<n_euler_steps; ++i)
-  {
-    //Compute rotational stress
-    E_dot_omega[0] = moment_of_inertia[0]*omega[0] + moment_of_inertia[2]*omega[1];
-    E_dot_omega[1] = moment_of_inertia[2]*omega[0] + moment_of_inertia[1]*omega[1];
-    omega_dot_E_dot_omega_omega[0] = (omega[0]*E_dot_omega[0] + omega[1]*E_dot_omega[1])*omega[0];
-    omega_dot_E_dot_omega_omega[1] = (omega[0]*E_dot_omega[0] + omega[1]*E_dot_omega[1])*omega[1];
-
-    double Fr = 0.003;
-    double factor = 2./19.; //Tuning factor to make the rate look good.
-
-    omega_dot[0] = factor * Ra/Fr * ( E_dot_omega[0] - omega_dot_E_dot_omega_omega[0] );
-    omega_dot[1] = factor * Ra/Fr * ( E_dot_omega[1] - omega_dot_E_dot_omega_omega[1] );
-
-    omega[0] += omega_dot[0]*small_dt;
-    omega[1] += omega_dot[1]*small_dt;
-    double omega_norm = std::sqrt(omega[0]*omega[0]+omega[1]*omega[1]);
-    omega[0]/=omega_norm;
-    omega[1]/=omega_norm;
-  }
-
-  spin = std::atan2( omega[1], omega[0] );
-}
-
-void ConvectionSimulator::update_state(double rayleigh)
-{
-  double Ra_c = 657.;  //critical rayleigh number
-  double length_scale = std::pow(rayleigh/2./Ra_c, -1./3.)*grid.lr;  //calculate a provisional length scale
-
-  //The resolution basically sets the maximum Ra we can use.  Estimate the minimum length scale,
-  //and if that is smaller than the resolution, cap the Rayleigh number.
-  const double boundary_layer_cells = 4.;  //grid cells per boundary layer
-  if (length_scale < boundary_layer_cells *grid.dr)
-    Ra = 2.*Ra_c*std::pow( grid.lr/boundary_layer_cells/grid.dr, 3.0);
-  else Ra = rayleigh;
-
-  length_scale = std::pow(Ra/2./Ra_c, -1./3.)*grid.lr;
+  const double length_scale = std::pow(Ra/2./Ra_c, -1./3.)*grid.lr;
   const double Nu = std::pow(Ra/Ra_c/2., 1./3.) / 2.;  //Nusselt
   const double velocity_scale = std::sqrt( Ra * Nu );
   const double cfl = dmin(grid.dr, grid.r_inner*grid.dtheta)/velocity_scale;
 
   //Estimate other state properties based on simple isoviscous scalings
   dt = cfl * 20.0; //Roughly 10x CFL, thanks to semi-lagrangian
+  std::cout<<"DT: "<<dt<<std::endl;
   heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
   heat_source = velocity_scale/grid.lr*2.; //Heat a blob of order the ascent time for thta blob
-  composition_source_radius = grid.lr/10.; //Size of compositional blob
-  composition_source=heat_source; //Strength of compositional reaction
+  vorticity_source_radius = grid.lr/10.; //Size of vorticity blob
+  vorticity_strength=heat_source; //Strength of vorticity addition
 
-  setup_diffusion_problem();  //need to recompute the auxiliary vectors for the diffusion problem
+  setup_temperature_diffusion_problem();  //need to recompute the auxiliary vectors for the diffusion problem
+  setup_vorticity_diffusion_problem();  //need to recompute the auxiliary vectors for the diffusion problem
 
 }
-
-double ConvectionSimulator::spin_angle() const
-{
-  return spin;
-}
-
 
 double ConvectionSimulator::rayleigh_number() const
 {
   return Ra;
 }
 
-double ConvectionSimulator::seismometer_reading() const
+double ConvectionSimulator::ekman_number() const
 {
-  return D[grid.cell_id(seismometer_location)];
+  return Ek;
 }
 
-void ConvectionSimulator::seismometer_position( double &theta, double&r) const
+double ConvectionSimulator::prandtl_number() const
 {
-  theta = seismometer_location.theta;
-  r = seismometer_location.r;
-}
-
-
-double ConvectionSimulator::timescale() const
-{
-  double Ra_c = 657.;  //critical rayleigh number
-  const double Nu = std::pow(Ra/Ra_c/2., 1./3.) / 2.;  //Nusselt
-  const double velocity_scale = std::sqrt( Ra * Nu );
-  return grid.lr/velocity_scale; //Approximately the ascent time for a plume
+  return Pr;
 }

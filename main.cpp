@@ -16,13 +16,6 @@
     BEHAVIOR OF THE SIMULATION.
 *********************************************/
 
-//Whether to include a chemical field.
-//The simulation will be faster without an additional advected field.
-bool include_composition = false;
-
-//Whether to do TPW calculation
-bool include_tpw = false;
-
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
 //as well as performance.
@@ -33,10 +26,6 @@ const unsigned int nr = 128;
 //is set by the inner radius, where the outer
 //radius is assumed to be 1.0
 const double r_inner = 0.5;
-
-//Render the simulation flattened, as if
-//acting under centrifugal forces.
-const double flattening = 0.0;
 
 /*********************************************
     PROBABLY DON'T MODIFY THE REST
@@ -59,20 +48,12 @@ int click_state = 0;
 //Location of heat-adding, chemistry adding, or earthquake generation
 double click_theta, click_r;
 
-//Whether we are in earthquake mode
-bool seismic_mode = false;
-
-//Whether to solve the advection-diffusion equation
-bool advection_diffusion = true;
-
 //Whether to draw composition or temperature fields
-bool draw_composition = false;
+bool draw_vorticity = false;
 
 //Global solver
-ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
-Axis axis(simulator);
+ConvectionSimulator simulator(r_inner, ntheta,nr);
 Core core(simulator);
-Seismograph seismograph(simulator);
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -85,22 +66,6 @@ inline void compute_simulator_location( const float x, const float y, float *the
   //Scale the click coordinates so that they are
   //in the correct place if the domain is elliptical
   float xpp = x, ypp = y;
-  if (flattening > 1.e-2)
-  {
-    //Rotate the click position so that the ellipse
-    //corresponds to the Cartesian axes.
-    float rot_angle = simulator.spin_angle() - M_PI/2.;
-    float xp = x * std::cos(-rot_angle) - y * std::sin(-rot_angle);
-    float yp = x * std::sin(-rot_angle) + y * std::cos(-rot_angle);
-
-    //Do the inverse flattening
-    yp = yp / (1.-flattening);
-    xp = xp;
-
-    //Rotate back to the initial angle
-    xpp = xp * std::cos(rot_angle) - yp * std::sin(rot_angle);
-    ypp = xp * std::sin(rot_angle) + yp * std::cos(rot_angle);
-  }
   *theta = std::atan2( ypp, xpp );
   *theta = (*theta < 0. ? *theta + 2.*M_PI : *theta );
   *r = 2.*std::sqrt( xpp*xpp + ypp*ypp );
@@ -124,7 +89,7 @@ inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 {
   double rayleigh = simulator.rayleigh_number();
   double factor = std::pow(10.0, 1./100.* (event->y < 0 ? -1. : 1.0) );
-  simulator.update_state( rayleigh * factor );
+  simulator.update_state( rayleigh * factor, 1., 1000. );
 }
 
 //Toggle whether to add heat, and whether it should
@@ -162,59 +127,25 @@ inline bool in_domain( const float theta, const float r )
 void timestep()
 {
   static int i=0;  //Keep track of timestep number
-  simulator.draw( include_composition && draw_composition );  //Draw to screen
+  simulator.draw( draw_vorticity );  //Draw to screen
   core.draw();
-  if (include_tpw && !seismic_mode)
-    axis.draw();
-  if (seismic_mode)
-    seismograph.draw();
 
-  //Do the convection problem if not in seismic mode
-  if( !seismic_mode )
-  {
-    //At the moment, the stokes solve is not the limiting factor,
-    //so it does not hurt to do it every timestep
-    simulator.solve_stokes();
+  simulator.solve_poisson();
 
-    //Add heat if the user is clicking
-    if(click_state != 0 && ( (include_composition && !draw_composition)||(!include_composition)) && in_domain(click_theta, click_r) )
-      simulator.add_heat(click_theta, click_r, (click_state==1 ? true : false));
-    if(click_state != 0 && include_composition && draw_composition && in_domain(click_theta, click_r) )
-      simulator.add_composition(click_theta, click_r);
+  //Add heat if the user is clicking
+  if(click_state != 0 && in_domain(click_theta, click_r) )
+    simulator.add_heat(click_theta, click_r, (click_state==1 ? true : false));
+  //Advect temperature and composition fields
+  simulator.semi_lagrangian_advect_temperature();
+  simulator.semi_lagrangian_advect_vorticity();
 
-    //The user can do some neat painting by turning off advection and diffusion
-    if (advection_diffusion)
-    {
-      //Advect temperature and composition fields
-      simulator.semi_lagrangian_advect_temperature();
-      if (include_composition)
-        simulator.semi_lagrangian_advect_composition();
+  //Diffuse temperature and vorticity
+  simulator.diffuse_temperature();
+  simulator.diffuse_vorticity();
 
-      //Diffuse temperature
-      simulator.diffuse_temperature();
-    }
-
-    //Do TPW
-    if (include_tpw)
-      simulator.true_polar_wander();
-
-    //Output scaling information
-    std::cout<<"Ra: "<<std::setprecision(3)<<simulator.rayleigh_number()
-             <<"\tNu: "<<simulator.nusselt_number()<<std::endl;
-    //increment timestep
-    ++i;
-  }
-  //If we are in seismic mode
-  else
-  {
-    //Make earthquakes
-    if(click_state == 1 && in_domain(click_theta,click_r) )
-      simulator.earthquake(click_theta, click_r);
-    else if(click_state == -1 && in_domain(click_theta,click_r) )
-      simulator.place_seismometer(click_theta, click_r);
-    //Propagate waves
-    simulator.propagate_seismic_waves();
-  }
+  //increment timestep
+  ++i;
+  std::cout<<"Timestep: "<<i<<std::endl;
 }
 
 
@@ -284,9 +215,6 @@ void init()
 
     simulator.setup_opengl();
     core.setup();
-    if (include_tpw)
-      axis.setup();
-    seismograph.setup();
 }
 
 //Cleanup
@@ -294,9 +222,6 @@ void quit()
 {
     simulator.cleanup_opengl();
     core.cleanup();
-    if(include_tpw)
-      axis.cleanup();
-    seismograph.cleanup();
 
     SDL_GL_DeleteContext(context);
     SDL_Quit();
@@ -313,12 +238,8 @@ void loop()
       case SDL_QUIT:
         quit();
       case SDL_KEYDOWN:
-        if(event.key.keysym.sym == SDLK_SPACE)
-        {
-          seismic_mode = !seismic_mode;
-          simulator.clear_seismic_waves();
-          seismograph.clear_record();
-        }
+        if(event.key.keysym.sym == SDLK_TAB)
+          draw_vorticity = ! draw_vorticity;
         //Quitting should be handled by navigating to another
         //webpage or closing the browser when using, emscripten,
         //so just disable quitting on escape
@@ -326,10 +247,6 @@ void loop()
         else if(event.key.keysym.sym == SDLK_ESCAPE)
           quit();
 #endif
-        else if(event.key.keysym.sym == SDLK_TAB)
-          draw_composition = ! draw_composition;
-        else if(event.key.keysym.sym == SDLK_BACKSPACE)
-          advection_diffusion = !advection_diffusion;
         break;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:

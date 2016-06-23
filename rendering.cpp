@@ -150,7 +150,7 @@ void ConvectionSimulator::cleanup_opengl()
 #endif //LEGACY_OPENGL
 }
 
-void ConvectionSimulator::draw( bool draw_composition )
+void ConvectionSimulator::draw( bool draw_vorticity )
 {
   double displacement_factor = 1.0;
 #ifndef LEGACY_OPENGL
@@ -160,14 +160,6 @@ void ConvectionSimulator::draw( bool draw_composition )
   const short coordinates_per_vertex = 2;
   const unsigned long n_triangles = grid.ntheta * (grid.nr-1) * triangles_per_quad;
   const unsigned long n_vertices = grid.ntheta * grid.nr;
-
-  //Parameters for ellipticity, if required.
-  //angle is the angle of the semimajor axis, which
-  //defaults to the spin axis+90 degrees.
-  //a and b are the semimajor and semiminor axes.
-  const float angle = this->spin_angle() + M_PI/2.;
-  const float a = 1.0f;
-  const float b = 1.0f-flattening;
 
   unsigned long v=0, i=0;
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
@@ -180,19 +172,14 @@ void ConvectionSimulator::draw( bool draw_composition )
     //using an epicycle on the normal rendering.
     //TODO: offsetting the epicycle seems to work with 2*angle.
     //Why not 1*angle? Figure this out.
-    vertices[v + 0] = r*(a+b)/2. * std::cos(theta) + r*(a-b)/2. * std::cos(-theta+ 2.*angle);
-    vertices[v + 1] = r*(a+b)/2. * std::sin(theta) + r*(a-b)/2. * std::sin(-theta+ 2.*angle);
+    vertices[v + 0] = r * std::cos(theta);
+    vertices[v + 1] = r * std::sin(theta);
 
     color c;
-    if (draw_composition)
-      c = hot(C[cell->self()]);
+    if (draw_vorticity)
+      c = hot(V[cell->self()]);
     else
       c = hot(T[cell->self()]);
-
-    double displacement = displacement_factor * D[cell->self()]; //Perturb color if there is displacement
-    c.R += displacement;
-    c.G += displacement;
-    c.B += displacement;
 
     vertex_colors[i + 0] = c.R;
     vertex_colors[i + 1] = c.G;
@@ -260,13 +247,6 @@ void ConvectionSimulator::draw( bool draw_composition )
     color c_s = hot(T[cell->self()]);
     color c_u = hot(T[cell->up()]);
 
-    c_s.R += displacement_factor*D[cell->self()];
-    c_s.G += displacement_factor*D[cell->self()];
-    c_s.B += displacement_factor*D[cell->self()];
-    c_u.R += displacement_factor*D[cell->up()];
-    c_u.G += displacement_factor*D[cell->up()];
-    c_u.B += displacement_factor*D[cell->up()];
-
     const float r = grid.r_inner + (cell->yindex()*DY * (1.0f - grid.r_inner) );
     const float r_up = grid.r_inner + ((cell->yindex()+1)*DY * (1.0f - grid.r_inner) );
     const float theta = cell->xindex()*DX;
@@ -280,23 +260,16 @@ void ConvectionSimulator::draw( bool draw_composition )
     if (cell->at_right_boundary() )
     {
       color c_s, c_u;
-      if (draw_composition)
+      if (draw_vorticity)
       {
-        c_s = hot(C[cell->self()]);
-        c_u = hot(C[cell->up()]);
+        c_s = hot(V[cell->self()]);
+        c_u = hot(V[cell->up()]);
       }
       else
       {
         c_s = hot(T[cell->self()]);
         c_u = hot(T[cell->up()]);
       }
-
-      c_s.R += displacement_factor*D[cell->right()];
-      c_s.G += displacement_factor*D[cell->right()];
-      c_s.B += displacement_factor*D[cell->right()];
-      c_u.R += displacement_factor*D[cell->upright()];
-      c_u.G += displacement_factor*D[cell->upright()];
-      c_u.B += displacement_factor*D[cell->upright()];
 
       const float r = grid.r_inner + (cell->yindex()*DY * (1.0f - grid.r_inner) );
       const float r_up = grid.r_inner + ((cell->yindex()+1)*DY * (1.0f - grid.r_inner) );

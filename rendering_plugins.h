@@ -5,7 +5,6 @@
 
 extern const double r_inner;
 extern const unsigned int nr, ntheta;
-extern const double flattening;
 
 //Useful constants
 static const short vertices_per_triangle = 3;
@@ -53,57 +52,6 @@ class Core : RenderingPlugin
     GLuint plugin_vertices;
     GLuint plugin_vertex_colors;
     GLuint plugin_triangle_vertex_indices;
-    GLint plugin_attribute_coord2d;
-    GLint plugin_attribute_v_color;
-};
-
-class Axis : RenderingPlugin
-{
-  public:
-    Axis( const ConvectionSimulator &sim ) : RenderingPlugin(sim) {}
-    void setup();
-    void draw();
-    void cleanup();
-  private:
-    //Data for rendering with OpenGL
-    GLfloat* vertices;
-    GLfloat* vertex_colors;
-    GLuint* triangle_vertex_indices;
-
-    GLuint plugin_program;
-    GLuint plugin_vertices;
-    GLuint plugin_vertex_colors;
-    GLuint plugin_triangle_vertex_indices;
-    GLint plugin_attribute_coord2d;
-    GLint plugin_attribute_v_color;
-};
-
-class Seismograph : RenderingPlugin
-{
-  public:
-    Seismograph( const ConvectionSimulator &sim ) : RenderingPlugin(sim),
-                                                    n_lines(1000),
-                                                    n_vertices(n_lines+1 /*endpoint*/ + vertices_per_triangle /*seismometer*/)
-                                                    {}
-    void setup();
-    void draw();
-    void cleanup();
-
-    void clear_record();
-
-  private:
-    const unsigned int n_lines;
-    const unsigned int n_vertices;
-
-    //Data for rendering with OpenGL
-    GLfloat* vertices;
-    GLfloat* vertex_colors;
-    GLuint* line_vertex_indices;
-
-    GLuint plugin_program;
-    GLuint plugin_vertices;
-    GLuint plugin_vertex_colors;
-    GLuint plugin_line_vertex_indices;
     GLint plugin_attribute_coord2d;
     GLint plugin_attribute_v_color;
 };
