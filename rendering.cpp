@@ -161,14 +161,14 @@ void ConvectionSimulator::draw( bool draw_vorticity )
   const unsigned long n_triangles = grid.ntheta * (grid.nr-1) * triangles_per_quad;
   const unsigned long n_vertices = grid.ntheta * grid.nr;
 
-  double max_V = 0.;
-  double max_S = 0.;
+  double max_V = -1.e99;
+  double min_V = 1.e99;
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    if(std::abs(V[cell->self()]) > max_V)
-      max_V = std::abs(V[cell->self()]);
-    if(std::abs(stream[cell->self()]) > max_S)
-      max_S = std::abs(stream[cell->self()]);
+    if(V[cell->self()] > max_V)
+      max_V = V[cell->self()];
+    if(V[cell->self()] < min_V)
+      min_V = V[cell->self()];
   }
 
   unsigned long v=0, i=0;
@@ -187,7 +187,7 @@ void ConvectionSimulator::draw( bool draw_vorticity )
 
     color c;
     if (draw_vorticity)
-      c = hot(V[cell->self()]);
+      c = hot(V[cell->self()]/(max_V-min_V)/2. + 0.5);
     else
       c = hot(T[cell->self()]);
 

@@ -47,7 +47,7 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
   }
 
   //Initialize the state
-  update_state(1.e6, 1.0, 1.0e-8);
+  update_state(1.e6, 1.0e-8, 100.1);
   initialize_temperature();
   initialize_vorticity();
 
@@ -167,7 +167,7 @@ void ConvectionSimulator::generate_vorticity()
     {
       RegularGrid::iterator cell(cell_index, grid);
       const double r = cell->radius();
-      const double curl_T = (T[cell->right()]-T[cell->left()])/2./grid.dtheta/r;
+      const double curl_T = -(T[cell->right()]-T[cell->left()])/2./grid.dtheta/r;
       V[cell->self()] += Pr*Ra*curl_T;
     }
 }
@@ -596,15 +596,6 @@ void ConvectionSimulator::assemble_vorticity_source_vector()
 /* Solve the Poisson equation for the stream function.*/
 void ConvectionSimulator::solve_poisson()
 {
-  //Apply boundary conditions
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    if (cell->at_top_boundary())
-      V[cell->self()] = 0.0;
-    else if (cell->at_bottom_boundary())
-      V[cell->self()] = 0.0;
-  }
-
   //Execute the forward fourier transform
   fftw_execute(dft_poisson);  //X direction
 
@@ -652,9 +643,9 @@ void ConvectionSimulator::update_state(double rayleigh, double ekman, double pra
   const double cfl = dmin(grid.dr, grid.r_inner*grid.dtheta)/velocity_scale;
 
   //Estimate other state properties based on simple isoviscous scalings
-  dt = cfl * 1.0; //Roughly 10x CFL, thanks to semi-lagrangian
+  dt = cfl * .00001; //Roughly 10x CFL, thanks to semi-lagrangian
   heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
-  heat_source = velocity_scale/grid.lr*2.; //Heat a blob of order the ascent time for thta blob
+  heat_source = 1.*velocity_scale/grid.lr*2.; //Heat a blob of order the ascent time for thta blob
   vorticity_source_radius = grid.lr/10.; //Size of vorticity blob
   vorticity_strength=heat_source; //Strength of vorticity addition
 

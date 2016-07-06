@@ -89,7 +89,7 @@ inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 {
   double rayleigh = simulator.rayleigh_number();
   double factor = std::pow(10.0, 1./100.* (event->y < 0 ? -1. : 1.0) );
-  simulator.update_state( rayleigh * factor, 1000., 1. );
+  simulator.update_state( rayleigh * factor, 1000., 1.0 );
 }
 
 //Toggle whether to add heat, and whether it should
