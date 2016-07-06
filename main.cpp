@@ -89,7 +89,7 @@ inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 {
   double rayleigh = simulator.rayleigh_number();
   double factor = std::pow(10.0, 1./100.* (event->y < 0 ? -1. : 1.0) );
-  simulator.update_state( rayleigh * factor, 1., 1000. );
+  simulator.update_state( rayleigh * factor, 1000., 1. );
 }
 
 //Toggle whether to add heat, and whether it should
@@ -133,8 +133,10 @@ void timestep()
   simulator.solve_poisson();
 
   //Add heat if the user is clicking
-  if(click_state != 0 && in_domain(click_theta, click_r) )
+  if(click_state != 0 && !draw_vorticity && in_domain(click_theta, click_r) )
     simulator.add_heat(click_theta, click_r, (click_state==1 ? true : false));
+  if(click_state != 0 && draw_vorticity && in_domain(click_theta, click_r) )
+    simulator.add_vorticity(click_theta, click_r, (click_state==1 ? true : false));
   simulator.generate_vorticity();
   //Advect temperature and composition fields
   simulator.semi_lagrangian_advect_temperature();
@@ -146,7 +148,7 @@ void timestep()
 
   //increment timestep
   ++i;
-  std::cout<<"Timestep: "<<i<<std::endl;
+  std::cout<<"Ra: "<<simulator.rayleigh_number()<<std::endl;
 }
 
 

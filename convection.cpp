@@ -154,9 +154,9 @@ void ConvectionSimulator::add_vorticity(double theta, double r, bool ccw)
   #pragma omp parallel for
   for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
   {
-    //RegularGrid::iterator cell(cell_index, grid);
-    //double vorticity = V[cell->self()] + react(p, cell->location())*dt;
-    //V[cell->self()] = vorticity;
+    RegularGrid::iterator cell(cell_index, grid);
+    double vorticity = V[cell->self()] + heat(p, cell->location())*dt;
+    V[cell->self()] = vorticity;
   }
 }
 
@@ -396,7 +396,7 @@ void ConvectionSimulator::diffuse_vorticity()
 
   #pragma omp parallel for
   for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
-    vorticity_diffusion_matrices[l]->solve( T_spectral+l, grid.ntheta, scratch1_spectral+l);
+    vorticity_diffusion_matrices[l]->solve( V_spectral+l, grid.ntheta, scratch1_spectral+l);
 
   //Execute the inverse Fourier transform
   fftw_execute(idft_vorticity_diffusion);  //X direction
@@ -593,9 +593,18 @@ void ConvectionSimulator::assemble_vorticity_source_vector()
 }
 
 
-/* Actually solve the biharmonic equation for the Stokes system.*/
+/* Solve the Poisson equation for the stream function.*/
 void ConvectionSimulator::solve_poisson()
 {
+  //Apply boundary conditions
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    if (cell->at_top_boundary())
+      V[cell->self()] = 0.0;
+    else if (cell->at_bottom_boundary())
+      V[cell->self()] = 0.0;
+  }
+
   //Execute the forward fourier transform
   fftw_execute(dft_poisson);  //X direction
 
@@ -609,9 +618,6 @@ void ConvectionSimulator::solve_poisson()
   //Renormalize
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     stream[cell->self()] = scratch[cell->self()]/grid.ntheta;
-
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    std::cout<<stream[cell->self()]<<std::endl;
 
   //Come up with the velocities by taking finite differences of the stream function.
   //I could also take these derivatives in spectral space, but that would mean
@@ -646,7 +652,7 @@ void ConvectionSimulator::update_state(double rayleigh, double ekman, double pra
   const double cfl = dmin(grid.dr, grid.r_inner*grid.dtheta)/velocity_scale;
 
   //Estimate other state properties based on simple isoviscous scalings
-  dt = cfl * 20.0; //Roughly 10x CFL, thanks to semi-lagrangian
+  dt = cfl * 1.0; //Roughly 10x CFL, thanks to semi-lagrangian
   heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
   heat_source = velocity_scale/grid.lr*2.; //Heat a blob of order the ascent time for thta blob
   vorticity_source_radius = grid.lr/10.; //Size of vorticity blob

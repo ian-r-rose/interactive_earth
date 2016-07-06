@@ -187,10 +187,9 @@ void ConvectionSimulator::draw( bool draw_vorticity )
 
     color c;
     if (draw_vorticity)
-      c = hot((V[cell->self()]/max_V + 1.) /2.);
+      c = hot(V[cell->self()]);
     else
-      //c = hot(T[cell->self()]);
-      c = hot((stream[cell->self()]/max_S + 1.) /2.);
+      c = hot(T[cell->self()]);
 
     vertex_colors[i + 0] = c.R;
     vertex_colors[i + 1] = c.G;
