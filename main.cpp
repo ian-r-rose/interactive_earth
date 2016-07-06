@@ -135,6 +135,7 @@ void timestep()
   //Add heat if the user is clicking
   if(click_state != 0 && in_domain(click_theta, click_r) )
     simulator.add_heat(click_theta, click_r, (click_state==1 ? true : false));
+  simulator.generate_vorticity();
   //Advect temperature and composition fields
   simulator.semi_lagrangian_advect_temperature();
   simulator.semi_lagrangian_advect_vorticity();

@@ -35,7 +35,6 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
   T_spectral = new std::complex<double>[grid.ncells];
   V_spectral = new std::complex<double>[grid.ncells];
   scratch1_spectral = new std::complex<double>[grid.ncells];
-  scratch2_spectral = new std::complex<double>[grid.ncells];
 
   poisson_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.ntheta/2+1];
   temperature_diffusion_matrices = new TridiagonalMatrixSolver<std::complex<double> >*[grid.ntheta/2+1];
@@ -48,7 +47,7 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
   }
 
   //Initialize the state
-  update_state(1.e6, 1.0, 1.0);
+  update_state(1.e6, 1.0, 1.0e-8);
   initialize_temperature();
   initialize_vorticity();
 
@@ -73,7 +72,6 @@ ConvectionSimulator::~ConvectionSimulator()
   delete[] T_spectral;
   delete[] V_spectral;
   delete[] scratch1_spectral;
-  delete[] scratch2_spectral;
 
   for (unsigned int i=0; i<=grid.ntheta/2; ++i)
   {
@@ -162,6 +160,18 @@ void ConvectionSimulator::add_vorticity(double theta, double r, bool ccw)
   }
 }
 
+void ConvectionSimulator::generate_vorticity()
+{
+    #pragma omp parallel for
+    for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
+    {
+      RegularGrid::iterator cell(cell_index, grid);
+      const double r = cell->radius();
+      const double curl_T = (T[cell->right()]-T[cell->left()])/2./grid.dtheta/r;
+      V[cell->self()] += Pr*Ra*curl_T;
+    }
+}
+
 /* Interpolate the velocity onto an arbitrary point
    A bit complicated*/
 Point ConvectionSimulator::evaluate_velocity(const Point &p)
@@ -221,19 +231,19 @@ inline double ConvectionSimulator::evaluate_vorticity(const Point &p)
 {
   if (p.r < 0.0 || p.r > grid.lr ) return 0.0;
 
-  double comp;
+  double vort;
   RegularGrid::iterator cell = grid.lower_left_cell(p);
   double local_theta = fast_fmod(p.theta, grid.dtheta)/grid.dtheta;
   double local_r = ( p.r - cell->location().r )/grid.dr;
 
   if (cell->at_top_boundary() )
-    comp = linear_interp_2d( local_theta, local_r, V[cell->self()], V[cell->right()],
+    vort = linear_interp_2d( local_theta, local_r, V[cell->self()], V[cell->right()],
                              V[cell->self()], V[cell->right()]);
   else
-    comp = linear_interp_2d( local_theta, local_r, V[cell->up()], V[cell->upright()],
+    vort = linear_interp_2d( local_theta, local_r, V[cell->up()], V[cell->upright()],
                              V[cell->self()], V[cell->right()]);
 
-  return comp;
+  return vort;
 }
 
 void ConvectionSimulator::semi_lagrangian_advect_temperature()
@@ -475,7 +485,7 @@ void ConvectionSimulator::setup_vorticity_diffusion_problem()
      for (unsigned int i=1; i<grid.nr-1; ++i)
      {
        const double r = grid.r_inner + i*dr;
-       diag[i] = (1. + 2.*dt/dr/dr + factor*dt/r/r) * Pr;
+       diag[i] = (1. + 2.*dt/dr/dr*Pr + factor*dt/r/r*Pr);
      }
 
      vorticity_diffusion_matrices[l]->initialize(lower_diag, diag, upper_diag);
@@ -545,7 +555,7 @@ void ConvectionSimulator::setup_poisson_problem()
                                       reinterpret_cast<fftw_complex*>(V_spectral),
                                       NULL, stride, dist, FFTW_ESTIMATE);
   idft_poisson = fftw_plan_many_dft_c2r(1, n, howmany,
-                                       reinterpret_cast<fftw_complex*>(scratch2_spectral),
+                                       reinterpret_cast<fftw_complex*>(scratch1_spectral),
                                        NULL, stride, dist, scratch, NULL,
                                        stride, dist, FFTW_ESTIMATE);
 
@@ -600,6 +610,9 @@ void ConvectionSimulator::solve_poisson()
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
     stream[cell->self()] = scratch[cell->self()]/grid.ntheta;
 
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    std::cout<<stream[cell->self()]<<std::endl;
+
   //Come up with the velocities by taking finite differences of the stream function.
   //I could also take these derivatives in spectral space, but that would mean
   //more fourier transforms, so this should be considerably cheaper.
@@ -634,7 +647,6 @@ void ConvectionSimulator::update_state(double rayleigh, double ekman, double pra
 
   //Estimate other state properties based on simple isoviscous scalings
   dt = cfl * 20.0; //Roughly 10x CFL, thanks to semi-lagrangian
-  std::cout<<"DT: "<<dt<<std::endl;
   heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
   heat_source = velocity_scale/grid.lr*2.; //Heat a blob of order the ascent time for thta blob
   vorticity_source_radius = grid.lr/10.; //Size of vorticity blob

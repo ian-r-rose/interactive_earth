@@ -92,6 +92,7 @@ class ConvectionSimulator
 
     void add_heat(double x, double y, bool hot); //Add heat at a point, with the bool indicating whether it is hot or cold
     void add_vorticity(double x, double y, bool ccw); //Add vorticity at a point, with a bool indicating counterclockwise
+    void generate_vorticity(); // Generate vorticity due to buoyancy and vortex stretching
     void semi_lagrangian_advect_temperature();  //Advect temperature through the velocity field
     void semi_lagrangian_advect_vorticity();  //Advect vorticity through the velocity field
     void diffuse_temperature(); //Diffuse temperature
