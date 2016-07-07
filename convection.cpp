@@ -31,7 +31,6 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
 
   //I actually allocate more memory than necessary for the
   //spectral vector, but this way it makes the indexing simpler
-  vorticity_source_spectral = new std::complex<double>[grid.ncells];
   T_spectral = new std::complex<double>[grid.ncells];
   V_spectral = new std::complex<double>[grid.ncells];
   scratch1_spectral = new std::complex<double>[grid.ncells];
@@ -47,7 +46,7 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
   }
 
   //Initialize the state
-  update_state(1.e6, 1.0e-8, 100.1);
+  update_state(1.e7, 1.0e-4, 1.0);
   initialize_temperature();
   initialize_vorticity();
 
@@ -68,7 +67,6 @@ ConvectionSimulator::~ConvectionSimulator()
   delete[] u;
   delete[] v;
   delete[] scratch;
-  delete[] vorticity_source_spectral;
   delete[] T_spectral;
   delete[] V_spectral;
   delete[] scratch1_spectral;
@@ -167,8 +165,17 @@ void ConvectionSimulator::generate_vorticity()
     {
       RegularGrid::iterator cell(cell_index, grid);
       const double r = cell->radius();
+
+      //vorticity due to buoyancy
       const double curl_T = -(T[cell->right()]-T[cell->left()])/2./grid.dtheta/r;
-      V[cell->self()] += Pr*Ra*curl_T*dt;
+      const double buoyancy = Pr*Ra*curl_T;
+
+      const double R = grid.r_outer * 1.25; //Larger than the computational domain
+      const double height = std::sqrt(R*R-r*r);
+      const double dw_dz = r * v[cell->self()] / height / height;
+      const double vortex_stretching = 2. * dw_dz / Ek;
+
+      V[cell->self()] += buoyancy*dt + vortex_stretching*dt;
     }
 }
 
