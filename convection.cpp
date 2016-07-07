@@ -168,7 +168,7 @@ void ConvectionSimulator::generate_vorticity()
       RegularGrid::iterator cell(cell_index, grid);
       const double r = cell->radius();
       const double curl_T = -(T[cell->right()]-T[cell->left()])/2./grid.dtheta/r;
-      V[cell->self()] += Pr*Ra*curl_T;
+      V[cell->self()] += Pr*Ra*curl_T*dt;
     }
 }
 
@@ -643,7 +643,7 @@ void ConvectionSimulator::update_state(double rayleigh, double ekman, double pra
   const double cfl = dmin(grid.dr, grid.r_inner*grid.dtheta)/velocity_scale;
 
   //Estimate other state properties based on simple isoviscous scalings
-  dt = cfl * .00001; //Roughly 10x CFL, thanks to semi-lagrangian
+  dt = cfl * 20.0; //Roughly 10x CFL, thanks to semi-lagrangian
   heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
   heat_source = 1.*velocity_scale/grid.lr*2.; //Heat a blob of order the ascent time for thta blob
   vorticity_source_radius = grid.lr/10.; //Size of vorticity blob
