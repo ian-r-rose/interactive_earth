@@ -28,6 +28,7 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
   u = new double[grid.ncells];
   v = new double[grid.ncells];
   scratch = new double[grid.ncells];
+  zonal = new double[grid.nr];
 
   //I actually allocate more memory than necessary for the
   //spectral vector, but this way it makes the indexing simpler
@@ -44,9 +45,10 @@ ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int n
     temperature_diffusion_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.nr);
     vorticity_diffusion_matrices[i] = new TridiagonalMatrixSolver<std::complex<double> >(grid.nr);
   }
+  zonal_velocity_matrix = new TridiagonalMatrixSolver<double>(grid.nr);
 
   //Initialize the state
-  update_state(1.e7, 1.0e-4, 1.0);
+  update_state(1.e10, 1.0e-5, 1.0);
   initialize_temperature();
   initialize_vorticity();
 
@@ -80,6 +82,7 @@ ConvectionSimulator::~ConvectionSimulator()
   delete[] poisson_matrices;
   delete[] vorticity_diffusion_matrices;
   delete[] temperature_diffusion_matrices;
+  delete zonal_velocity_matrix;
 
   fftw_destroy_plan(dft_temperature_diffusion);
   fftw_destroy_plan(idft_temperature_diffusion);
@@ -99,13 +102,6 @@ double ConvectionSimulator::initial_temperature(const Point &p)
   return grid.r_inner/(1.+grid.r_inner);
 }
 
-/* Functional form of initial vorticity.
-   Just start with zero.*/
-double ConvectionSimulator::initial_vorticity(const Point &p)
-{
-  return 0.0;
-}
-
 /* Loop over all the cells and set the initial temperature */
 void ConvectionSimulator::initialize_temperature()
 {
@@ -117,7 +113,10 @@ void ConvectionSimulator::initialize_temperature()
 void ConvectionSimulator::initialize_vorticity()
 {
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    V[cell->self()] = initial_vorticity(cell->location());
+    V[cell->self()] = 0.0;
+
+  for( unsigned int i=0; i<grid.nr; ++i)
+    zonal[i] = 0.0;
 }
 
 /* Given a heat source centered on p1, calculate the heating at
@@ -527,6 +526,20 @@ void ConvectionSimulator::setup_poisson_problem()
   double *lower_diag = new double[grid.nr];
 
   const double dr = grid.dr;
+  //Setup diffusion problem for the zonal velocity
+  for (unsigned int i=0; i < grid.nr; ++i)
+  {
+    const double r = grid.r_inner+i*dr;
+    upper_diag[i] = -dt/dr/dr * (1. + 0.5*dr/r) * Pr;
+    lower_diag[i] = -dt/dr/dr * (1. - 0.5*dr/r) * Pr;
+    diag[i] = (1. + 2.*dt/dr/dr*Pr - 1.*dt/r/r*Pr);
+  }
+  upper_diag[0] = 0.0;  diag[0] = 1.0; //fix for lower B.C.
+  lower_diag[grid.nr-1] = 0.0; diag[grid.nr-1] = 1.0; //fix for upper B.C.
+  zonal_velocity_matrix->initialize(lower_diag, diag, upper_diag);
+
+  //Setup poisson matrices for stream function
+  //with the non-axisymmetric velocity
   for( unsigned int i=0; i < grid.nr; ++i )
   {
     const double r = grid.r_inner + i*dr;
@@ -603,12 +616,56 @@ void ConvectionSimulator::assemble_vorticity_source_vector()
 /* Solve the Poisson equation for the stream function.*/
 void ConvectionSimulator::solve_poisson()
 {
+
+  for (unsigned int i=0; i<=grid.nr; ++i)
+  {
+    const double r = grid.r_inner + i*grid.dr;
+    const double R = grid.r_outer * 1.25; //Larger than the computational domain
+    const double height = std::sqrt(R*R-r*r);
+    zonal[i] -= std::sqrt(Ek * R) / std::pow(height, 1.5) * zonal[i] * dt;
+  }
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    const double r = cell->radius();
+    const double R = grid.r_outer * 1.25; //Larger than the computational domain
+    const double height = std::sqrt(R*R-r*r);
+    const double utheta = u[cell->self()];
+    const double ur = v[cell->self()];
+
+    //zonal[ cell->rindex() ] += utheta*ur/r/grid.ntheta*dt;
+    //if ( ur >= 0. || cell->at_top_boundary())
+    //  zonal[cell->rindex()] += (u[cell->self()]-u[cell->down()])/grid.dr*ur*dt/grid.ntheta;
+    //else if (ur <= 0. || cell->at_bottom_boundary())
+    //  zonal[cell->rindex()] += (u[cell->up()]-u[cell->self()])/grid.dr*ur*dt/grid.ntheta;
+  }
+  zonal_velocity_matrix->solve( zonal, 1, scratch);
+  double total_flow = 0.;
+  for (unsigned int i=0; i<=grid.nr; ++i)
+  {
+    zonal[i] = scratch[i];
+    total_flow -= zonal[i]*grid.dr;
+    //std::cout<<i<<"\t"<<zonal[i]<<std::endl;
+  }
+  total_flow = 1.e4;
+  //Apply boundary conditions
+  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  {
+    if (cell->at_top_boundary())
+      V[cell->self()] = total_flow;
+    else if (cell->at_bottom_boundary())
+      V[cell->self()] = 0.0;
+  }
+
   //Execute the forward fourier transform
   fftw_execute(dft_poisson);  //X direction
 
   #pragma omp parallel for
   for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
      poisson_matrices[l]->solve( V_spectral+l, grid.ntheta, scratch1_spectral+l);
+
+  for( unsigned int i=0; i < grid.nr; ++i)
+    for(unsigned int j=0; j < 1; ++j)
+      scratch1_spectral[i*grid.ntheta+j] *= 0.0;
 
   //Execute the inverse Fourier transform
   fftw_execute(idft_poisson);  //X direction
@@ -650,7 +707,7 @@ void ConvectionSimulator::update_state(double rayleigh, double ekman, double pra
   const double cfl = dmin(grid.dr, grid.r_inner*grid.dtheta)/velocity_scale;
 
   //Estimate other state properties based on simple isoviscous scalings
-  dt = cfl * 20.0; //Roughly 10x CFL, thanks to semi-lagrangian
+  dt = cfl * 50.0; //Roughly 10x CFL, thanks to semi-lagrangian
   heat_source_radius = length_scale*0.5;  //Radius of order the boundary layer thickness
   heat_source = 1.*velocity_scale/grid.lr*2.; //Heat a blob of order the ascent time for thta blob
   vorticity_source_radius = grid.lr/10.; //Size of vorticity blob

@@ -12,8 +12,6 @@ static GLint attribute_v_color;
 #endif //LEGACY_OPENGL
 
 
-extern const double flattening;
-
 void ConvectionSimulator::setup_opengl()
 {
 #ifndef LEGACY_OPENGL
@@ -166,11 +164,17 @@ void ConvectionSimulator::draw( bool draw_vorticity )
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
     if(V[cell->self()] > max_V)
-      max_V = V[cell->self()];
+      max_V = u[cell->self()];
     if(V[cell->self()] < min_V)
-      min_V = V[cell->self()];
+      min_V = u[cell->self()];
   }
-
+  for (unsigned int i=0; i<grid.nr; ++i)
+  {
+    if(zonal[i] > max_V)
+      max_V = zonal[i];
+    if(zonal[i] < min_V)
+      min_V = zonal[i];
+  }
   unsigned long v=0, i=0;
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -187,7 +191,8 @@ void ConvectionSimulator::draw( bool draw_vorticity )
 
     color c;
     if (draw_vorticity)
-      c = hot(V[cell->self()]/(max_V-min_V)/2. + 0.5);
+      //c = hot(u[cell->self()]/(max_V-min_V)/2. + 0.5);
+      c = hot(zonal[cell->rindex()]/(max_V-min_V)/2. + 0.5);
     else
       c = hot(T[cell->self()]);
 

@@ -25,7 +25,7 @@ const unsigned int nr = 128;
 //Aspect ratio of the computational domain
 //is set by the inner radius, where the outer
 //radius is assumed to be 1.0
-const double r_inner = 0.5;
+const double r_inner = 0.35;
 
 /*********************************************
     PROBABLY DON'T MODIFY THE REST
@@ -89,7 +89,7 @@ inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 {
   double rayleigh = simulator.rayleigh_number();
   double factor = std::pow(10.0, 1./100.* (event->y < 0 ? -1. : 1.0) );
-  simulator.update_state( rayleigh * factor, 1000., 1.0 );
+  //simulator.update_state( rayleigh * factor, 1000., 1.0 );
 }
 
 //Toggle whether to add heat, and whether it should

@@ -41,10 +41,12 @@ class ConvectionSimulator
     double *vorticity_source; //Curl of temperature for the stream function solution
     double *u; //velocity in the x direction
     double *v; //Velocity in the y direction
+    double *zonal; //zonal velocity
 
     TridiagonalMatrixSolver<std::complex<double> > **poisson_matrices;
     TridiagonalMatrixSolver<std::complex<double> > **temperature_diffusion_matrices;
     TridiagonalMatrixSolver<std::complex<double> > **vorticity_diffusion_matrices;
+    TridiagonalMatrixSolver<double> *zonal_velocity_matrix;
 
     //FFTW stuff
     fftw_plan dft_poisson, idft_poisson; //FFTW plans for doing the forward and inverse transforms
