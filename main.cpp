@@ -9,6 +9,7 @@
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
+#include <emscripten/bind.h>
 #endif
 
 /*********************************************
@@ -198,9 +199,11 @@ void timestep()
     if (include_tpw)
       simulator.true_polar_wander();
 
+#ifndef __EMSCRIPTEN__
     //Output scaling information
     std::cout<<"Ra: "<<std::setprecision(3)<<simulator.rayleigh_number()
              <<"\tNu: "<<simulator.nusselt_number()<<std::endl;
+#endif
     //increment timestep
     ++i;
   }
@@ -367,3 +370,24 @@ int main(int argc, char** argv)
     quit();
     return 0;
 }
+
+
+#ifdef __EMSCRIPTEN__
+//Emscripten bindings so that the Javascript on the page can
+//query the simulator for its state.
+
+//Embind requires a raw function pointer, so wrap the simulator
+//member function call in a function
+double emscripten_rayleigh()
+{
+  return simulator.rayleigh_number();
+}
+double emscripten_nusselt()
+{
+  return simulator.nusselt_number();
+}
+EMSCRIPTEN_BINDINGS(my_module) {
+  emscripten::function("rayleigh", &emscripten_rayleigh );
+  emscripten::function("nusselt", &emscripten_nusselt );
+}
+#endif

@@ -1,14 +1,14 @@
 CXX=/home/ian/emsdk_portable/emscripten/master/emcc
 CC=/home/ian/emsdk_portable/emscripten/master/emcc
 
-CXX_FLAGS=-O2
+CXX_FLAGS=-O2 --bind
 
 INCLUDE_DIRS=
 LIBRARY_DIRS=
 LIBRARIES= libfftw3.a libSDL2.a
 
 DEFINES = -DGL_ES_VERSION_2_0
-LINK_FLAGS = --memory-init-file 0 -s ALLOW_MEMORY_GROWTH=0
+LINK_FLAGS = --memory-init-file 0 -s ALLOW_MEMORY_GROWTH=0 -s TOTAL_MEMORY=33554432
 
 
 
