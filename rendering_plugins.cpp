@@ -357,7 +357,9 @@ void Axis::draw()
   vertices[19] = -(r - arrowhead) * std::sin(theta - 4.*dtheta);
 
   glEnable(GL_BLEND);
+#ifndef __EMSCRIPTEN__
   glEnable(GL_POLYGON_SMOOTH);
+#endif
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   glUseProgram(plugin_program);
@@ -396,7 +398,9 @@ void Axis::draw()
   glBindBuffer(GL_ARRAY_BUFFER, 0);
 
   glDisable(GL_BLEND);
+#ifndef __EMSCRIPTEN__
   glDisable(GL_POLYGON_SMOOTH);
+#endif
 }
 
 void Axis::cleanup()
@@ -599,7 +603,9 @@ void Seismograph::draw()
   vertices[ (n_lines+3)*coordinates_per_vertex + 1] = seis_y-0.02;
 
   glEnable(GL_BLEND);
+#ifndef __EMSCRIPTEN__
   glEnable(GL_LINE_SMOOTH);
+#endif
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   glLineWidth(2.0);
@@ -643,7 +649,9 @@ void Seismograph::draw()
 
   glLineWidth(1.0);
   glDisable(GL_BLEND);
+#ifndef __EMSCRIPTEN__
   glDisable(GL_LINE_SMOOTH);
+#endif
 }
 
 void Seismograph::cleanup()
