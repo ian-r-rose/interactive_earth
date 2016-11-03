@@ -476,8 +476,8 @@ void Seismograph::setup()
     for (int i=vertices_per_triangle; i>0; --i)
     {
       vertex_colors[(n_vertices-i)*(colors_per_vertex+1) + 0] = 0.0;//line_color.R;
-      vertex_colors[(n_vertices-i)*(colors_per_vertex+1)+ 1] = 0.2;//line_color.G;
-      vertex_colors[(n_vertices-i)*(colors_per_vertex+1) + 2] = 0.7;//line_color.B;
+      vertex_colors[(n_vertices-i)*(colors_per_vertex+1)+ 1] = 0.3;//line_color.G;
+      vertex_colors[(n_vertices-i)*(colors_per_vertex+1) + 2] = 1.0;//line_color.B;
       vertex_colors[(n_vertices-i)*(colors_per_vertex+1) + 3] = 0.8;
     }
 
@@ -597,12 +597,12 @@ void Seismograph::draw()
                        r*(a-b)/2. * std::sin(-theta+ 2.*(angle+M_PI/2.));
 
   //Seismometer vertices
-  vertices[ (n_lines+1)*coordinates_per_vertex + 0] = seis_x-0.03;
-  vertices[ (n_lines+1)*coordinates_per_vertex + 1] = seis_y+0.03;
-  vertices[ (n_lines+2)*coordinates_per_vertex + 0] = seis_x+0.03;
-  vertices[ (n_lines+2)*coordinates_per_vertex + 1] = seis_y+0.03;
+  vertices[ (n_lines+1)*coordinates_per_vertex + 0] = seis_x-0.04;
+  vertices[ (n_lines+1)*coordinates_per_vertex + 1] = seis_y+0.04;
+  vertices[ (n_lines+2)*coordinates_per_vertex + 0] = seis_x+0.04;
+  vertices[ (n_lines+2)*coordinates_per_vertex + 1] = seis_y+0.04;
   vertices[ (n_lines+3)*coordinates_per_vertex + 0] = seis_x;
-  vertices[ (n_lines+3)*coordinates_per_vertex + 1] = seis_y-0.03;
+  vertices[ (n_lines+3)*coordinates_per_vertex + 1] = seis_y-0.04;
 
   glEnable(GL_BLEND);
 #ifndef __EMSCRIPTEN__
