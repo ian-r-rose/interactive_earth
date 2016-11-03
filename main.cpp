@@ -331,25 +331,42 @@ void loop()
       case SDL_QUIT:
         quit();
       case SDL_KEYDOWN:
-        if(event.key.keysym.sym == SDLK_SPACE)
+        //Some systems seem to have a hair trigger on the
+        //keypress repeats. Filter those out.
+        if(!event.key.repeat)
         {
-          seismic_mode = !seismic_mode;
-          simulator.clear_seismic_waves();
-          seismograph.clear_record();
-        }
-        //Quitting should be handled by navigating to another
-        //webpage or closing the browser when using, emscripten,
-        //so just disable quitting on escape
+          switch(event.key.keysym.sym)
+          {
+            case SDLK_SPACE:
+              seismic_mode = !seismic_mode;
+              simulator.clear_seismic_waves();
+              seismograph.clear_record();
+              break;
+
 #ifndef __EMSCRIPTEN__
-        else if(event.key.keysym.sym == SDLK_ESCAPE)
-          quit();
+            //Quitting should be handled by navigating to another
+            //webpage or closing the browser when using, emscripten,
+            //so just disable quitting on escape
+            case SDLK_ESCAPE:
+              quit();
+              break;
 #endif
-        else if(event.key.keysym.sym == SDLK_TAB)
-          draw_composition = ! draw_composition;
-        else if(event.key.keysym.sym == SDLK_BACKSPACE)
-          advection_diffusion = !advection_diffusion;
-        else if(event.key.keysym.sym == SDLK_c)
-          cycle_colorscale();
+            case SDLK_TAB:
+              draw_composition = !draw_composition;
+              break;
+
+            case SDLK_BACKSPACE:
+              advection_diffusion = !advection_diffusion;
+              break;
+
+            case SDLK_c:
+              cycle_colorscale();
+              break;
+
+            default:
+              break;
+          }
+        }
         break;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:
