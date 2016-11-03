@@ -264,7 +264,7 @@ double hot_data[len_colormap*3] = {
 
 color hot(double x)
 {
-  unsigned int index = int(round(x*len_colormap));
+  int index = int(round(x*len_colormap));
   //clamp the index to be within array bounds
   index = index > len_colormap-1 ? len_colormap-1 : index;
   index = index < 0 ? 0 : index;
@@ -541,7 +541,7 @@ double magma_data[len_colormap*3] = {
 
 color magma(double x)
 {
-  unsigned int index = int(round(x*len_colormap));
+  int index = int(round(x*len_colormap));
   //clamp the index to be within array bounds
   index = index > len_colormap-1 ? len_colormap-1 : index;
   index = index < 0 ? 0 : index;
@@ -809,7 +809,7 @@ double viridis_data[len_colormap*3] = {
 
 color viridis(double x)
 {
-  unsigned int index = int(round(x*len_colormap));
+  int index = int(round(x*len_colormap));
   //clamp the index to be within array bounds
   index = index > len_colormap-1 ? len_colormap-1 : index;
   index = index < 0 ? 0 : index;
@@ -1078,7 +1078,7 @@ double plasma_data[len_colormap*3] = {
 
 color plasma(double x)
 {
-  unsigned int index = int(round(x*len_colormap));
+  int index = int(round(x*len_colormap));
   //clamp the index to be within array bounds
   index = index > len_colormap-1 ? len_colormap-1 : index;
   index = index < 0 ? 0 : index;
@@ -1347,7 +1347,7 @@ double inferno_data[len_colormap*3] = {
 
 color inferno(double x)
 {
-  unsigned int index = int(round(x*len_colormap));
+  int index = int(round(x*len_colormap));
   //clamp the index to be within array bounds
   index = index > len_colormap-1 ? len_colormap-1 : index;
   index = index < 0 ? 0 : index;
