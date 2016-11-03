@@ -282,10 +282,11 @@ double magma_data[len_colormap*3] = {
 
 color magma(double x)
 {
-  unsigned int index = 3*int(round(x*len_colormap));
+  unsigned int index = int(round(x*len_colormap));
   //clamp the index to be within array bounds
-  index = ((index > 3*(len_colormap-1) ? 3*(len_colormap-1) : index) < 0 ? 0 : index);
-  color c = { magma_data[index], magma_data[index+1], magma_data[index+2]};
+  index = index > len_colormap-1 ? len_colormap-1 : index;
+  index = index < 0 ? 0 : index;
+  color c = { magma_data[3*index+0], magma_data[3*index+1], magma_data[3*index+2]};
   return c;
 }
 
@@ -549,10 +550,11 @@ double viridis_data[len_colormap*3] = {
 
 color viridis(double x)
 {
-  unsigned int index = 3*int(round(x*len_colormap));
+  unsigned int index = int(round(x*len_colormap));
   //clamp the index to be within array bounds
-  index = ((index > 3*(len_colormap-1) ? 3*(len_colormap-1) : index) < 0 ? 0 : index);
-  color c = { viridis_data[index], viridis_data[index+1], viridis_data[index+2]};
+  index = index > len_colormap-1 ? len_colormap-1 : index;
+  index = index < 0 ? 0 : index;
+  color c = { viridis_data[3*index+0], viridis_data[3*index+1], viridis_data[3*index+2]};
   return c;
 }
 
@@ -817,10 +819,11 @@ double plasma_data[len_colormap*3] = {
 
 color plasma(double x)
 {
-  unsigned int index = 3*int(round(x*len_colormap));
+  unsigned int index = int(round(x*len_colormap));
   //clamp the index to be within array bounds
-  index = ((index > 3*(len_colormap-1) ? 3*(len_colormap-1) : index) < 0 ? 0 : index);
-  color c = { plasma_data[index], plasma_data[index+1], plasma_data[index+2]};
+  index = index > len_colormap-1 ? len_colormap-1 : index;
+  index = index < 0 ? 0 : index;
+  color c = { plasma_data[3*index+0], plasma_data[3*index+1], plasma_data[3*index+2]};
   return c;
 }
 
@@ -1085,9 +1088,10 @@ double inferno_data[len_colormap*3] = {
 
 color inferno(double x)
 {
-  unsigned int index = 3*int(round(x*len_colormap));
+  unsigned int index = int(round(x*len_colormap));
   //clamp the index to be within array bounds
-  index = ((index > 3*(len_colormap-1) ? 3*(len_colormap-1) : index) < 0 ? 0 : index);
-  color c = { inferno_data[index], inferno_data[index+1], inferno_data[index+2]};
+  index = index > len_colormap-1 ? len_colormap-1 : index;
+  index = index < 0 ? 0 : index;
+  color c = { inferno_data[3*index+0], inferno_data[3*index+1], inferno_data[3*index+2]};
   return c;
 }
