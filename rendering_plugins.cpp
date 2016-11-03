@@ -2,6 +2,8 @@
 #include "rendering_plugins.h"
 #include "color.h"
 
+extern color (*colormap)(double);
+
 void Core::setup()
 {
   {
@@ -15,7 +17,7 @@ void Core::setup()
     const float dtheta = 2.*M_PI/n_triangles;
     const float r = r_inner;
     
-    color core_color = hot(1.0);
+    color core_color = colormap(1.0);
 
     //one vertex at the origin
     vertices[0] = 0.0f;

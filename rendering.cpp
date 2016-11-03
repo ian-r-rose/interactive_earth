@@ -11,8 +11,10 @@ static GLint attribute_coord2d;
 static GLint attribute_v_color;
 #endif //LEGACY_OPENGL
 
-
+//get access to some of the globals
 extern const double flattening;
+extern color (*colormap)(double);
+
 
 void ConvectionSimulator::setup_opengl()
 {
@@ -185,9 +187,9 @@ void ConvectionSimulator::draw( bool draw_composition )
 
     color c;
     if (draw_composition)
-      c = hot(C[cell->self()]);
+      c = colormap(C[cell->self()]);
     else
-      c = hot(T[cell->self()]);
+      c = colormap(T[cell->self()]);
 
     double displacement = displacement_factor * D[cell->self()]; //Perturb color if there is displacement
     c.R += displacement;
@@ -257,8 +259,8 @@ void ConvectionSimulator::draw( bool draw_composition )
     if (cell->at_left_boundary() && cell->self() != 0.)
       glBegin(GL_TRIANGLE_STRIP);
 
-    color c_s = hot(T[cell->self()]);
-    color c_u = hot(T[cell->up()]);
+    color c_s = colormap(T[cell->self()]);
+    color c_u = colormap(T[cell->up()]);
 
     c_s.R += displacement_factor*D[cell->self()];
     c_s.G += displacement_factor*D[cell->self()];
@@ -282,13 +284,13 @@ void ConvectionSimulator::draw( bool draw_composition )
       color c_s, c_u;
       if (draw_composition)
       {
-        c_s = hot(C[cell->self()]);
-        c_u = hot(C[cell->up()]);
+        c_s = colormap(C[cell->self()]);
+        c_u = colormap(C[cell->up()]);
       }
       else
       {
-        c_s = hot(T[cell->self()]);
-        c_u = hot(T[cell->up()]);
+        c_s = colormap(T[cell->self()]);
+        c_u = colormap(T[cell->up()]);
       }
 
       c_s.R += displacement_factor*D[cell->right()];

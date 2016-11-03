@@ -3,6 +3,7 @@
 #include "SDL2/SDL.h"
 #include "convection.h"
 #include "rendering_plugins.h"
+#include "color.h"
 #include <cmath>
 #include <iostream>
 #include <iomanip>
@@ -68,6 +69,9 @@ bool advection_diffusion = true;
 
 //Whether to draw composition or temperature fields
 bool draw_composition = false;
+
+//Function pointer to which color scale we are using
+color (*colormap)(double) = &hot;
 
 //Global solver
 ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
@@ -158,6 +162,17 @@ inline bool in_domain( const float theta, const float r )
 {
   return (r+r_inner < 1.) && ( r > 0.);
 }
+
+void cycle_colorscale()
+{
+  const unsigned int n_colormaps = 5;
+  static color (*maps[n_colormaps])(double) =
+    { &hot, &plasma, &viridis, &inferno, &magma };
+  static unsigned short i = 0;
+  i = (i+1)%n_colormaps;
+  colormap = maps[i];
+}
+
 
 //Actually perform the timestep
 void timestep()
@@ -333,6 +348,8 @@ void loop()
           draw_composition = ! draw_composition;
         else if(event.key.keysym.sym == SDLK_BACKSPACE)
           advection_diffusion = !advection_diffusion;
+        else if(event.key.keysym.sym == SDLK_c)
+          cycle_colorscale();
         break;
       case SDL_MOUSEBUTTONDOWN:
       case SDL_MOUSEBUTTONUP:
