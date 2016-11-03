@@ -167,7 +167,7 @@ void cycle_colorscale()
 {
   const unsigned int n_colormaps = 5;
   static color (*maps[n_colormaps])(double) =
-    { &hot, &plasma, &viridis, &inferno, &magma };
+    { &hot, &viridis, &inferno, &seismic, &gist_earth };
   static unsigned short i = 0;
   i = (i+1)%n_colormaps;
   colormap = maps[i];

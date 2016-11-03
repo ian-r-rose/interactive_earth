@@ -24,5 +24,7 @@ color magma(double x);
 color viridis(double x);
 color plasma(double x);
 color inferno(double x);
+color seismic(double x);
+color gist_earth(double x);
 
 #endif
