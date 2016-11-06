@@ -181,10 +181,36 @@ void text_output()
   //rough timescale conversion for Earth's mantle:
   //L^2/kappa / seconds/Gyr
   const double timescale = 2800.e3*2800.e3/1.e-6 /M_PI/1.e7/1.e9;
-  std::cout<<"Ra: "<<std::setprecision(3)<<simulator.rayleigh_number()
-           <<"\tNu: "<<simulator.nusselt_number()
-           <<"\tTime: "<<simulation_time*timescale<<" Gyr"
-           <<std::endl;
+  //Unicode characters for exponentiation
+  const char* exponents[10] = { "\u2070", "\u00B9", "\u00B2",
+                                "\u00b3", "\u2074", "\u2075",
+                                "\u2076", "\u2077", "\u2078",
+                                "\u2079"};
+  //Output Rayleigh information
+  const double Ra = simulator.rayleigh_number();
+  if( Ra < 1000 )
+    std::cout<<"Ra: "<<std::setprecision(3)<<Ra<<"\t";
+  else
+  {
+    const int upper = int(std::floor(std::log10(Ra)));
+    const int lower = int(rint(Ra/std::pow(10, upper)));
+    if (lower == 1)
+      std::cout<<"Ra: "<<"10"<<exponents[upper]<<"\t";
+    else
+      std::cout<<"Ra: "<<lower<<"x10"<<exponents[upper]<<"\t";
+  }
+
+  //Output Nusselt information
+  std::cout<<"Nu: "<<std::setprecision(2)<<simulator.nusselt_number()<<"\t";
+
+  //Output time information
+  if (simulation_time*timescale < 1.)
+    std::cout<<"\tTime: "<<int(rint(simulation_time*timescale*1000.))<<" Myr\t";
+  else
+    std::cout<<"\tTime: "<<std::setprecision(2)<<simulation_time*timescale<<" Gyr\t";
+
+  //clear the line
+  std::cout<<std::endl;
 }
 
 //Actually perform the timestep
