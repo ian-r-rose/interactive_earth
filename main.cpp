@@ -195,7 +195,7 @@ void text_output()
     const int upper = int(std::floor(std::log10(Ra)));
     const int lower = int(rint(Ra/std::pow(10, upper)));
     if (lower == 1)
-      std::cout<<"Ra: "<<"10"<<exponents[upper]<<"\t";
+      std::cout<<"Ra: "<<"  10"<<exponents[upper]<<"\t";
     else
       std::cout<<"Ra: "<<lower<<"x10"<<exponents[upper]<<"\t";
   }
