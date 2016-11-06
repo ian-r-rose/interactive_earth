@@ -205,9 +205,9 @@ void text_output()
 
   //Output time information
   if (simulation_time*timescale < 1.)
-    std::cout<<"\tTime: "<<int(rint(simulation_time*timescale*1000.))<<" Myr\t";
+    std::cout<<"\tTime: "<<int(rint(simulation_time*timescale*1000.))<<" million years\t";
   else
-    std::cout<<"\tTime: "<<std::setprecision(2)<<simulation_time*timescale<<" Gyr\t";
+    std::cout<<"\tTime: "<<std::setprecision(2)<<simulation_time*timescale<<" billion years\t";
 
   //clear the line
   std::cout<<std::endl;
