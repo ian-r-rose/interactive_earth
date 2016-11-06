@@ -817,6 +817,11 @@ void ConvectionSimulator::seismometer_position( double &theta, double&r) const
   r = seismometer_location.r;
 }
 
+double ConvectionSimulator::timestep() const
+{
+  return dt;
+}
+
 
 double ConvectionSimulator::timescale() const
 {

@@ -91,6 +91,7 @@ class ConvectionSimulator
     double nusselt_number(); //Calculate nusselt number at a timestep
     double spin_angle() const; //return angle of spin axis (with respect to x axis) in radians
     double seismometer_reading() const; //Return the displacement at the seismometer
+    double timestep() const; //Return the timestep for the simulation.
     void seismometer_position( double &theta, double &r) const; //Query the current location of the seismometer
 
     void earthquake(double x, double y);  //Add source term for wave equation

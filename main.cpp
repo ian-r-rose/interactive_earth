@@ -178,6 +178,7 @@ void cycle_colorscale()
 void timestep()
 {
   static int i=0;  //Keep track of timestep number
+  static double time = 0.0; //Keep track of the time;
   simulator.draw( include_composition && draw_composition );  //Draw to screen
   core.draw();
   if (include_tpw && !seismic_mode)
@@ -221,6 +222,7 @@ void timestep()
 #endif
     //increment timestep
     ++i;
+    time += simulator.timestep();
   }
   //If we are in seismic mode
   else
