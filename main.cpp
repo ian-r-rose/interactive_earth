@@ -73,6 +73,9 @@ bool draw_composition = false;
 //Function pointer to which color scale we are using
 color (*colormap)(double) = &hot;
 
+//The simulation time.
+double simulation_time = 0.0;
+
 //Global solver
 ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
 Axis axis(simulator);
@@ -173,12 +176,21 @@ void cycle_colorscale()
   colormap = maps[i];
 }
 
+void text_output()
+{
+  //rough timescale conversion for Earth's mantle:
+  //L^2/kappa / seconds/Gyr
+  const double timescale = 2800.e3*2800.e3/1.e-6 /M_PI/1.e7/1.e9;
+  std::cout<<"Ra: "<<std::setprecision(3)<<simulator.rayleigh_number()
+           <<"\tNu: "<<simulator.nusselt_number()
+           <<"\tTime: "<<simulation_time*timescale<<" Gyr"
+           <<std::endl;
+}
 
 //Actually perform the timestep
 void timestep()
 {
   static int i=0;  //Keep track of timestep number
-  static double time = 0.0; //Keep track of the time;
   simulator.draw( include_composition && draw_composition );  //Draw to screen
   core.draw();
   if (include_tpw && !seismic_mode)
@@ -217,12 +229,12 @@ void timestep()
 
 #ifndef __EMSCRIPTEN__
     //Output scaling information
-    std::cout<<"Ra: "<<std::setprecision(3)<<simulator.rayleigh_number()
-             <<"\tNu: "<<simulator.nusselt_number()<<std::endl;
+    text_output();
 #endif
+
     //increment timestep
     ++i;
-    time += simulator.timestep();
+    simulation_time += simulator.timestep();
   }
   //If we are in seismic mode
   else
