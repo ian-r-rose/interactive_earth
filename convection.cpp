@@ -605,7 +605,9 @@ double ConvectionSimulator::nusselt_number()
       heat_flux += grad_T;
     }
   }
-  return -heat_flux * grid.lr/grid.ntheta;
+  return -heat_flux * //sum of fluxes
+         grid.r_outer/grid.ntheta * //metric terms
+         std::log(grid.r_outer/grid.r_inner); //geometry factor.
 }
 
 
