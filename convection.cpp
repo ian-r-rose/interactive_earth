@@ -788,7 +788,7 @@ void ConvectionSimulator::update_state(double rayleigh)
 
   //Estimate other state properties based on simple isoviscous scalings
   dt = cfl * 10.0; //Roughly 10x CFL, thanks to semi-lagrangian
-  heat_source_radius = 0.05;  //Radius of order the boundary layer thickness
+  heat_source_radius = 0.02;  //Radius of order the boundary layer thickness
   heat_source = velocity_scale/grid.lr*20.; //Heat a blob of order the ascent time for thta blob
   composition_source_radius = grid.lr/10.; //Size of compositional blob
   composition_source=heat_source; //Strength of compositional reaction
