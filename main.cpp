@@ -403,6 +403,10 @@ int main(int argc, char** argv)
 
 //Embind requires a raw function pointer, so wrap the simulator
 //member function call in a function
+void emscripten_set_rayleigh(double value)
+{
+  simulator.update_state(value);
+}
 double emscripten_rayleigh()
 {
   return simulator.rayleigh_number();
@@ -412,6 +416,7 @@ double emscripten_nusselt()
   return simulator.nusselt_number();
 }
 EMSCRIPTEN_BINDINGS(my_module) {
+  emscripten::function("set_rayleigh", &emscripten_set_rayleigh );
   emscripten::function("rayleigh", &emscripten_rayleigh );
   emscripten::function("nusselt", &emscripten_nusselt );
 }
