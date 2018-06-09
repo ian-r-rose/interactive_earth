@@ -120,10 +120,7 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 {
   if(event->state==SDL_PRESSED)
   {
-    if(event->button == SDL_BUTTON_LEFT)
-      click_state = 1;
-    if(event->button == SDL_BUTTON_RIGHT)
-      click_state = -1;
+    click_state = 1;
 
     float x = float(event->x)/float(xpix)-0.5f;
     float y = 1.0f-float(event->y)/float(ypix)-0.5f;

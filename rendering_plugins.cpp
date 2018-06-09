@@ -18,6 +18,8 @@ void Core::setup()
     const float r = r_inner;
     
     color core_color = colormap(1.0);
+    color core_mask = colormap(0.0);
+    const float theta_max = std::atan2(1./zoom_factor, 1.0);
 
     //one vertex at the origin
     vertices[0] = 0.0f;
@@ -29,9 +31,17 @@ void Core::setup()
     unsigned long v = 2, c=3, i=0; //start at the next vertex index
     for (unsigned long n = 0; n < n_triangles; ++n)
     {
-      vertex_colors[c + 0] = core_color.R;
-      vertex_colors[c + 1] = core_color.G;
-      vertex_colors[c + 2] = core_color.B;
+      const float theta = dtheta * n;
+      color col;
+
+      if (theta > M_PI/2. + theta_max || theta < M_PI/2. - theta_max)
+        col = core_mask;
+      else
+        col = core_color;
+
+      vertex_colors[c + 0] = col.R;
+      vertex_colors[c + 1] = col.G;
+      vertex_colors[c + 2] = col.B;
 
       triangle_vertex_indices[i + 0] = 0;
       triangle_vertex_indices[i + 1] = n+1;

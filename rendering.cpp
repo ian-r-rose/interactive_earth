@@ -163,6 +163,8 @@ void ConvectionSimulator::draw( bool draw_composition )
   const unsigned long n_triangles = grid.ntheta * (grid.nr-1) * triangles_per_quad;
   const unsigned long n_vertices = grid.ntheta * grid.nr;
 
+  const float theta_max = std::atan2(1./zoom_factor, 1.0);
+
   unsigned long v=0, i=0;
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -183,6 +185,9 @@ void ConvectionSimulator::draw( bool draw_composition )
     c.R += displacement;
     c.G += displacement;
     c.B += displacement;
+
+    if (theta > M_PI/2. + theta_max || theta < M_PI/2. - theta_max)
+      c = colormap(0.0);
 
     vertex_colors[i + 0] = c.R;
     vertex_colors[i + 1] = c.G;
