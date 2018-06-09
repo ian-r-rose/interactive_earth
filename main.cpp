@@ -11,6 +11,7 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
 #include <emscripten/bind.h>
+#include <emscripten/html5.h>
 #endif
 
 /*********************************************
@@ -284,12 +285,12 @@ void init()
 
 #ifndef __EMSCRIPTEN__
     //Get the number of displays
-    int n_displays = SDL_GetNumVideoDisplays();
+    unsigned int n_displays = SDL_GetNumVideoDisplays();
     if (n_displays < 1)
        std::cerr<<"SDL : Could not find displays"<<std::endl;
 
     //Identify the largest display
-    unsigned int max_display_dimension = 0;
+    int max_display_dimension = 0;
     SDL_Rect draw_rect;
     float screen_fraction = 0.8;
     for (unsigned int i=0; i < n_displays; ++i)
@@ -317,8 +318,8 @@ void init()
         xpix, ypix,
         SDL_WINDOW_OPENGL);
 #else
-    int width, height, isFullscreen;
-    emscripten_get_canvas_size( &width, &height, &isFullscreen );
+    int width, height;
+    emscripten_get_canvas_element_size("#canvas", &width, &height);
     xpix = (width < height ? width : height);
     ypix = xpix;
 

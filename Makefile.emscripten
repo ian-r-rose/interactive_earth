@@ -1,5 +1,5 @@
-CXX=/home/ian/emsdk_portable/emscripten/master/emcc
-CC=/home/ian/emsdk_portable/emscripten/master/emcc
+CXX=emcc
+CC=emcc
 
 CXX_FLAGS=-O2 --bind
 
@@ -8,7 +8,7 @@ LIBRARY_DIRS=
 LIBRARIES= libfftw3.a libSDL2.a
 
 DEFINES = -DGL_ES_VERSION_2_0
-LINK_FLAGS = --memory-init-file 0 -s ALLOW_MEMORY_GROWTH=0 -s TOTAL_MEMORY=33554432
+LINK_FLAGS = -s ALLOW_MEMORY_GROWTH=0 -s TOTAL_MEMORY=67108864 -s WASM=1 -s EXTRA_EXPORTED_RUNTIME_METHODS=["Pointer_stringify"]
 
 
 
@@ -32,4 +32,4 @@ color.o: color.h color.cpp
 
 .PHONY: clean
 clean:
-	rm -f *.o interactive_earth.html *.js
+	rm -f *.o interactive_earth.html *.js *.wasm
