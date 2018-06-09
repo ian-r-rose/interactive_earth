@@ -12,9 +12,9 @@ static GLint attribute_v_color;
 #endif //LEGACY_OPENGL
 
 //get access to some of the globals
-extern const double flattening;
 extern color (*colormap)(double);
 
+extern const double zoom_factor;
 
 void ConvectionSimulator::setup_opengl()
 {
@@ -163,14 +163,6 @@ void ConvectionSimulator::draw( bool draw_composition )
   const unsigned long n_triangles = grid.ntheta * (grid.nr-1) * triangles_per_quad;
   const unsigned long n_vertices = grid.ntheta * grid.nr;
 
-  //Parameters for ellipticity, if required.
-  //angle is the angle of the semimajor axis, which
-  //defaults to the spin axis+90 degrees.
-  //a and b are the semimajor and semiminor axes.
-  const float angle = this->spin_angle() + M_PI/2.;
-  const float a = 1.0f;
-  const float b = 1.0f-flattening;
-
   unsigned long v=0, i=0;
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -178,12 +170,8 @@ void ConvectionSimulator::draw( bool draw_composition )
     const float r = cell->radius();
     const float theta = cell->location().theta;
 
-    //This is kind of cool: add ellipticity to the domain rendering
-    //using an epicycle on the normal rendering.
-    //TODO: offsetting the epicycle seems to work with 2*angle.
-    //Why not 1*angle? Figure this out.
-    vertices[v + 0] = r*(a+b)/2. * std::cos(theta) + r*(a-b)/2. * std::cos(-theta+ 2.*angle);
-    vertices[v + 1] = r*(a+b)/2. * std::sin(theta) + r*(a-b)/2. * std::sin(-theta+ 2.*angle);
+    vertices[v + 0] = zoom_factor*r*std::cos(theta);
+    vertices[v + 1] = zoom_factor*r*std::sin(theta) - (zoom_factor-1.0f);
 
     color c;
     if (draw_composition)

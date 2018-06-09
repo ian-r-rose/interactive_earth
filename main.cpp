@@ -37,9 +37,7 @@ const unsigned int nr = 128;
 //radius is assumed to be 1.0
 const double r_inner = 0.5;
 
-//Render the simulation flattened, as if
-//acting under centrifugal forces.
-const double flattening = 0.0;
+const double zoom_factor = 3.0;
 
 /*********************************************
     PROBABLY DON'T MODIFY THE REST
@@ -79,9 +77,7 @@ double simulation_time = 0.0;
 
 //Global solver
 ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
-Axis axis(simulator);
 Core core(simulator);
-Seismograph seismograph(simulator);
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -91,28 +87,10 @@ SDL_Window *window=NULL;
 //simulator domain. Can handle the case of ellipticity.
 inline void compute_simulator_location( const float x, const float y, float *theta, float *r )
 {
-  //Scale the click coordinates so that they are
-  //in the correct place if the domain is elliptical
-  float xpp = x, ypp = y;
-  if (flattening > 1.e-2)
-  {
-    //Rotate the click position so that the ellipse
-    //corresponds to the Cartesian axes.
-    float rot_angle = simulator.spin_angle() - M_PI/2.;
-    float xp = x * std::cos(-rot_angle) - y * std::sin(-rot_angle);
-    float yp = x * std::sin(-rot_angle) + y * std::cos(-rot_angle);
-
-    //Do the inverse flattening
-    yp = yp / (1.-flattening);
-    xp = xp;
-
-    //Rotate back to the initial angle
-    xpp = xp * std::cos(rot_angle) - yp * std::sin(rot_angle);
-    ypp = xp * std::sin(rot_angle) + yp * std::cos(rot_angle);
-  }
+  float xpp = 2.*x/zoom_factor, ypp = (2.*y + (zoom_factor-1.0))/zoom_factor;
   *theta = std::atan2( ypp, xpp );
   *theta = (*theta < 0. ? *theta + 2.*M_PI : *theta );
-  *r = 2.*std::sqrt( xpp*xpp + ypp*ypp );
+  *r = 1.*std::sqrt( xpp*xpp + ypp*ypp );
 }
 
 //Update where to add heat
@@ -220,10 +198,6 @@ void timestep()
   static int i=0;  //Keep track of timestep number
   simulator.draw( include_composition && draw_composition );  //Draw to screen
   core.draw();
-  if (include_tpw && !seismic_mode)
-    axis.draw();
-  if (seismic_mode)
-    seismograph.draw();
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -343,9 +317,6 @@ void init()
 
     simulator.setup_opengl();
     core.setup();
-    if (include_tpw)
-      axis.setup();
-    seismograph.setup();
 }
 
 //Cleanup
@@ -353,9 +324,6 @@ void quit()
 {
     simulator.cleanup_opengl();
     core.cleanup();
-    if(include_tpw)
-      axis.cleanup();
-    seismograph.cleanup();
 
     SDL_GL_DeleteContext(context);
     SDL_Quit();
@@ -378,12 +346,6 @@ void loop()
         {
           switch(event.key.keysym.sym)
           {
-            case SDLK_SPACE:
-              seismic_mode = !seismic_mode;
-              simulator.clear_seismic_waves();
-              seismograph.clear_record();
-              break;
-
 #ifndef __EMSCRIPTEN__
             //Quitting should be handled by navigating to another
             //webpage or closing the browser when using, emscripten,
@@ -392,18 +354,6 @@ void loop()
               quit();
               break;
 #endif
-            case SDLK_TAB:
-              draw_composition = !draw_composition;
-              break;
-
-            case SDLK_BACKSPACE:
-              advection_diffusion = !advection_diffusion;
-              break;
-
-            case SDLK_c:
-              cycle_colorscale();
-              break;
-
             default:
               break;
           }
