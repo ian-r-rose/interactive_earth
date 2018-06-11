@@ -29,8 +29,8 @@ bool include_tpw = false;
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
 //as well as performance.
-const unsigned int ntheta = 1024;
-const unsigned int nr = 128;
+const unsigned int ntheta = 768;
+const unsigned int nr = 96;
 
 //Aspect ratio of the computational domain
 //is set by the inner radius, where the outer
@@ -104,14 +104,6 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 
   click_theta = ltheta * theta / 2. / M_PI;
   click_r = lr*(r-r_inner)/(1.0f-r_inner);
-}
-
-//Change the Rayleigh number on scrolling
-inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
-{
-  double rayleigh = simulator.rayleigh_number();
-  double factor = std::pow(10.0, 1./100.* (event->y < 0 ? -1. : 1.0) );
-  simulator.update_state( rayleigh * factor );
 }
 
 //Toggle whether to add heat, and whether it should
@@ -362,9 +354,6 @@ void loop()
         break;
       case SDL_MOUSEMOTION:
         handle_mouse_motion(&event.motion);
-        break;
-      case SDL_MOUSEWHEEL:
-        handle_mouse_wheel(&event.wheel);
         break;
       default:
         break;
