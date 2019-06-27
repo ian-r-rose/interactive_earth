@@ -8,6 +8,7 @@ calculations
 / ***********************/
 
 #include <iterator>
+#include <cmath>
 
 #ifndef REGULAR_GRID_H
 #define REGULAR_GRID_H
