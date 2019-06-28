@@ -81,6 +81,7 @@ double simulation_time = 0.0;
 ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
 Axis axis(simulator);
 Core core(simulator);
+ModeButton modebutton(simulator);
 Seismograph seismograph(simulator);
 
 //Structures for initializing a window and OpenGL conext
@@ -270,6 +271,7 @@ void timestep()
     axis.draw();
   if (seismic_mode)
     seismograph.draw();
+  modebutton.draw();
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -392,6 +394,7 @@ void init()
     if (include_tpw)
       axis.setup();
     seismograph.setup();
+    modebutton.setup();
 }
 
 //Cleanup
@@ -402,6 +405,7 @@ void quit()
     if(include_tpw)
       axis.cleanup();
     seismograph.cleanup();
+    modebutton.cleanup();
 
     SDL_GL_DeleteContext(context);
     SDL_Quit();

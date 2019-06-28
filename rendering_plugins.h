@@ -108,4 +108,26 @@ class Seismograph : RenderingPlugin
     GLint plugin_attribute_v_color;
 };
 
+class ModeButton : RenderingPlugin
+{
+  public:
+    ModeButton( const ConvectionSimulator &sim ) : RenderingPlugin(sim) {}
+    void setup();
+    void draw();
+    void cleanup();
+
+  private:
+    //Data for rendering with OpenGL
+    GLfloat* vertices;
+    GLfloat* vertex_colors;
+    GLuint* triangle_vertex_indices;
+
+    GLuint plugin_program;
+    GLuint plugin_vertices;
+    GLuint plugin_vertex_colors;
+    GLuint plugin_triangle_vertex_indices;
+    GLint plugin_attribute_coord2d;
+    GLint plugin_attribute_v_color;
+};
+
 #endif
