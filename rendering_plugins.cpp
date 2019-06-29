@@ -684,14 +684,14 @@ void ModeButton::setup()
     color button_color = colormap(1.0);
 
     // Make the button vertices
-    vertices[0] = -1.0f;
-    vertices[1] = -1.0f;
-    vertices[2] = -1.0f + width;
-    vertices[3] = -1.0f;
-    vertices[4] = -1.0f + width;
-    vertices[5] = -1.0f + height;
-    vertices[6] = -1.0f;
-    vertices[7] = -1.0f + height;
+    vertices[0] = mode_button_left;
+    vertices[1] = mode_button_bottom;
+    vertices[2] = mode_button_left + mode_button_width;
+    vertices[3] = mode_button_bottom;
+    vertices[4] = mode_button_left + mode_button_width;
+    vertices[5] = mode_button_bottom + mode_button_height;
+    vertices[6] = mode_button_left;
+    vertices[7] = mode_button_bottom + mode_button_height;
     triangle_vertex_indices[0] = 0;
     triangle_vertex_indices[1] = 2;
     triangle_vertex_indices[2] = 3;

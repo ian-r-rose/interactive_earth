@@ -29,8 +29,8 @@ bool include_tpw = false;
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
 //as well as performance.
-const unsigned int ntheta = 1024;
-const unsigned int nr = 128;
+const unsigned int ntheta = 256;
+const unsigned int nr = 32;
 
 //Aspect ratio of the computational domain
 //is set by the inner radius, where the outer
@@ -77,6 +77,14 @@ color (*colormap)(double) = &hot;
 //The simulation time.
 double simulation_time = 0.0;
 
+// Button geometries
+const float mode_button_left = -1.0;
+const float mode_button_bottom = -1.0;
+const float mode_button_width = 0.168;
+const float mode_button_height = 0.1;
+
+
+
 //Global solver
 ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
 Axis axis(simulator);
@@ -118,11 +126,29 @@ inline void compute_simulator_location( const float x, const float y, float *the
   *r = 2.*std::sqrt( xpp*xpp + ypp*ypp );
 }
 
+inline bool check_buttons(float x, float y)
+{
+  // Handle the weird choice of -0.5 to 0.5
+  float xp = x*2.0f;
+  float yp = y*2.0f;
+  std::cout<<xp<<"\t"<<yp<<std::endl;
+  if (xp > mode_button_left && xp < mode_button_left + mode_button_width
+      && yp > mode_button_bottom && yp < mode_button_bottom + mode_button_height)
+  {
+    seismic_mode = !seismic_mode;
+    simulator.clear_seismic_waves();
+    seismograph.clear_record();
+    return true;
+  }
+  return false;
+}
+
 //Given x,y from -0.5 to 0.5, from a mouse button
 //or finger event, handle it in the simulator.
 inline void handle_mouse_or_finger_motion(float x, float y)
 {
   float theta, r;
+
   compute_simulator_location( x, y, &theta, &r);
 
   click_theta = ltheta * theta / 2. / M_PI;
@@ -175,6 +201,8 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
     float x = float(event->x)/float(xpix)-0.5f;
     float y = 1.0f-float(event->y)/float(ypix)-0.5f;
 
+    check_buttons(x, y);
+
     float theta, r;
     compute_simulator_location(x, y, &theta, &r);
 
@@ -197,6 +225,7 @@ inline void handle_finger_down(SDL_TouchFingerEvent *event)
     float x = event->x - 0.5f;
     float y = 0.5f - event->y;
 
+    check_buttons(x, y);
     float theta, r;
     compute_simulator_location(x, y, &theta, &r);
 
