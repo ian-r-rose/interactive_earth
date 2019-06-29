@@ -89,6 +89,8 @@ SDL_Window *window=NULL;
 
 //Given an x and y location, compute the r, theta location of the 
 //simulator domain. Can handle the case of ellipticity.
+//x and y are assumed to range from -0.5 to 0.5, not -1 to -1.
+//Why? I'm not sure and it is lost to the sands of time.
 inline void compute_simulator_location( const float x, const float y, float *theta, float *r )
 {
   //Scale the click coordinates so that they are
@@ -115,12 +117,10 @@ inline void compute_simulator_location( const float x, const float y, float *the
   *r = 2.*std::sqrt( xpp*xpp + ypp*ypp );
 }
 
-//Update where to add heat
-inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
+//Given x,y from -0.5 to 0.5, from a mouse button
+//or finger event, handle it in the simulator.
+inline void handle_mouse_or_finger_motion(float x, float y)
 {
-  float x = float(event->x)/float(xpix)-0.5f;
-  float y = 1.0f-float(event->y)/float(ypix)-0.5f;
-
   float theta, r;
   compute_simulator_location( x, y, &theta, &r);
 
@@ -129,16 +129,19 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 }
 
 //Update where to add heat
+inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
+{
+  const float x = float(event->x)/float(xpix)-0.5f;
+  const float y = 1.0f-float(event->y)/float(ypix)-0.5f;
+  handle_mouse_or_finger_motion(x, y);
+}
+
+//Update where to add heat
 inline void handle_finger_motion(SDL_TouchFingerEvent *event)
 {
   float x = event->x - 0.5f;
   float y = 0.5f - event->y;
-
-  float theta, r;
-  compute_simulator_location( x, y, &theta, &r);
-
-  click_theta = ltheta * theta / 2. / M_PI;
-  click_r = lr*(r-r_inner)/(1.0f-r_inner);
+  handle_mouse_or_finger_motion(x, y);
 }
 
 //Change the Rayleigh number on scrolling
@@ -177,7 +180,7 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 
 //Toggle whether to add heat, and whether it should
 //be positive or negative
-inline void handle_finger(SDL_TouchFingerEvent *event)
+inline void handle_finger_down(SDL_TouchFingerEvent *event)
 {
   if(event->type==SDL_FINGERDOWN)
   {
@@ -456,7 +459,7 @@ void loop()
         break;
       case SDL_FINGERDOWN:
       case SDL_FINGERUP:
-        handle_finger(&event.tfinger);
+        handle_finger_down(&event.tfinger);
         break;
       case SDL_FINGERMOTION:
         handle_finger_motion(&event.tfinger);
