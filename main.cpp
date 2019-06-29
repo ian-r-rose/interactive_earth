@@ -126,26 +126,30 @@ inline void compute_simulator_location( const float x, const float y, float *the
   *r = 2.*std::sqrt( xpp*xpp + ypp*ypp );
 }
 
+void toggle_seismic_mode()
+{
+  seismic_mode = !seismic_mode;
+  simulator.clear_seismic_waves();
+  seismograph.clear_record();
+  if (seismic_mode)
+  {
+    colormap = &seismic;
+  }
+  else
+  {
+    colormap = &hot;
+  }
+}
+
 inline bool check_buttons(float x, float y)
 {
   // Handle the weird choice of -0.5 to 0.5
   float xp = x*2.0f;
   float yp = y*2.0f;
-  std::cout<<xp<<"\t"<<yp<<std::endl;
   if (xp > mode_button_left && xp < mode_button_left + mode_button_width
       && yp > mode_button_bottom && yp < mode_button_bottom + mode_button_height)
   {
-    seismic_mode = !seismic_mode;
-    simulator.clear_seismic_waves();
-    seismograph.clear_record();
-    if (seismic_mode)
-    {
-      colormap = &seismic;
-    }
-    else
-    {
-      colormap = &hot;
-    }
+    toggle_seismic_mode();
     return true;
   }
   return false;
@@ -466,17 +470,7 @@ void loop()
           switch(event.key.keysym.sym)
           {
             case SDLK_SPACE:
-              seismic_mode = !seismic_mode;
-              simulator.clear_seismic_waves();
-              seismograph.clear_record();
-              if (seismic_mode)
-              {
-                colormap = &seismic;
-              }
-              else
-              {
-                colormap = &hot;
-              }
+              toggle_seismic_mode();
               break;
 
 #ifndef __EMSCRIPTEN__
