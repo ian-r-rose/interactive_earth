@@ -26,6 +26,9 @@ bool include_composition = false;
 //Whether to do TPW calculation
 bool include_tpw = false;
 
+//Whether to show a button for toggling seismic mode.
+const bool show_mode_button = false;
+
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
 //as well as performance.
@@ -81,8 +84,6 @@ double simulation_time = 0.0;
 const float mode_button_x = -0.9;
 const float mode_button_y = -0.9;
 const float mode_button_radius = 0.1;
-
-
 
 //Global solver
 ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
@@ -140,12 +141,19 @@ void toggle_seismic_mode()
   }
 }
 
+/**
+ * Check to see if a button should handle a mouse event,
+ * rather than the simulator.
+ */
 inline bool check_buttons(float x, float y)
 {
   // Handle the weird choice of -0.5 to 0.5
   float xp = x*2.0f;
   float yp = y*2.0f;
-  if (std::sqrt((xp-mode_button_x)*(xp-mode_button_x) + (yp-mode_button_y)*(yp-mode_button_y)) < mode_button_radius)
+  if (
+      show_mode_button &&
+      std::sqrt((xp-mode_button_x)*(xp-mode_button_x) + (yp-mode_button_y)*(yp-mode_button_y)) < mode_button_radius
+     )
   {
     toggle_seismic_mode();
     return true;
@@ -310,7 +318,8 @@ void timestep()
     axis.draw();
   if (seismic_mode)
     seismograph.draw();
-  modebutton.draw();
+  if (show_mode_button)
+    modebutton.draw();
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -433,7 +442,8 @@ void init()
     if (include_tpw)
       axis.setup();
     seismograph.setup();
-    modebutton.setup();
+    if (show_mode_button)
+      modebutton.setup();
 }
 
 //Cleanup
@@ -444,7 +454,8 @@ void quit()
     if(include_tpw)
       axis.cleanup();
     seismograph.cleanup();
-    modebutton.cleanup();
+    if (show_mode_button)
+      modebutton.cleanup();
 
     SDL_GL_DeleteContext(context);
     SDL_Quit();
