@@ -29,8 +29,8 @@ bool include_tpw = false;
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
 //as well as performance.
-const unsigned int ntheta = 256;
-const unsigned int nr = 32;
+const unsigned int ntheta = 512;
+const unsigned int nr = 64;
 
 //Aspect ratio of the computational domain
 //is set by the inner radius, where the outer
@@ -138,6 +138,14 @@ inline bool check_buttons(float x, float y)
     seismic_mode = !seismic_mode;
     simulator.clear_seismic_waves();
     seismograph.clear_record();
+    if (seismic_mode)
+    {
+      colormap = &seismic;
+    }
+    else
+    {
+      colormap = &hot;
+    }
     return true;
   }
   return false;
@@ -461,6 +469,14 @@ void loop()
               seismic_mode = !seismic_mode;
               simulator.clear_seismic_waves();
               seismograph.clear_record();
+              if (seismic_mode)
+              {
+                colormap = &seismic;
+              }
+              else
+              {
+                colormap = &hot;
+              }
               break;
 
 #ifndef __EMSCRIPTEN__
