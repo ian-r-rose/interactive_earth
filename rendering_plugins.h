@@ -7,6 +7,8 @@ extern const double r_inner;
 extern const unsigned int nr, ntheta;
 extern const double flattening;
 
+extern bool seismic_mode;
+
 extern const float mode_button_x;
 extern const float mode_button_y;
 extern const float mode_button_radius;

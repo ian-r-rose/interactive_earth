@@ -832,6 +832,27 @@ void ModeButton::draw()
   const unsigned long n_lines = 100;
   const unsigned long n_vertices = n_triangles + 1 + n_lines + 1;
 
+  // Update the color if we are in seismic mode to indicate it is enabled.
+  color button_color;
+  button_color.R = seismic_mode ? 0.51 : 1.0;
+  button_color.G = seismic_mode ? 0.73  : 1.0;
+  button_color.B = seismic_mode ? 0.85 : 1.0;
+
+  //one vertex at the origin
+  vertex_colors[0] = button_color.R;
+  vertex_colors[1] = button_color.G; 
+  vertex_colors[2] = button_color.B; 
+
+  unsigned long c=3; //start at the next vertex index
+  for (unsigned long n = 0; n < n_triangles; ++n)
+  {
+    vertex_colors[c + 0] = button_color.R;
+    vertex_colors[c + 1] = button_color.G;
+    vertex_colors[c + 2] = button_color.B;
+
+    c += colors_per_vertex;
+  }
+
   glEnable(GL_BLEND);
 #ifndef __EMSCRIPTEN__
   glEnable(GL_LINE_SMOOTH);
@@ -860,6 +881,7 @@ void ModeButton::draw()
 
   glEnableVertexAttribArray(plugin_attribute_v_color);
   glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*colors_per_vertex, vertex_colors, GL_STATIC_DRAW);
   glVertexAttribPointer(
     plugin_attribute_v_color, // attribute
     3,                 // number of elements per vertex (r,g,b)
