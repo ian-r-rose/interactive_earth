@@ -29,8 +29,8 @@ bool include_tpw = false;
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
 //as well as performance.
-const unsigned int ntheta = 1024;
-const unsigned int nr = 128;
+const unsigned int ntheta = 512;
+const unsigned int nr = 64;
 
 //Aspect ratio of the computational domain
 //is set by the inner radius, where the outer
@@ -128,6 +128,19 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
   click_r = lr*(r-r_inner)/(1.0f-r_inner);
 }
 
+//Update where to add heat
+inline void handle_finger_motion(SDL_TouchFingerEvent *event)
+{
+  float x = event->x - 0.5f;
+  float y = 0.5f - event->y;
+
+  float theta, r;
+  compute_simulator_location( x, y, &theta, &r);
+
+  click_theta = ltheta * theta / 2. / M_PI;
+  click_r = lr*(r-r_inner)/(1.0f-r_inner);
+}
+
 //Change the Rayleigh number on scrolling
 inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 {
@@ -149,6 +162,28 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 
     float x = float(event->x)/float(xpix)-0.5f;
     float y = 1.0f-float(event->y)/float(ypix)-0.5f;
+
+    float theta, r;
+    compute_simulator_location(x, y, &theta, &r);
+
+    click_theta = theta;
+    click_r = r-r_inner;
+  }
+  else
+  {
+    click_state=0;
+  }
+}
+
+//Toggle whether to add heat, and whether it should
+//be positive or negative
+inline void handle_finger(SDL_TouchFingerEvent *event)
+{
+  if(event->type==SDL_FINGERDOWN)
+  {
+    click_state = 1;
+    float x = event->x - 0.5f;
+    float y = 0.5f - event->y;
 
     float theta, r;
     compute_simulator_location(x, y, &theta, &r);
@@ -418,6 +453,13 @@ void loop()
         break;
       case SDL_MOUSEWHEEL:
         handle_mouse_wheel(&event.wheel);
+        break;
+      case SDL_FINGERDOWN:
+      case SDL_FINGERUP:
+        handle_finger(&event.tfinger);
+        break;
+      case SDL_FINGERMOTION:
+        handle_finger_motion(&event.tfinger);
         break;
       default:
         break;
