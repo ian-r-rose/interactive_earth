@@ -29,8 +29,8 @@ bool include_tpw = false;
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
 //as well as performance.
-const unsigned int ntheta = 512;
-const unsigned int nr = 64;
+const unsigned int ntheta = 1024;
+const unsigned int nr = 128;
 
 //Aspect ratio of the computational domain
 //is set by the inner radius, where the outer
@@ -131,6 +131,10 @@ inline void handle_mouse_or_finger_motion(float x, float y)
 //Update where to add heat
 inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 {
+  // We handle toucn events separately.
+  if (event->which == SDL_TOUCH_MOUSEID) {
+    return;
+  }
   const float x = float(event->x)/float(xpix)-0.5f;
   const float y = 1.0f-float(event->y)/float(ypix)-0.5f;
   handle_mouse_or_finger_motion(x, y);
@@ -156,6 +160,10 @@ inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 //be positive or negative
 inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 {
+  // We handle toucn events separately.
+  if (event->which == SDL_TOUCH_MOUSEID) {
+    return;
+  }
   if(event->state==SDL_PRESSED)
   {
     if(event->button == SDL_BUTTON_LEFT)
