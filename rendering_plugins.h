@@ -125,12 +125,12 @@ class ModeButton : RenderingPlugin
     //Data for rendering with OpenGL
     GLfloat* vertices;
     GLfloat* vertex_colors;
-    GLuint* triangle_vertex_indices;
+    GLuint* vertex_indices;
 
     GLuint plugin_program;
     GLuint plugin_vertices;
     GLuint plugin_vertex_colors;
-    GLuint plugin_triangle_vertex_indices;
+    GLuint plugin_vertex_indices;
     GLint plugin_attribute_coord2d;
     GLint plugin_attribute_v_color;
 };

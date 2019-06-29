@@ -169,7 +169,7 @@ void Core::draw()
   glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
   glVertexAttribPointer(
     plugin_attribute_v_color, // attribute
-    3,                 // number of elements per verte (r,g,b)
+    3,                 // number of elements per vertex (r,g,b)
     GL_FLOAT,          // the type of each element
     GL_FALSE,          // take our values as-is
     0,                 // no extra data between each position
@@ -383,7 +383,7 @@ void Axis::draw()
   glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
   glVertexAttribPointer(
     plugin_attribute_v_color, // attribute
-    3,                 // number of elements per verte (r,g,b)
+    3,                 // number of elements per vertex (r,g,b)
     GL_FLOAT,          // the type of each element
     GL_FALSE,          // take our values as-is
     0,                 // no extra data between each position
@@ -630,7 +630,7 @@ void Seismograph::draw()
   glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
   glVertexAttribPointer(
     plugin_attribute_v_color, // attribute
-    4,                 // number of elements per verte (r,g,b,a)
+    4,                 // number of elements per vertex (r,g,b,a)
     GL_FLOAT,          // the type of each element
     GL_FALSE,          // take our values as-is
     0,                 // no extra data between each position
@@ -670,11 +670,12 @@ void ModeButton::setup()
 {
   {
     const unsigned long n_triangles = 2;
-    const unsigned long n_vertices = 4;
+    const unsigned long n_lines = 100;
+    const unsigned long n_vertices = n_lines + 1 + 4;
 
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
     vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
-    triangle_vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
+    vertex_indices = new GLuint[ n_triangles * vertices_per_triangle + n_lines * vertices_per_line ];
 
     color button_color = colormap(1.0);
 
@@ -687,15 +688,39 @@ void ModeButton::setup()
     vertices[5] = mode_button_bottom + mode_button_height;
     vertices[6] = mode_button_left;
     vertices[7] = mode_button_bottom + mode_button_height;
-    triangle_vertex_indices[0] = 0;
-    triangle_vertex_indices[1] = 2;
-    triangle_vertex_indices[2] = 3;
-    triangle_vertex_indices[3] = 0;
-    triangle_vertex_indices[4] = 1;
-    triangle_vertex_indices[5] = 2;
+    vertex_indices[0] = 0;
+    vertex_indices[1] = 2;
+    vertex_indices[2] = 3;
+    vertex_indices[3] = 0;
+    vertex_indices[4] = 1;
+    vertex_indices[5] = 2;
 
-    unsigned long c = 0; //start at the next vertex index
-    for (unsigned long n = 0; n < n_vertices; ++n)
+    // Make the button icon vertices
+    unsigned long v = 4 * coordinates_per_vertex;
+    const float padding = 0.01f;
+    for (unsigned long i = 0; i <= n_lines; i++)
+    {
+      const float x = 2.*M_PI*(float(i)/n_lines - 0.5);
+      vertices[v + 0] = mode_button_left + padding + i * (mode_button_width - 2.0*padding)/n_lines;
+      vertices[v + 1] =
+        mode_button_bottom +
+        mode_button_height/2.0f +
+        (mode_button_height/2.0f - 2.*padding) * std::cos(2.0*x/2.0*M_PI) * std::exp(-x*x/2.);
+
+      v += coordinates_per_vertex;
+    }
+
+    unsigned long idx = n_triangles * vertices_per_triangle;
+    for(unsigned long i = 0; i < n_lines; ++i)
+    {
+      vertex_indices[idx + 0] = i + 4; // 4 leading triangle vertex indices
+      vertex_indices[idx + 1] = i + 5;
+
+      idx += vertices_per_line;
+    }
+
+    unsigned long c = 0;
+    for (unsigned long n = 0; n < 4; ++n)
     {
       vertex_colors[c + 0] = button_color.R;
       vertex_colors[c + 1] = button_color.G;
@@ -703,10 +728,23 @@ void ModeButton::setup()
 
       c += colors_per_vertex;
     }
+    for (unsigned long n = 0; n <= n_lines; ++n)
+    {
+      vertex_colors[c + 0 ] = 0.0;
+      vertex_colors[c + 1 ] = 0.0;
+      vertex_colors[c + 2 ] = 0.0;
 
-    glGenBuffers(1, &plugin_triangle_vertex_indices);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_triangle_vertex_indices);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint)*n_triangles*vertices_per_triangle, triangle_vertex_indices, GL_STATIC_DRAW);
+      c += colors_per_vertex;
+    }
+
+    glGenBuffers(1, &plugin_vertex_indices);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_vertex_indices);
+    glBufferData(
+        GL_ELEMENT_ARRAY_BUFFER,
+        sizeof(GLuint)*(n_triangles*vertices_per_triangle + n_lines*vertices_per_line),
+        vertex_indices,
+        GL_STATIC_DRAW
+    );
 
     glGenBuffers(1, &plugin_vertices);
 
@@ -792,11 +830,20 @@ void ModeButton::setup()
 void ModeButton::draw()
 {
   const unsigned long n_triangles = 2;
-  const unsigned long n_vertices = 4;
+  const unsigned long n_lines = 100;
+  const unsigned long n_vertices = n_lines + 1 + 4;
+
+  glEnable(GL_BLEND);
+#ifndef __EMSCRIPTEN__
+  glEnable(GL_LINE_SMOOTH);
+#endif
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  glLineWidth(2.0);
 
   glUseProgram(plugin_program);
 
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_triangle_vertex_indices);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_vertex_indices);
 
   glEnableVertexAttribArray(plugin_attribute_coord2d);
 
@@ -815,29 +862,41 @@ void ModeButton::draw()
   glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
   glVertexAttribPointer(
     plugin_attribute_v_color, // attribute
-    3,                 // number of elements per verte (r,g,b)
+    3,                 // number of elements per vertex (r,g,b)
     GL_FLOAT,          // the type of each element
     GL_FALSE,          // take our values as-is
     0,                 // no extra data between each position
     0);
 
   glDrawElements(GL_TRIANGLES, n_triangles*vertices_per_triangle, GL_UNSIGNED_INT, 0);
+  glDrawElements(
+      GL_LINES,
+      n_lines*vertices_per_line,
+      GL_UNSIGNED_INT,
+      (void*)(((n_triangles)*vertices_per_triangle)*sizeof(GLuint))
+  );
 
   glDisableVertexAttribArray(plugin_attribute_coord2d);
   glDisableVertexAttribArray(plugin_attribute_v_color);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+  glDisable(GL_BLEND);
+#ifndef __EMSCRIPTEN__
+  glDisable(GL_LINE_SMOOTH);
+#endif
+  glLineWidth(1.0);
 }
 
 void ModeButton::cleanup()
 {
   delete[] vertices;
   delete[] vertex_colors;
-  delete[] triangle_vertex_indices;
+  delete[] vertex_indices;
 
   glDeleteProgram(plugin_program);
   glDeleteBuffers(1, &plugin_vertices);
   glDeleteBuffers(1, &plugin_vertex_colors);
-  glDeleteBuffers(1, &plugin_triangle_vertex_indices);
+  glDeleteBuffers(1, &plugin_vertex_indices);
 }
