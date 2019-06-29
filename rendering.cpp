@@ -18,8 +18,6 @@ void ConvectionSimulator::setup_opengl()
 {
   //Setup the vertices, indices, and colors
   {
-    GLfloat DX = 2.0*M_PI/grid.ntheta;
-    GLfloat DY = 1.0/(grid.nr-1);
     const short triangles_per_quad = 2;
     const short vertices_per_triangle = 3;
     const short coordinates_per_vertex = 2;

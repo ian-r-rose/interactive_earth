@@ -15,9 +15,6 @@ void Core::setup()
     vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
     triangle_vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
 
-    const float dtheta = 2.*M_PI/n_triangles;
-    const float r = r_inner;
-    
     color core_color = colormap(1.0);
 
     //one vertex at the origin
@@ -674,8 +671,6 @@ void ModeButton::setup()
   {
     const unsigned long n_triangles = 2;
     const unsigned long n_vertices = 4;
-    const float width = 0.2;
-    const float height = 0.1;
 
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
     vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
