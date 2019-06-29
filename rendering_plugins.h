@@ -7,10 +7,9 @@ extern const double r_inner;
 extern const unsigned int nr, ntheta;
 extern const double flattening;
 
-extern const float mode_button_left;
-extern const float mode_button_bottom;
-extern const float mode_button_width;
-extern const float mode_button_height;
+extern const float mode_button_x;
+extern const float mode_button_y;
+extern const float mode_button_radius;
 
 //Useful constants
 static const short vertices_per_triangle = 3;

@@ -78,10 +78,9 @@ color (*colormap)(double) = &hot;
 double simulation_time = 0.0;
 
 // Button geometries
-const float mode_button_left = -1.0;
-const float mode_button_bottom = -1.0;
-const float mode_button_width = 0.168;
-const float mode_button_height = 0.1;
+const float mode_button_x = -0.9;
+const float mode_button_y = -0.9;
+const float mode_button_radius = 0.1;
 
 
 
@@ -146,8 +145,7 @@ inline bool check_buttons(float x, float y)
   // Handle the weird choice of -0.5 to 0.5
   float xp = x*2.0f;
   float yp = y*2.0f;
-  if (xp > mode_button_left && xp < mode_button_left + mode_button_width
-      && yp > mode_button_bottom && yp < mode_button_bottom + mode_button_height)
+  if (std::sqrt((xp-mode_button_x)*(xp-mode_button_x) + (yp-mode_button_y)*(yp-mode_button_y)) < mode_button_radius)
   {
     toggle_seismic_mode();
     return true;

@@ -38,7 +38,7 @@ void Core::setup()
       v += coordinates_per_vertex;
       c += colors_per_vertex;
       i += vertices_per_triangle;
-    }      
+    }
 
     glGenBuffers(1, &plugin_triangle_vertex_indices);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_triangle_vertex_indices);
@@ -669,9 +669,9 @@ void Seismograph::cleanup()
 void ModeButton::setup()
 {
   {
-    const unsigned long n_triangles = 2;
+    const unsigned long n_triangles = 100;
     const unsigned long n_lines = 100;
-    const unsigned long n_vertices = n_lines + 1 + 4;
+    const unsigned long n_vertices = n_triangles + 1 + n_lines + 1;
 
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
     vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
@@ -679,55 +679,54 @@ void ModeButton::setup()
 
     color button_color = colormap(1.0);
 
-    // Make the button vertices
-    vertices[0] = mode_button_left;
-    vertices[1] = mode_button_bottom;
-    vertices[2] = mode_button_left + mode_button_width;
-    vertices[3] = mode_button_bottom;
-    vertices[4] = mode_button_left + mode_button_width;
-    vertices[5] = mode_button_bottom + mode_button_height;
-    vertices[6] = mode_button_left;
-    vertices[7] = mode_button_bottom + mode_button_height;
-    vertex_indices[0] = 0;
-    vertex_indices[1] = 2;
-    vertex_indices[2] = 3;
-    vertex_indices[3] = 0;
-    vertex_indices[4] = 1;
-    vertex_indices[5] = 2;
+    //one vertex at the origin
+    vertices[0] = mode_button_x;
+    vertices[1] = mode_button_y;
+    vertex_colors[0] = button_color.R;
+    vertex_colors[1] = button_color.G; 
+    vertex_colors[2] = button_color.B; 
+
+    unsigned long v = 2, c=3, i=0; //start at the next vertex index
+    for (unsigned long n = 0; n < n_triangles; ++n)
+    {
+      vertices[v + 0] = mode_button_x + mode_button_radius * std::cos(float(n)/n_triangles * 2.0f*M_PI);
+      vertices[v + 1] = mode_button_y + mode_button_radius * std::sin(float(n)/n_triangles * 2.0f*M_PI);
+
+      vertex_colors[c + 0] = button_color.R;
+      vertex_colors[c + 1] = button_color.G;
+      vertex_colors[c + 2] = button_color.B;
+
+      vertex_indices[i + 0] = 0;
+      vertex_indices[i + 1] = n+1;
+      vertex_indices[i + 2] = (n == n_triangles-1 ? 1 : n+2);
+
+      v += coordinates_per_vertex;
+      c += colors_per_vertex;
+      i += vertices_per_triangle;
+    }
 
     // Make the button icon vertices
-    unsigned long v = 4 * coordinates_per_vertex;
     const float padding = 0.01f;
-    for (unsigned long i = 0; i <= n_lines; i++)
+    for (unsigned long n = 0; n <= n_lines; n++)
     {
-      const float x = 2.*M_PI*(float(i)/n_lines - 0.5);
-      vertices[v + 0] = mode_button_left + padding + i * (mode_button_width - 2.0*padding)/n_lines;
+      const float x = 2.*M_PI*(float(n)/n_lines - 0.5);
+      vertices[v + 0] = mode_button_x - mode_button_radius + padding + n * 2.*(mode_button_radius - padding)/n_lines;
       vertices[v + 1] =
-        mode_button_bottom +
-        mode_button_height/2.0f +
-        (mode_button_height/2.0f - 2.*padding) * std::cos(2.0*x/2.0*M_PI) * std::exp(-x*x/2.);
+        mode_button_y +
+        (mode_button_radius - padding) * std::cos(2.0*x/2.0*M_PI) * std::exp(-x*x/2.);
 
       v += coordinates_per_vertex;
     }
 
     unsigned long idx = n_triangles * vertices_per_triangle;
-    for(unsigned long i = 0; i < n_lines; ++i)
+    for(unsigned long n = 0; n < n_lines; ++n)
     {
-      vertex_indices[idx + 0] = i + 4; // 4 leading triangle vertex indices
-      vertex_indices[idx + 1] = i + 5;
+      vertex_indices[idx + 0] = n + n_triangles + 1;
+      vertex_indices[idx + 1] = n + n_triangles + 2;
 
       idx += vertices_per_line;
     }
 
-    unsigned long c = 0;
-    for (unsigned long n = 0; n < 4; ++n)
-    {
-      vertex_colors[c + 0] = button_color.R;
-      vertex_colors[c + 1] = button_color.G;
-      vertex_colors[c + 2] = button_color.B;
-
-      c += colors_per_vertex;
-    }
     for (unsigned long n = 0; n <= n_lines; ++n)
     {
       vertex_colors[c + 0 ] = 0.0;
@@ -829,13 +828,14 @@ void ModeButton::setup()
 
 void ModeButton::draw()
 {
-  const unsigned long n_triangles = 2;
+  const unsigned long n_triangles = 100;
   const unsigned long n_lines = 100;
-  const unsigned long n_vertices = n_lines + 1 + 4;
+  const unsigned long n_vertices = n_triangles + 1 + n_lines + 1;
 
   glEnable(GL_BLEND);
 #ifndef __EMSCRIPTEN__
   glEnable(GL_LINE_SMOOTH);
+  glEnable(GL_POLYGON_SMOOTH);
 #endif
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -885,6 +885,7 @@ void ModeButton::draw()
   glDisable(GL_BLEND);
 #ifndef __EMSCRIPTEN__
   glDisable(GL_LINE_SMOOTH);
+  glDisable(GL_POLYGON_SMOOTH);
 #endif
   glLineWidth(1.0);
 }
