@@ -82,7 +82,7 @@ class ConvectionSimulator
 
   public:
     //Constructor and destructor
-    ConvectionSimulator( double inner_radius, int nx, int ny, bool include_composition);
+    ConvectionSimulator( double inner_radius, double r_scaling, double box_shift, double box_size, int nx, int ny, bool include_composition);
     ~ConvectionSimulator();
 
     //Querying physics information about the solver

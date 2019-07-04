@@ -27,7 +27,7 @@ bool include_composition = false;
 bool include_tpw = false;
 
 //Whether to show a button for toggling seismic mode.
-const bool show_mode_button = false;
+const bool show_mode_button = true;
 
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
@@ -44,6 +44,14 @@ const double r_inner = 0.5;
 //acting under centrifugal forces.
 const double flattening = 0.0;
 
+//Rescale computational domain
+const double r_scaling = 1.0;
+
+//Shift domain in the x-direction from left
+const double box_shift = 300; //
+//Size of computational domain
+const double box_size = 720;  // square
+
 /*********************************************
     PROBABLY DON'T MODIFY THE REST
     UNLESS YOU KNOW WHAT YOU ARE DOING.
@@ -54,7 +62,7 @@ const double flattening = 0.0;
 //as ltheta to lr to avoid a funny shaped grid,
 //which will result in a strange looking simulation.
 const double ltheta = 2.*M_PI;
-const double lr = 1.0-r_inner;
+const double lr = r_scaling*(1.0-r_inner);
 
 //Total number of pixels in x and y directions
 int xpix;
@@ -86,7 +94,7 @@ const float mode_button_y = -0.9;
 const float mode_button_radius = 0.1;
 
 //Global solver
-ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
+ConvectionSimulator simulator(r_inner, r_scaling, box_shift, box_size, ntheta,nr, include_composition);
 Axis axis(simulator);
 Core core(simulator);
 ModeButton modebutton(simulator);
@@ -148,8 +156,8 @@ void toggle_seismic_mode()
 inline bool check_buttons(float x, float y)
 {
   // Handle the weird choice of -0.5 to 0.5
-  float xp = x*2.0f;
-  float yp = y*2.0f;
+    float xp = x*2.0f;
+    float yp = y*2.0f;
   if (
       show_mode_button &&
       std::sqrt((xp-mode_button_x)*(xp-mode_button_x) + (yp-mode_button_y)*(yp-mode_button_y)) < mode_button_radius
@@ -180,16 +188,16 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
   if (event->which == SDL_TOUCH_MOUSEID) {
     return;
   }
-  const float x = float(event->x)/float(xpix)-0.5f;
-  const float y = 1.0f-float(event->y)/float(ypix)-0.5f;
+  const float x =  (float(event->x)-float(box_shift))/float(box_size)-0.5f;
+  const float y = float(ypix)/float(box_size)-(float(event->y)+50)/float(box_size)-0.5f;
   handle_mouse_or_finger_motion(x, y);
 }
 
 //Update where to add heat
 inline void handle_finger_motion(SDL_TouchFingerEvent *event)
 {
-  float x = event->x - 0.5f;
-  float y = 0.5f - event->y;
+  const float x =  (float(event->x)-float(box_shift))/float(box_size)-0.5f;
+  const float y = float(ypix)/float(box_size)-(float(event->y)+50)/float(box_size)-0.5f;
   handle_mouse_or_finger_motion(x, y);
 }
 
@@ -216,16 +224,16 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
     if(event->button == SDL_BUTTON_RIGHT)
       click_state = -1;
 
-    float x = float(event->x)/float(xpix)-0.5f;
-    float y = 1.0f-float(event->y)/float(ypix)-0.5f;
-
+    float x =  (float(event->x)-float(box_shift))/float(box_size)-0.5f;
+    float y = float(ypix)/float(box_size)-(float(event->y)+50)/float(box_size)-0.5f;
+      
     check_buttons(x, y);
 
     float theta, r;
     compute_simulator_location(x, y, &theta, &r);
 
     click_theta = theta;
-    click_r = r-r_inner;
+    click_r = r-r_scaling*r_inner;
   }
   else
   {
@@ -240,15 +248,15 @@ inline void handle_finger_down(SDL_TouchFingerEvent *event)
   if(event->type==SDL_FINGERDOWN)
   {
     click_state = 1;
-    float x = event->x - 0.5f;
-    float y = 0.5f - event->y;
+    float x =  (float(event->x)-float(box_shift))/float(box_size)-0.5f;
+    float y = float(ypix)/float(box_size)-(float(event->y)+50)/float(box_size)-0.5f;
 
     check_buttons(x, y);
     float theta, r;
     compute_simulator_location(x, y, &theta, &r);
 
     click_theta = theta;
-    click_r = r-r_inner;
+    click_r = r-r_scaling*r_inner;
   }
   else
   {
@@ -258,7 +266,7 @@ inline void handle_finger_down(SDL_TouchFingerEvent *event)
 
 inline bool in_domain( const float theta, const float r )
 {
-  return (r+r_inner < 1.) && ( r > 0.);
+  return (r+r_scaling*r_inner < 1.) && ( r > 0.);
 }
 
 void cycle_colorscale()
@@ -281,6 +289,7 @@ void text_output()
                                 "\u00b3", "\u2074", "\u2075",
                                 "\u2076", "\u2077", "\u2078",
                                 "\u2079"};
+  
   //Output Rayleigh information
   const double Ra = simulator.rayleigh_number();
   if( Ra < 1000 )
@@ -306,6 +315,7 @@ void text_output()
 
   //clear the line
   std::cout<<std::endl;
+  
 }
 
 //Actually perform the timestep
@@ -388,7 +398,7 @@ void init()
     //Identify the largest display
     int max_display_dimension = 0;
     SDL_Rect draw_rect;
-    float screen_fraction = 0.8;
+    float screen_fraction = 1.0;
     for (unsigned int i=0; i < n_displays; ++i)
     {
       SDL_Rect r;
@@ -412,7 +422,7 @@ void init()
        "Convection",
         draw_rect.x + draw_rect.w/2 - xpix/2 , draw_rect.y + draw_rect.h/2 - ypix/2,
         xpix, ypix,
-        SDL_WINDOW_OPENGL);
+        SDL_WINDOW_OPENGL|SDL_WINDOW_FULLSCREEN);
 #else
     int width, height;
     emscripten_get_canvas_element_size("#canvas", &width, &height);

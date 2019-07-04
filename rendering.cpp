@@ -18,6 +18,8 @@ void ConvectionSimulator::setup_opengl()
 {
   //Setup the vertices, indices, and colors
   {
+    glViewport(grid.box_shift , 50, grid.box_size ,grid.box_size);
+
     const short triangles_per_quad = 2;
     const short vertices_per_triangle = 3;
     const short coordinates_per_vertex = 2;

@@ -134,11 +134,11 @@ class RegularGrid
     const union { double dx; double dtheta; }; //node spacing in x/theta direction
     const union { double dy; double dr; }; //node spacing in y/r direction
     const int ncells; //Total number of cells
-    const double r_inner, r_outer;
+    const double r_inner, r_outer, box_size, box_shift;
 
-    RegularGrid(const double inner_radius, const unsigned int num_theta, const unsigned int num_r)
-                  : r_inner(inner_radius), r_outer(1.0), ltheta(2.0*M_PI), lr(1.0-inner_radius),
-                    ntheta(num_theta), nr(num_r), dtheta(ltheta/ntheta), dr(lr/(nr-1)), ncells(ntheta*nr)
+    RegularGrid(const double inner_radius, const double r_scaling, const double box_shift,   const double box_size, const unsigned int num_theta, const unsigned int num_r)
+    : r_inner(r_scaling*inner_radius), r_outer(r_scaling*1.0), box_shift(box_shift), box_size(box_size), ltheta(2.0*M_PI), lr(r_scaling*(1.0-inner_radius)),
+    ntheta(num_theta), nr(num_r), dtheta(ltheta/ntheta), dr(lr/(nr-1)), ncells(ntheta*nr)
                   {}
     const iterator begin() { return iterator(0, *this); }
     const iterator end() {return iterator(ncells, *this);}

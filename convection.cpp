@@ -12,12 +12,15 @@ inline double dmax (double x, double y) { return x > y ? x : y; }
 
 /*Constructor for the solver. The parameters are in order:
   inner_radius : inner radius, compared to an outer radius of one.
+  r_scaling : sclaing factor for domain
+  box_shift : lateral shift for domain from lower left corner
+  box_size : size of square domain
   ntheta : number of cells in theta direction
   nr : number of cells in r direction
-  Rayleigh : initial Rayleigh number
+  include_composition : flag for composition
 */
-ConvectionSimulator::ConvectionSimulator( double inner_radius, int ntheta, int nr, bool include_composition):
-                          grid(inner_radius, ntheta, nr),
+ConvectionSimulator::ConvectionSimulator( double inner_radius,double r_scaling, double box_shift, double box_size,  int ntheta, int nr, bool include_composition):
+                          grid(inner_radius, r_scaling, box_shift, box_size, ntheta, nr),
                           include_composition (include_composition)
 {
   //Allocate memory for data vectors
