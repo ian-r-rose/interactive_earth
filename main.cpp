@@ -390,9 +390,9 @@ void timestep()
   else
   {
     //Make earthquakes
-    if(pressing && alt_press && in_domain(press_theta,press_r) )
+    if(pressing && !alt_press && in_domain(press_theta,press_r) )
       simulator.earthquake(press_theta, press_r);
-    else if(pressing && !alt_press && in_domain(press_theta,press_r) )
+    else if(pressing && alt_press && in_domain(press_theta,press_r) )
       simulator.place_seismometer(press_theta, press_r);
     //Propagate waves
     simulator.propagate_seismic_waves();
