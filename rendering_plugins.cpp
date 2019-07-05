@@ -918,68 +918,60 @@ void ModeButton::cleanup()
 void HeatButton::setup()
 {
   {
-    const unsigned long n_triangles = 100;
-    const unsigned long n_lines = 100;
-    const unsigned long n_vertices = n_triangles + 1 + n_lines + 1;
+    const unsigned long n_theta = 64;
+    const unsigned long n_r = 16;
+    const unsigned long n_triangles = n_theta + (n_r - 1)*n_theta*2;
+    const unsigned long n_vertices = 1 + n_r * n_theta; // One for the central vertex
 
     vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
     vertex_colors = new GLfloat[ n_vertices * colors_per_vertex ];
-    vertex_indices = new GLuint[ n_triangles * vertices_per_triangle + n_lines * vertices_per_line ];
+    vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
 
     //one vertex at the origin
     vertices[0] = heat_button_x;
     vertices[1] = heat_button_y;
 
-    unsigned long v = 2, c=3, i=0; //start at the next vertex index
-    for (unsigned long n = 0; n < n_triangles; ++n)
+    unsigned long n = 1, v = 2, i=0; //start at the next vertex index
+    // Set up triangles for the inner fan
+    for (unsigned long nt = 0; nt < n_theta; ++nt, ++n)
     {
-      vertices[v + 0] = heat_button_x + button_radius * std::cos(float(n)/n_triangles * 2.0f*M_PI);
-      vertices[v + 1] = heat_button_y + button_radius * std::sin(float(n)/n_triangles * 2.0f*M_PI);
+      const float r = 1.0f/n_r * button_radius;
+      const float theta = float(nt) / n_theta * M_PI*2.0f;
+      vertices[v + 0] = heat_button_x + r * std::cos(theta);
+      vertices[v + 1] = heat_button_y + r * std::sin(theta);
 
       vertex_indices[i + 0] = 0;
-      vertex_indices[i + 1] = n+1;
-      vertex_indices[i + 2] = (n == n_triangles-1 ? 1 : n+2);
+      vertex_indices[i + 1] = n;
+      vertex_indices[i + 2] = (nt == n_theta - 1 ? 1 : n + 1);
 
       v += coordinates_per_vertex;
       i += vertices_per_triangle;
     }
+    // Set up the outer triangles
+    for (unsigned long nr = 0; nr < n_r-1; ++nr)
+      for (unsigned long nt = 0; nt < n_theta; ++nt, ++n)
+      {
+        const float r = float(nr+1)/n_r * button_radius;
+        const float theta = float(nt) / n_theta * M_PI*2.0f;
+        vertices[v + 0] = heat_button_x + r * std::cos(theta);
+        vertices[v + 1] = heat_button_y + r * std::sin(theta);
 
-    // Make the button icon vertices
-    const float padding = 0.01f;
-    for (unsigned long n = 0; n <= n_lines; n++)
-    {
-      const float x = 2.*M_PI*(float(n)/n_lines - 0.5);
-      vertices[v + 0] = heat_button_x - button_radius + padding + n * 2.*(button_radius - padding)/n_lines;
-      vertices[v + 1] =
-        heat_button_y +
-        (button_radius - padding) * std::cos(2.0*x/2.0*M_PI) * std::exp(-x*x/2.);
-
-      v += coordinates_per_vertex;
-    }
-
-    unsigned long idx = n_triangles * vertices_per_triangle;
-    for(unsigned long n = 0; n < n_lines; ++n)
-    {
-      vertex_indices[idx + 0] = n + n_triangles + 1;
-      vertex_indices[idx + 1] = n + n_triangles + 2;
-
-      idx += vertices_per_line;
-    }
-
-    for (unsigned long n = 0; n <= n_lines; ++n)
-    {
-      vertex_colors[c + 0 ] = 0.0;
-      vertex_colors[c + 1 ] = 0.0;
-      vertex_colors[c + 2 ] = 0.0;
-
-      c += colors_per_vertex;
-    }
+        vertex_indices[i + 0] = n - n_theta;
+        vertex_indices[i + 1] = n;
+        vertex_indices[i + 2] = (nt == n_theta - 1 ? (n - n_theta + 1) : n + 1);
+        vertex_indices[i + 3] = n - n_theta;
+        vertex_indices[i + 4] = (nt == n_theta - 1 ? (n - n_theta + 1) : n + 1);
+        vertex_indices[i + 5] = (nt == n_theta - 1 ? (n - 2*n_theta+1) : n - n_theta + 1);
+        
+        v += coordinates_per_vertex;
+        i += 2*vertices_per_triangle;
+      }
 
     glGenBuffers(1, &plugin_vertex_indices);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_vertex_indices);
     glBufferData(
         GL_ELEMENT_ARRAY_BUFFER,
-        sizeof(GLuint)*(n_triangles*vertices_per_triangle + n_lines*vertices_per_line),
+        sizeof(GLuint)*(n_triangles*vertices_per_triangle),
         vertex_indices,
         GL_STATIC_DRAW
     );
@@ -1067,40 +1059,42 @@ void HeatButton::setup()
 
 void HeatButton::draw()
 {
-  const unsigned long n_triangles = 100;
-  const unsigned long n_lines = 100;
-  const unsigned long n_vertices = n_triangles + 1 + n_lines + 1;
+  const unsigned long n_theta = 64;
+  const unsigned long n_r = 16;
+  const unsigned long n_triangles = n_theta + (n_r - 1)*n_theta*2;
+  const unsigned long n_vertices = 1 + n_r * n_theta; // One for the central vertex
 
   // Update the button color depending upon whether we are in hot or cold mode
-  color *button_color;
   color hot_color = hot(0.75);
   color cold_color = hot(0.25);
   color disabled_color = { 0.5, 0.5, 0.5 };
-  button_color =  seismic_mode ? &disabled_color : alt_press ? &cold_color : &hot_color;
 
   //one vertex at the origin
-  vertex_colors[0] = button_color->R;
-  vertex_colors[1] = button_color->G;
-  vertex_colors[2] = button_color->B;
+  const float t_center = alt_press ? 0.0 : 1.0;
+  const color center_color = hot(t_center);
+  vertex_colors[0] = center_color.R;
+  vertex_colors[1] = center_color.G;
+  vertex_colors[2] = center_color.B;
 
   unsigned long c=3; //start at the next vertex index
-  for (unsigned long n = 0; n < n_triangles; ++n)
+  for (unsigned long n = 1; n < n_vertices; ++n)
   {
-    vertex_colors[c + 0] = button_color->R;
-    vertex_colors[c + 1] = button_color->G;
-    vertex_colors[c + 2] = button_color->B;
+    const unsigned int nr = (n-1)/n_r;
+    const float r = float(nr)/n_r;
+    const float temp = alt_press ? 0.5 - 0.5*std::exp(-r*r/2.0) : 0.5 + 0.5*std::exp(-r*r/2.0);
+    const color vertex_color = hot(temp);
+    vertex_colors[c + 0] = vertex_color.R;
+    vertex_colors[c + 1] = vertex_color.G;
+    vertex_colors[c + 2] = vertex_color.B;
 
     c += colors_per_vertex;
   }
 
   glEnable(GL_BLEND);
 #ifndef __EMSCRIPTEN__
-  glEnable(GL_LINE_SMOOTH);
   glEnable(GL_POLYGON_SMOOTH);
 #endif
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-  glLineWidth(2.0);
 
   glUseProgram(plugin_program);
 
@@ -1131,12 +1125,6 @@ void HeatButton::draw()
     0);
 
   glDrawElements(GL_TRIANGLES, n_triangles*vertices_per_triangle, GL_UNSIGNED_INT, 0);
-  glDrawElements(
-      GL_LINES,
-      n_lines*vertices_per_line,
-      GL_UNSIGNED_INT,
-      (void*)(((n_triangles)*vertices_per_triangle)*sizeof(GLuint))
-  );
 
   glDisableVertexAttribArray(plugin_attribute_coord2d);
   glDisableVertexAttribArray(plugin_attribute_v_color);
@@ -1146,10 +1134,8 @@ void HeatButton::draw()
 
   glDisable(GL_BLEND);
 #ifndef __EMSCRIPTEN__
-  glDisable(GL_LINE_SMOOTH);
   glDisable(GL_POLYGON_SMOOTH);
 #endif
-  glLineWidth(1.0);
 }
 
 void HeatButton::cleanup()
