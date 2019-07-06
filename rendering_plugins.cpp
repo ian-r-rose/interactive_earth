@@ -1071,6 +1071,7 @@ void HeatButton::draw()
 
   //one vertex at the origin
   const float t_center = alt_press ? 0.0 : 1.0;
+  const float t_background = 0.3;
   const color center_color = hot(t_center);
   vertex_colors[0] = center_color.R;
   vertex_colors[1] = center_color.G;
@@ -1079,9 +1080,11 @@ void HeatButton::draw()
   unsigned long c=3; //start at the next vertex index
   for (unsigned long n = 1; n < n_vertices; ++n)
   {
-    const unsigned int nr = (n-1)/n_r;
+    const unsigned int nr = (n-1)/n_theta;
     const float r = float(nr)/n_r;
-    const float temp = alt_press ? 0.5 - 0.5*std::exp(-r*r/2.0) : 0.5 + 0.5*std::exp(-r*r/2.0);
+    const float temp = alt_press ?
+                       t_background - t_background*std::exp(-r*r*5.0) :
+                       t_background + (1.0-t_background)*std::exp(-r*r*5.0);
     const color vertex_color = hot(temp);
     vertex_colors[c + 0] = vertex_color.R;
     vertex_colors[c + 1] = vertex_color.G;
