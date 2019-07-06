@@ -139,12 +139,12 @@ void toggle_seismic_mode()
   if (seismic_mode)
   {
     colormap = &seismic;
+    alt_press = false;
   }
   else
   {
     colormap = &hot;
   }
-  alt_press = false;
 }
 
 /**
@@ -223,19 +223,21 @@ inline void handle_mouse_button(SDL_MouseButtonEvent *event)
   if (event->which == SDL_TOUCH_MOUSEID) {
     return;
   }
+
   if(event->state==SDL_PRESSED)
   {
+    float x = float(event->x)/float(xpix)-0.5f;
+    float y = 1.0f-float(event->y)/float(ypix)-0.5f;
+
+    // Check if this is a button press
+    const bool handled = check_buttons(x, y);
+    if (handled) return;
+
     pressing = true;
     if(event->button == SDL_BUTTON_LEFT)
       alt_press = false;
     if(event->button == SDL_BUTTON_RIGHT)
       alt_press = true;
-
-    float x = float(event->x)/float(xpix)-0.5f;
-    float y = 1.0f-float(event->y)/float(ypix)-0.5f;
-
-    const bool handled = check_buttons(x, y);
-    if (handled) return;
 
     float theta, r;
     compute_simulator_location(x, y, &theta, &r);
