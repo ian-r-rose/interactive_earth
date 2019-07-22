@@ -14,7 +14,7 @@ More about the project can be found [here](http://ian-r-rose.github.io/interacti
 An introduction to the underlying science can be found [here](http://ian-r-rose.github.io/interactive_earth/explanation.html).
 
 ## Compiling on Ubuntu Linux
-- Install ```fftw3```, ```SDL2```, and ```GLEW``` using ```apt-get```
+- Install ```fftw3```, ```SDL2```, and ```GLEW``` using ```apt-get install libfftw3-dev libsdl2-dev libglew-dev```
 - Rename ```Makefile.linux``` to ```makefile```
 - Run ```make``` on the command line to compile the project
 - run the program by typing its path and name in the command line: ```./interactive_earth```
