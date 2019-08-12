@@ -182,7 +182,6 @@ inline void handle_mouse_or_finger_motion(float x, float y)
   float theta, r;
 
   compute_simulator_location( x, y, &theta, &r);
-
   press_theta = ltheta * theta / 2. / M_PI;
   press_r = lr*(r-r_inner)/(1.0f-r_inner);
 }
@@ -202,6 +201,9 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 //Update where to add heat
 inline void handle_finger_motion(SDL_TouchFingerEvent *event)
 {
+    if (SDL_GetTouchDevice(event->touchId)==0) {
+        return;
+    }
   float x = event->x - 0.5f;
   float y = 0.5f - event->y;
   handle_mouse_or_finger_motion(x, y);
@@ -257,6 +259,9 @@ inline void handle_finger_down(SDL_TouchFingerEvent *event)
 {
   if(event->type==SDL_FINGERDOWN)
   {
+      if (SDL_GetTouchDevice(event->touchId)==0) {
+          return;
+      }
     pressing = true;
     float x = event->x - 0.5f;
     float y = 0.5f - event->y;
