@@ -20,7 +20,7 @@ An introduction to the underlying science can be found [here](http://ian-r-rose.
 - run the program by typing its path and name in the command line: ```./interactive_earth```
 
 ## Compiling on a Mac
-- brew install the following dependencies: ```fftw3```, ```SDL2```, ```GLEW```
+- brew install the following dependencies: ```fftw```, ```SDL2```, ```GLEW```
 - rename ```Makefile.osx``` to ```makefile```
 - run the command ```make``` in the command line
 - run the program by typing its path and name in the command line: ```./interactive_earth```
