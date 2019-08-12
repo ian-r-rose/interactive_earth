@@ -2,14 +2,12 @@
 #include "convection.h"
 #include "color.h"
 
-#ifndef LEGACY_OPENGL
 static GLuint program;
 static GLuint vbo_vertices;
 static GLuint vbo_colors;
 static GLuint ibo_triangle_vertex_indices;
 static GLint attribute_coord2d;
 static GLint attribute_v_color;
-#endif //LEGACY_OPENGL
 
 //get access to some of the globals
 extern const double flattening;
@@ -18,11 +16,8 @@ extern color (*colormap)(double);
 
 void ConvectionSimulator::setup_opengl()
 {
-#ifndef LEGACY_OPENGL
   //Setup the vertices, indices, and colors
   {
-    GLfloat DX = 2.0*M_PI/grid.ntheta;
-    GLfloat DY = 1.0/(grid.nr-1);
     const short triangles_per_quad = 2;
     const short vertices_per_triangle = 3;
     const short coordinates_per_vertex = 2;
@@ -132,15 +127,11 @@ void ConvectionSimulator::setup_opengl()
     fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
     return;
   }
-
-#endif //LEGACY_OPENGL
-
   return;
 }
 
 void ConvectionSimulator::cleanup_opengl()
 {
-#ifndef LEGACY_OPENGL
   delete[] vertices;
   delete[] vertex_colors;
   delete[] triangle_vertex_indices;
@@ -149,13 +140,11 @@ void ConvectionSimulator::cleanup_opengl()
   glDeleteBuffers(1, &vbo_vertices);
   glDeleteBuffers(1, &vbo_colors);
   glDeleteBuffers(1, &ibo_triangle_vertex_indices);
-#endif //LEGACY_OPENGL
 }
 
 void ConvectionSimulator::draw( bool draw_composition )
 {
   double displacement_factor = 1.0;
-#ifndef LEGACY_OPENGL
   const short triangles_per_quad = 2;
   const short vertices_per_triangle = 3;
   const short colors_per_vertex = 3;
@@ -244,76 +233,5 @@ void ConvectionSimulator::draw( bool draw_composition )
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-#else
-
-  GLfloat DX = 2.0*M_PI/(grid.ntheta);
-  GLfloat DY = 1.0/(grid.nr-1);
-
-  glClearColor(0.0, 0.0, 0.0, 0.0);
-  glClear(GL_COLOR_BUFFER_BIT);
-  glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
-  glBegin(GL_TRIANGLE_STRIP);
-  for( RegularGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
-  {
-    if (cell->at_left_boundary() && cell->self() != 0.)
-      glBegin(GL_TRIANGLE_STRIP);
-
-    color c_s = colormap(T[cell->self()]);
-    color c_u = colormap(T[cell->up()]);
-
-    c_s.R += displacement_factor*D[cell->self()];
-    c_s.G += displacement_factor*D[cell->self()];
-    c_s.B += displacement_factor*D[cell->self()];
-    c_u.R += displacement_factor*D[cell->up()];
-    c_u.G += displacement_factor*D[cell->up()];
-    c_u.B += displacement_factor*D[cell->up()];
-
-    const float r = grid.r_inner + (cell->yindex()*DY * (1.0f - grid.r_inner) );
-    const float r_up = grid.r_inner + ((cell->yindex()+1)*DY * (1.0f - grid.r_inner) );
-    const float theta = cell->xindex()*DX;
-
-    glColor3f(c_s.R, c_s.G, c_s.B);
-    glVertex2f(r * std::cos(theta), r * std::sin(theta));
-    glColor3f(c_u.R, c_u.G, c_u.B);
-    glVertex2f(r_up * std::cos(theta), r_up * std::sin(theta));
-
-    //Add last strip for periodicity
-    if (cell->at_right_boundary() )
-    {
-      color c_s, c_u;
-      if (draw_composition)
-      {
-        c_s = colormap(C[cell->self()]);
-        c_u = colormap(C[cell->up()]);
-      }
-      else
-      {
-        c_s = colormap(T[cell->self()]);
-        c_u = colormap(T[cell->up()]);
-      }
-
-      c_s.R += displacement_factor*D[cell->right()];
-      c_s.G += displacement_factor*D[cell->right()];
-      c_s.B += displacement_factor*D[cell->right()];
-      c_u.R += displacement_factor*D[cell->upright()];
-      c_u.G += displacement_factor*D[cell->upright()];
-      c_u.B += displacement_factor*D[cell->upright()];
-
-      const float r = grid.r_inner + (cell->yindex()*DY * (1.0f - grid.r_inner) );
-      const float r_up = grid.r_inner + ((cell->yindex()+1)*DY * (1.0f - grid.r_inner) );
-      const float theta = 0.0;
-
-      glColor3f(c_s.R, c_s.G, c_s.B);
-      glVertex2f(r * std::cos(theta), r * std::sin(theta));
-      glColor3f(c_u.R, c_u.G, c_u.B);
-      glVertex2f(r_up * std::cos(theta), r_up * std::sin(theta));
-      glEnd();
-    }
-  }
-  glFlush();
-
-#endif //LEGACY_OPENGL
-
 }
 

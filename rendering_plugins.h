@@ -3,9 +3,21 @@
 
 #include "convection.h"
 
+// Geometry info
 extern const double r_inner;
 extern const unsigned int nr, ntheta;
 extern const double flattening;
+
+// User interaction state
+extern bool seismic_mode;
+extern bool pressing;
+extern bool alt_press;
+
+extern const float mode_button_x;
+extern const float mode_button_y;
+extern const float heat_button_x;
+extern const float heat_button_y;
+extern const float button_radius;
 
 //Useful constants
 static const short vertices_per_triangle = 3;
@@ -104,6 +116,50 @@ class Seismograph : RenderingPlugin
     GLuint plugin_vertices;
     GLuint plugin_vertex_colors;
     GLuint plugin_line_vertex_indices;
+    GLint plugin_attribute_coord2d;
+    GLint plugin_attribute_v_color;
+};
+
+class ModeButton : RenderingPlugin
+{
+  public:
+    ModeButton( const ConvectionSimulator &sim ) : RenderingPlugin(sim) {}
+    void setup();
+    void draw();
+    void cleanup();
+
+  private:
+    //Data for rendering with OpenGL
+    GLfloat* vertices;
+    GLfloat* vertex_colors;
+    GLuint* vertex_indices;
+
+    GLuint plugin_program;
+    GLuint plugin_vertices;
+    GLuint plugin_vertex_colors;
+    GLuint plugin_vertex_indices;
+    GLint plugin_attribute_coord2d;
+    GLint plugin_attribute_v_color;
+};
+
+class HeatButton : RenderingPlugin
+{
+  public:
+    HeatButton( const ConvectionSimulator &sim ) : RenderingPlugin(sim) {}
+    void setup();
+    void draw();
+    void cleanup();
+
+  private:
+    //Data for rendering with OpenGL
+    GLfloat* vertices;
+    GLfloat* vertex_colors;
+    GLuint* vertex_indices;
+
+    GLuint plugin_program;
+    GLuint plugin_vertices;
+    GLuint plugin_vertex_colors;
+    GLuint plugin_vertex_indices;
     GLint plugin_attribute_coord2d;
     GLint plugin_attribute_v_color;
 };

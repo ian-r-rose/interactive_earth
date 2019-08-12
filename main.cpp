@@ -26,11 +26,14 @@ bool include_composition = false;
 //Whether to do TPW calculation
 bool include_tpw = false;
 
+//Whether to show a button for toggling seismic mode.
+const bool show_buttons = true;
+
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
 //as well as performance.
-const unsigned int ntheta = 1024;
-const unsigned int nr = 128;
+const unsigned int ntheta = 512;
+const unsigned int nr = 64;
 
 //Aspect ratio of the computational domain
 //is set by the inner radius, where the outer
@@ -58,9 +61,11 @@ int xpix;
 int ypix;
 
 //Whether to add heat to the simulation on mouse click.
-int click_state = 0;
+bool alt_press = false;
+bool pressing = false;
+
 //Location of heat-adding, chemistry adding, or earthquake generation
-double click_theta, click_r;
+double press_theta, press_r;
 
 //Whether we are in earthquake mode
 bool seismic_mode = false;
@@ -77,10 +82,19 @@ color (*colormap)(double) = &hot;
 //The simulation time.
 double simulation_time = 0.0;
 
+// Button geometries
+const float mode_button_x = -0.9;
+const float mode_button_y = -0.9;
+const float heat_button_x = -mode_button_x;
+const float heat_button_y = mode_button_y;
+const float button_radius = 0.1;
+
 //Global solver
 ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
 Axis axis(simulator);
 Core core(simulator);
+ModeButton modebutton(simulator);
+HeatButton heatbutton(simulator);
 Seismograph seismograph(simulator);
 
 //Structures for initializing a window and OpenGL conext
@@ -89,6 +103,8 @@ SDL_Window *window=NULL;
 
 //Given an x and y location, compute the r, theta location of the 
 //simulator domain. Can handle the case of ellipticity.
+//x and y are assumed to range from -0.5 to 0.5, not -1 to -1.
+//Why? I'm not sure and it is lost to the sands of time.
 inline void compute_simulator_location( const float x, const float y, float *theta, float *r )
 {
   //Scale the click coordinates so that they are
@@ -115,17 +131,80 @@ inline void compute_simulator_location( const float x, const float y, float *the
   *r = 2.*std::sqrt( xpp*xpp + ypp*ypp );
 }
 
+void toggle_seismic_mode()
+{
+  seismic_mode = !seismic_mode;
+  simulator.clear_seismic_waves();
+  seismograph.clear_record();
+  if (seismic_mode)
+  {
+    colormap = &seismic;
+    alt_press = false;
+  }
+  else
+  {
+    colormap = &hot;
+  }
+}
+
+/**
+ * Check to see if a button should handle a mouse event,
+ * rather than the simulator.
+ */
+inline bool check_buttons(float x, float y)
+{
+  // Handle the weird choice of -0.5 to 0.5
+  float xp = x*2.0f;
+  float yp = y*2.0f;
+  if (
+      show_buttons &&
+      std::sqrt((xp-mode_button_x)*(xp-mode_button_x) + (yp-mode_button_y)*(yp-mode_button_y)) < button_radius
+     )
+  {
+    toggle_seismic_mode();
+    return true;
+  }
+  if (
+      show_buttons &&
+      std::sqrt((xp-heat_button_x)*(xp-heat_button_x) + (yp-heat_button_y)*(yp-heat_button_y)) < button_radius
+     )
+  {
+    alt_press = !alt_press;
+    return true;
+  }
+  return false;
+}
+
+//Given x,y from -0.5 to 0.5, from a mouse button
+//or finger event, handle it in the simulator.
+inline void handle_mouse_or_finger_motion(float x, float y)
+{
+  float theta, r;
+
+  compute_simulator_location( x, y, &theta, &r);
+
+  press_theta = ltheta * theta / 2. / M_PI;
+  press_r = lr*(r-r_inner)/(1.0f-r_inner);
+}
+
 //Update where to add heat
 inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 {
-  float x = float(event->x)/float(xpix)-0.5f;
-  float y = 1.0f-float(event->y)/float(ypix)-0.5f;
+  // We handle toucn events separately.
+  if (event->which == SDL_TOUCH_MOUSEID) {
+    return;
+  }
+  const float x = float(event->x)/float(xpix)-0.5f;
+  const float y = 1.0f-float(event->y)/float(ypix)-0.5f;
+  handle_mouse_or_finger_motion(x, y);
+}
 
-  float theta, r;
-  compute_simulator_location( x, y, &theta, &r);
-
-  click_theta = ltheta * theta / 2. / M_PI;
-  click_r = lr*(r-r_inner)/(1.0f-r_inner);
+//Update where to add heat
+inline void handle_finger_motion(SDL_TouchFingerEvent *event)
+{
+  float x = event->x - 0.5f;
+  float y = 0.5f - event->y;
+  handle_mouse_or_finger_motion(x, y);
 }
 
 //Change the Rayleigh number on scrolling
@@ -140,25 +219,60 @@ inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
 //be positive or negative
 inline void handle_mouse_button(SDL_MouseButtonEvent *event)
 {
+  // We handle toucn events separately.
+  if (event->which == SDL_TOUCH_MOUSEID) {
+    return;
+  }
+
   if(event->state==SDL_PRESSED)
   {
-    if(event->button == SDL_BUTTON_LEFT)
-      click_state = 1;
-    if(event->button == SDL_BUTTON_RIGHT)
-      click_state = -1;
-
     float x = float(event->x)/float(xpix)-0.5f;
     float y = 1.0f-float(event->y)/float(ypix)-0.5f;
+
+    // Check if this is a button press
+    const bool handled = check_buttons(x, y);
+    if (handled) return;
+
+    pressing = true;
+    if(event->button == SDL_BUTTON_LEFT)
+      alt_press = false;
+    if(event->button == SDL_BUTTON_RIGHT)
+      alt_press = true;
 
     float theta, r;
     compute_simulator_location(x, y, &theta, &r);
 
-    click_theta = theta;
-    click_r = r-r_inner;
+    press_theta = theta;
+    press_r = r-r_inner;
   }
   else
   {
-    click_state=0;
+    pressing = false;
+  }
+}
+
+//Toggle whether to add heat, and whether it should
+//be positive or negative
+inline void handle_finger_down(SDL_TouchFingerEvent *event)
+{
+  if(event->type==SDL_FINGERDOWN)
+  {
+    pressing = true;
+    float x = event->x - 0.5f;
+    float y = 0.5f - event->y;
+
+    const bool handled = check_buttons(x, y);
+    if (handled) return;
+
+    float theta, r;
+    compute_simulator_location(x, y, &theta, &r);
+
+    press_theta = theta;
+    press_r = r-r_inner;
+  }
+  else
+  {
+    pressing = false;
   }
 }
 
@@ -224,6 +338,11 @@ void timestep()
     axis.draw();
   if (seismic_mode)
     seismograph.draw();
+  if (show_buttons)
+  {
+    modebutton.draw();
+    heatbutton.draw();
+  }
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -233,10 +352,16 @@ void timestep()
     simulator.solve_stokes();
 
     //Add heat if the user is clicking
-    if(click_state != 0 && ( (include_composition && !draw_composition)||(!include_composition)) && in_domain(click_theta, click_r) )
-      simulator.add_heat(click_theta, click_r, (click_state==1 ? true : false));
-    if(click_state != 0 && include_composition && draw_composition && in_domain(click_theta, click_r) )
-      simulator.add_composition(click_theta, click_r);
+    if(
+        pressing &&
+        ( (include_composition && !draw_composition)||(!include_composition)) && in_domain(press_theta, press_r)
+      )
+      simulator.add_heat(press_theta, press_r, !alt_press);
+    if(
+        pressing &&
+        include_composition && draw_composition && in_domain(press_theta, press_r)
+      )
+      simulator.add_composition(press_theta, press_r);
 
     //The user can do some neat painting by turning off advection and diffusion
     if (advection_diffusion)
@@ -267,10 +392,10 @@ void timestep()
   else
   {
     //Make earthquakes
-    if(click_state == 1 && in_domain(click_theta,click_r) )
-      simulator.earthquake(click_theta, click_r);
-    else if(click_state == -1 && in_domain(click_theta,click_r) )
-      simulator.place_seismometer(click_theta, click_r);
+    if(pressing && !alt_press && in_domain(press_theta,press_r) )
+      simulator.earthquake(press_theta, press_r);
+    else if(pressing && alt_press && in_domain(press_theta,press_r) )
+      simulator.place_seismometer(press_theta, press_r);
     //Propagate waves
     simulator.propagate_seismic_waves();
   }
@@ -346,6 +471,11 @@ void init()
     if (include_tpw)
       axis.setup();
     seismograph.setup();
+    if (show_buttons)
+    {
+      modebutton.setup();
+      heatbutton.setup();
+    }
 }
 
 //Cleanup
@@ -356,6 +486,11 @@ void quit()
     if(include_tpw)
       axis.cleanup();
     seismograph.cleanup();
+    if (show_buttons)
+    {
+      modebutton.cleanup();
+      heatbutton.cleanup();
+    }
 
     SDL_GL_DeleteContext(context);
     SDL_Quit();
@@ -379,9 +514,7 @@ void loop()
           switch(event.key.keysym.sym)
           {
             case SDLK_SPACE:
-              seismic_mode = !seismic_mode;
-              simulator.clear_seismic_waves();
-              seismograph.clear_record();
+              toggle_seismic_mode();
               break;
 
 #ifndef __EMSCRIPTEN__
@@ -418,6 +551,13 @@ void loop()
         break;
       case SDL_MOUSEWHEEL:
         handle_mouse_wheel(&event.wheel);
+        break;
+      case SDL_FINGERDOWN:
+      case SDL_FINGERUP:
+        handle_finger_down(&event.tfinger);
+        break;
+      case SDL_FINGERMOTION:
+        handle_finger_motion(&event.tfinger);
         break;
       default:
         break;
