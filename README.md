@@ -1,6 +1,6 @@
 # Interactive Earth
 
-<img src="cover.png" align="center", width="512">
+<img src="cover.png" align="center" width="512">
 
 Interactive Earth is a teaching tool for demonstrating mantle convection and its dependence on Rayleigh number.
 It enables a mantle convection model to be run much more quickly than the codes typically used in research.
