@@ -96,6 +96,7 @@ Core core(simulator);
 ModeButton modebutton(simulator);
 HeatButton heatbutton(simulator);
 Seismograph seismograph(simulator);
+InfoPanel infopanel(simulator);
 
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
@@ -343,6 +344,7 @@ void timestep()
     modebutton.draw();
     heatbutton.draw();
   }
+  infopanel.draw();
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -476,6 +478,7 @@ void init()
       modebutton.setup();
       heatbutton.setup();
     }
+    infopanel.setup();
 }
 
 //Cleanup
@@ -491,6 +494,7 @@ void quit()
       modebutton.cleanup();
       heatbutton.cleanup();
     }
+    infopanel.cleanup();
 
     SDL_GL_DeleteContext(context);
     SDL_Quit();

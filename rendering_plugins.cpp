@@ -3,6 +3,9 @@
 #include "rendering_plugins.h"
 #include "color.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 extern color (*colormap)(double);
 
 void Core::setup()
@@ -1064,11 +1067,6 @@ void HeatButton::draw()
   const unsigned long n_triangles = n_theta + (n_r - 1)*n_theta*2;
   const unsigned long n_vertices = 1 + n_r * n_theta; // One for the central vertex
 
-  // Update the button color depending upon whether we are in hot or cold mode
-  color hot_color = hot(0.75);
-  color cold_color = hot(0.25);
-  color disabled_color = { 0.5, 0.5, 0.5 };
-
   //one vertex at the origin
   const float t_center = alt_press ? 0.0 : 1.0;
   const float t_background = 0.3;
@@ -1152,3 +1150,161 @@ void HeatButton::cleanup()
   glDeleteBuffers(1, &plugin_vertex_colors);
   glDeleteBuffers(1, &plugin_vertex_indices);
 }
+
+void InfoPanel::setup()
+{
+  {
+    const unsigned long n_triangles = 2;
+    const unsigned long n_vertices = 4;
+
+    vertices = new GLfloat[ n_vertices * coordinates_per_vertex ];
+    vertex_indices = new GLuint[ n_triangles * vertices_per_triangle ];
+
+    glGenBuffers(1, &plugin_vertex_indices);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_vertex_indices);
+    glBufferData(
+        GL_ELEMENT_ARRAY_BUFFER,
+        sizeof(GLuint)*(n_triangles*vertices_per_triangle),
+        vertex_indices,
+        GL_STATIC_DRAW
+    );
+
+    glGenBuffers(1, &plugin_vertices);
+
+    glGenTextures(1, &plugin_texture);
+    glBindTexture(GL_TEXTURE_2D, plugin_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    std::cout<<"ONE"<<std::endl;
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load("container.jpg", &width, &height, &nrChannels, 0);
+    if (data)
+    {
+      std::cout<<width<<"\t"<<height<<std::endl;
+      glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+      glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+      glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+      glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+      glGenerateMipmap(GL_TEXTURE_2D);
+    }
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+  }
+
+  GLint compile_ok = GL_FALSE, link_ok = GL_FALSE;
+
+  GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+  const char *vs_source =
+#ifdef GL_ES_VERSION_2_0
+    "#version 100\n"  // OpenGL ES 2.0
+    "precision mediump float;"
+#else
+    "#version 120\n"  // OpenGL 2.1
+#endif
+    "attribute vec2 plugin_coord2d;"
+    "void main(void) {"
+    "  f_color = plugin_v_color;"
+    "  gl_Position = vec4(plugin_coord2d, 0.0, 1.0);"
+    "}";
+
+  glShaderSource(vs, 1, &vs_source, NULL);
+  glCompileShader(vs);
+  glGetShaderiv(vs, GL_COMPILE_STATUS, &compile_ok);
+  if (!compile_ok) {
+    fprintf(stderr, "Error in vertex shader\n");
+    return;
+  }
+
+  GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+  const char *fs_source =
+#ifdef GL_ES_VERSION_2_0
+    "#version 100\n"  // OpenGL ES 2.0
+    "precision mediump float;"
+#else
+    "#version 120\n"  // OpenGL 2.1
+#endif
+    "void main(void) {"
+    "  gl_FragColor = vec4(f_color, 1.0);"
+    "}";
+  glShaderSource(fs, 1, &fs_source, NULL);
+  glCompileShader(fs);
+  glGetShaderiv(fs, GL_COMPILE_STATUS, &compile_ok);
+  if (!compile_ok) {
+    fprintf(stderr, "Error in fragment shader\n");
+    return;
+  }
+
+  plugin_program = glCreateProgram();
+  glAttachShader(plugin_program, vs);
+  glAttachShader(plugin_program, fs);
+  glLinkProgram(plugin_program);
+  glGetProgramiv(plugin_program, GL_LINK_STATUS, &link_ok);
+  if (!link_ok) {
+    fprintf(stderr, "glLinkProgram:");
+    return;
+  }
+
+  const char* attribute_name = "plugin_coord2d";
+  plugin_attribute_coord2d = glGetAttribLocation(plugin_program, attribute_name);
+  if (plugin_attribute_coord2d == -1) {
+    fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
+    return;
+  }
+  return;
+}
+
+void InfoPanel::draw()
+{
+  const unsigned long n_triangles = 2;
+  const unsigned long n_vertices = 4;
+
+  glEnable(GL_BLEND);
+#ifndef __EMSCRIPTEN__
+  glEnable(GL_POLYGON_SMOOTH);
+#endif
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  glUseProgram(plugin_program);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_vertex_indices);
+
+  glEnableVertexAttribArray(plugin_attribute_coord2d);
+
+  glBindBuffer(GL_ARRAY_BUFFER, plugin_vertices);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat)*n_vertices*coordinates_per_vertex, vertices, GL_DYNAMIC_DRAW);
+  glVertexAttribPointer(
+    plugin_attribute_coord2d, // attribute
+    2,                 // number of elements per vertex (x,y)
+    GL_FLOAT,          // the type of each element
+    GL_FALSE,          // take our values as-is
+    0,                 // no extra data between each position
+    0                  // offset of first element
+  );
+
+  glDrawElements(GL_TRIANGLES, n_triangles*vertices_per_triangle, GL_UNSIGNED_INT, 0);
+
+  glDisableVertexAttribArray(plugin_attribute_coord2d);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+  glDisable(GL_BLEND);
+#ifndef __EMSCRIPTEN__
+  glDisable(GL_POLYGON_SMOOTH);
+#endif
+}
+
+void InfoPanel::cleanup()
+{
+  delete[] vertices;
+  delete[] vertex_indices;
+
+  glDeleteProgram(plugin_program);
+  glDeleteBuffers(1, &plugin_vertices);
+  glDeleteBuffers(1, &plugin_vertex_indices);
+  glDeleteBuffers(1, &plugin_texture);
+}
+

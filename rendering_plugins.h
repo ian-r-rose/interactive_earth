@@ -164,4 +164,24 @@ class HeatButton : RenderingPlugin
     GLint plugin_attribute_v_color;
 };
 
+class InfoPanel : RenderingPlugin
+{
+  public:
+    InfoPanel( const ConvectionSimulator &sim ) : RenderingPlugin(sim) {}
+    void setup();
+    void draw();
+    void cleanup();
+
+  private:
+    //Data for rendering with OpenGL
+    GLfloat* vertices;
+    GLuint* vertex_indices;
+
+    GLuint plugin_texture;
+    GLuint plugin_program;
+    GLuint plugin_vertices;
+    GLuint plugin_vertex_indices;
+    GLint plugin_attribute_coord2d;
+};
+
 #endif
