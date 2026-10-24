@@ -10,8 +10,6 @@ struct color
   double R, G, B;
 };
 
-
-
 /*******************************
   Matplotlib colormaps thanks
   to Stefan van der Walt,

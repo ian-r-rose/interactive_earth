@@ -23,9 +23,9 @@ const int seed_steps = 30;
 inline void add_seed_heat_sources(ConvectionSimulator &sim)
 {
   for (int k = 0; k < 4; ++k)
-    sim.add_heat(0.3 + k*M_PI/2., 0.05, true);
+    sim.add_heat(0.3 + k * M_PI / 2., 0.05, true);
   for (int k = 0; k < 2; ++k)
-    sim.add_heat(1.0 + k*M_PI, 0.45, false);
+    sim.add_heat(1.0 + k * M_PI, 0.45, false);
 }
 
 //One convection timestep, in the same order as the interactive app.
@@ -59,9 +59,9 @@ inline Diagnostics compute_diagnostics(ConvectionSimulator &sim)
   Diagnostics d = {sim.nusselt_number(), 0., 0., T[0], T[0], 0., 0., true};
   for (int i = 0; i < n; ++i)
   {
-    const double vv = u[i]*u[i] + v[i]*v[i];
+    const double vv = u[i] * u[i] + v[i] * v[i];
     d.mean_T += T[i];
-    d.rms_T += T[i]*T[i];
+    d.rms_T += T[i] * T[i];
     d.min_T = std::min(d.min_T, T[i]);
     d.max_T = std::max(d.max_T, T[i]);
     d.v_rms += vv;
@@ -69,8 +69,8 @@ inline Diagnostics compute_diagnostics(ConvectionSimulator &sim)
     d.finite = d.finite && std::isfinite(T[i]) && std::isfinite(vv);
   }
   d.mean_T /= n;
-  d.rms_T = std::sqrt(d.rms_T/n);
-  d.v_rms = std::sqrt(d.v_rms/n);
+  d.rms_T = std::sqrt(d.rms_T / n);
+  d.v_rms = std::sqrt(d.v_rms / n);
   d.finite = d.finite && std::isfinite(d.nusselt);
   return d;
 }

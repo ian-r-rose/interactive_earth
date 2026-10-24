@@ -22,21 +22,21 @@
 
 static int failures = 0;
 
-#define CHECK(cond, ...)                                       \
-  do                                                           \
-  {                                                            \
-    if (!(cond))                                               \
-    {                                                          \
-      std::printf("    FAIL %s:%d: %s\n      ", __FILE__, __LINE__, #cond); \
-      std::printf(__VA_ARGS__);                                \
-      std::printf("\n");                                       \
-      ++failures;                                              \
-    }                                                          \
+#define CHECK(cond, ...)                                                                           \
+  do                                                                                               \
+  {                                                                                                \
+    if (!(cond))                                                                                   \
+    {                                                                                              \
+      std::printf("    FAIL %s:%d: %s\n      ", __FILE__, __LINE__, #cond);                        \
+      std::printf(__VA_ARGS__);                                                                    \
+      std::printf("\n");                                                                           \
+      ++failures;                                                                                  \
+    }                                                                                              \
   } while (0)
 
 static bool close(double value, double expected, double rel_tol)
 {
-  return std::fabs(value - expected) <= rel_tol*std::fabs(expected);
+  return std::fabs(value - expected) <= rel_tol * std::fabs(expected);
 }
 
 const double r_inner = 0.5;
@@ -61,9 +61,9 @@ static void test_conduction()
   for (int j = 0; j < nr; ++j)
     for (int i = 0; i < ntheta; ++i)
     {
-      const double r = grid.r_inner + j*grid.dr;
-      const double exact = std::log(r/grid.r_outer)/std::log(grid.r_inner/grid.r_outer);
-      max_error = std::max(max_error, std::fabs(sim.temperature()[j*ntheta + i] - exact));
+      const double r = grid.r_inner + j * grid.dr;
+      const double exact = std::log(r / grid.r_outer) / std::log(grid.r_inner / grid.r_outer);
+      max_error = std::max(max_error, std::fabs(sim.temperature()[j * ntheta + i] - exact));
     }
   const Diagnostics d = compute_diagnostics(sim);
   CHECK(max_error < 1.e-5, "max |T - T_conductive| = %g", max_error);
@@ -79,23 +79,26 @@ static std::vector<double> dense_solve(std::vector<std::vector<double>> A, std::
   for (int k = 0; k < n; ++k)
   {
     int p = k;
-    for (int i = k+1; i < n; ++i)
-      if (std::fabs(A[i][k]) > std::fabs(A[p][k])) p = i;
+    for (int i = k + 1; i < n; ++i)
+      if (std::fabs(A[i][k]) > std::fabs(A[p][k]))
+        p = i;
     std::swap(A[k], A[p]);
     std::swap(b[k], b[p]);
-    for (int i = k+1; i < n; ++i)
+    for (int i = k + 1; i < n; ++i)
     {
-      const double f = A[i][k]/A[k][k];
-      for (int j = k; j < n; ++j) A[i][j] -= f*A[k][j];
-      b[i] -= f*b[k];
+      const double f = A[i][k] / A[k][k];
+      for (int j = k; j < n; ++j)
+        A[i][j] -= f * A[k][j];
+      b[i] -= f * b[k];
     }
   }
   std::vector<double> x(n);
-  for (int i = n-1; i >= 0; --i)
+  for (int i = n - 1; i >= 0; --i)
   {
     double sum = b[i];
-    for (int j = i+1; j < n; ++j) sum -= A[i][j]*x[j];
-    x[i] = sum/A[i][i];
+    for (int j = i + 1; j < n; ++j)
+      sum -= A[i][j] * x[j];
+    x[i] = sum / A[i][i];
   }
   return x;
 }
@@ -120,58 +123,62 @@ static void test_stokes_single_mode()
   std::vector<double> g(nr), r(nr);
   for (int j = 0; j < nr; ++j)
   {
-    r[j] = grid.r_inner + j*dr;
-    g[j] = std::sin(M_PI*j/(nr-1.));
+    r[j] = grid.r_inner + j * dr;
+    g[j] = std::sin(M_PI * j / (nr - 1.));
     for (int i = 0; i < ntheta; ++i)
-      T[j*ntheta + i] = g[j]*std::sin(l*i*dtheta);
+      T[j * ntheta + i] = g[j] * std::sin(l * i * dtheta);
   }
   sim.set_temperature(T.data());
   sim.solve_stokes();
 
   //Centered differences in theta turn d/dtheta of sin(l theta) into
   //s_l cos(l theta), with s_l = sin(l dtheta)/dtheta.
-  const double s_l = std::sin(l*dtheta)/dtheta;
+  const double s_l = std::sin(l * dtheta) / dtheta;
   std::vector<double> rhs(nr, 0.);
-  for (int j = 1; j < nr-1; ++j)
-    rhs[j] = Ra*g[j]*s_l/r[j];
+  for (int j = 1; j < nr - 1; ++j)
+    rhs[j] = Ra * g[j] * s_l / r[j];
 
   //Radial operator d^2/dr^2 + 1/r d/dr - l^2/r^2 with zero Dirichlet rows
   std::vector<std::vector<double>> A(nr, std::vector<double>(nr, 0.));
-  A[0][0] = A[nr-1][nr-1] = 1.;
-  for (int j = 1; j < nr-1; ++j)
+  A[0][0] = A[nr - 1][nr - 1] = 1.;
+  for (int j = 1; j < nr - 1; ++j)
   {
-    A[j][j-1] = 1./dr/dr - 0.5/dr/r[j];
-    A[j][j] = -2./dr/dr - double(l*l)/r[j]/r[j];
-    A[j][j+1] = 1./dr/dr + 0.5/dr/r[j];
+    A[j][j - 1] = 1. / dr / dr - 0.5 / dr / r[j];
+    A[j][j] = -2. / dr / dr - double(l * l) / r[j] / r[j];
+    A[j][j + 1] = 1. / dr / dr + 0.5 / dr / r[j];
   }
   const std::vector<double> p = dense_solve(A, dense_solve(A, rhs));
 
   double p_max = 0.;
-  for (double x : p) p_max = std::max(p_max, std::fabs(x));
+  for (double x : p)
+    p_max = std::max(p_max, std::fabs(x));
 
   double psi_err = 0., u_err = 0., v_err = 0., u_max = 0., v_max = 0.;
   for (int j = 0; j < nr; ++j)
     for (int i = 0; i < ntheta; ++i)
     {
-      const int k = j*ntheta + i;
-      const double c = std::cos(l*i*dtheta), s = std::sin(l*i*dtheta);
-      psi_err = std::max(psi_err, std::fabs(sim.stream_function()[k] - p[j]*c));
+      const int k = j * ntheta + i;
+      const double c = std::cos(l * i * dtheta), s = std::sin(l * i * dtheta);
+      psi_err = std::max(psi_err, std::fabs(sim.stream_function()[k] - p[j] * c));
 
       double dpdr;
-      if (j == 0) dpdr = (p[1] - p[0])/dr;
-      else if (j == nr-1) dpdr = (p[nr-1] - p[nr-2])/dr;
-      else dpdr = (p[j+1] - p[j-1])/2./dr;
-      const double u = dpdr*c;
-      const double v = p[j]*s_l*s/r[j];
+      if (j == 0)
+        dpdr = (p[1] - p[0]) / dr;
+      else if (j == nr - 1)
+        dpdr = (p[nr - 1] - p[nr - 2]) / dr;
+      else
+        dpdr = (p[j + 1] - p[j - 1]) / 2. / dr;
+      const double u = dpdr * c;
+      const double v = p[j] * s_l * s / r[j];
       u_err = std::max(u_err, std::fabs(sim.velocity_theta()[k] - u));
       v_err = std::max(v_err, std::fabs(sim.velocity_r()[k] - v));
       u_max = std::max(u_max, std::fabs(u));
       v_max = std::max(v_max, std::fabs(v));
     }
   CHECK(p_max > 0., "trivial stream function");
-  CHECK(psi_err < 1.e-9*p_max, "stream function error %g (scale %g)", psi_err, p_max);
-  CHECK(u_err < 1.e-9*u_max, "u_theta error %g (scale %g)", u_err, u_max);
-  CHECK(v_err < 1.e-9*v_max, "u_r error %g (scale %g)", v_err, v_max);
+  CHECK(psi_err < 1.e-9 * p_max, "stream function error %g (scale %g)", psi_err, p_max);
+  CHECK(u_err < 1.e-9 * u_max, "u_theta error %g (scale %g)", u_err, u_max);
+  CHECK(v_err < 1.e-9 * v_max, "u_r error %g (scale %g)", v_err, v_max);
 }
 
 /* A source in a uniform-temperature mantle should reach a seismometer
@@ -181,17 +188,17 @@ static void test_wave_arrival()
   ConvectionSimulator sim(r_inner, ntheta, nr, false);
   const RegularGrid &grid = sim.get_grid();
   //Must match propagate_seismic_waves()
-  const double tstep = 0.6*std::min(grid.r_inner*grid.dtheta, grid.dr);
-  const double speed = 1.0 - 0.7*sim.temperature()[0];
-  const double r = 0.25;  //depth coordinate, mid-mantle
+  const double tstep = 0.6 * std::min(grid.r_inner * grid.dtheta, grid.dr);
+  const double speed = 1.0 - 0.7 * sim.temperature()[0];
+  const double r = 0.25; //depth coordinate, mid-mantle
 
   for (double angle : {0.3, 0.6})
   {
     sim.clear_seismic_waves();
     sim.earthquake(0.0, r);
     sim.place_seismometer(angle, r);
-    const double distance = 2.*(r + grid.r_inner)*std::sin(angle/2.);
-    const double expected_step = distance/speed/tstep;
+    const double distance = 2. * (r + grid.r_inner) * std::sin(angle / 2.);
+    const double expected_step = distance / speed / tstep;
 
     double peak = 0., early_energy = 0., late_energy = 0.;
     int peak_step = -1;
@@ -200,22 +207,27 @@ static void test_wave_arrival()
     {
       sim.propagate_seismic_waves();
       const double x = std::fabs(sim.seismometer_reading());
-      if (x > peak) { peak = x; peak_step = s; }
+      if (x > peak)
+      {
+        peak = x;
+        peak_step = s;
+      }
       if (s == 300 || s == 1199)
       {
         double e = 0.;
         for (int k = 0; k < grid.ncells; ++k)
         {
-          e += sim.displacement()[k]*sim.displacement()[k];
+          e += sim.displacement()[k] * sim.displacement()[k];
           finite = finite && std::isfinite(sim.displacement()[k]);
         }
         (s == 300 ? early_energy : late_energy) = e;
       }
     }
     CHECK(finite, "non-finite displacement");
-    CHECK(close(peak_step, expected_step, 0.05),
-          "angle %.1f: peak at step %d, expected %.1f", angle, peak_step, expected_step);
-    CHECK(late_energy < 0.8*early_energy, "energy %g -> %g did not decay", early_energy, late_energy);
+    CHECK(close(peak_step, expected_step, 0.05), "angle %.1f: peak at step %d, expected %.1f",
+          angle, peak_step, expected_step);
+    CHECK(late_energy < 0.8 * early_energy, "energy %g -> %g did not decay", early_energy,
+          late_energy);
   }
 }
 
@@ -249,7 +261,8 @@ static void check_convection(double ra, double nu_ref, double vrms_ref, double r
   vrms /= n;
   CHECK(finite, "Ra=%g: non-finite state", ra);
   CHECK(close(nu, nu_ref, rel_tol), "Ra=%g: mean Nu %.6f, reference %.6f", ra, nu, nu_ref);
-  CHECK(close(vrms, vrms_ref, rel_tol), "Ra=%g: mean v_rms %.4f, reference %.4f", ra, vrms, vrms_ref);
+  CHECK(close(vrms, vrms_ref, rel_tol), "Ra=%g: mean v_rms %.4f, reference %.4f", ra, vrms,
+        vrms_ref);
   CHECK(min_T >= 0. && max_T <= 1., "Ra=%g: T outside [0,1]: [%g, %g]", ra, min_T, max_T);
 }
 
@@ -291,12 +304,14 @@ static void test_thread_independence()
 
 int main(int argc, char **argv)
 {
-  const struct { const char *name; std::function<void()> run; } tests[] = {
-    {"conduction", test_conduction},
-    {"stokes", test_stokes_single_mode},
-    {"waves", test_wave_arrival},
-    {"convection", test_convection_regression},
-    {"threads", test_thread_independence},
+  const struct
+  {
+    const char *name;
+    std::function<void()> run;
+  } tests[] = {
+      {"conduction", test_conduction},       {"stokes", test_stokes_single_mode},
+      {"waves", test_wave_arrival},          {"convection", test_convection_regression},
+      {"threads", test_thread_independence},
   };
 
   int run = 0;
@@ -305,14 +320,15 @@ int main(int argc, char **argv)
     bool selected = argc == 1;
     for (int i = 1; i < argc; ++i)
       selected = selected || std::strcmp(argv[i], t.name) == 0;
-    if (!selected) continue;
+    if (!selected)
+      continue;
 
     const int before = failures;
     const double start = now_ms();
     std::printf("%-12s ...\n", t.name);
     t.run();
     std::printf("%-12s %s (%.1f s)\n", t.name, failures == before ? "ok" : "FAILED",
-                (now_ms() - start)/1000.);
+                (now_ms() - start) / 1000.);
     ++run;
   }
   if (run == 0)

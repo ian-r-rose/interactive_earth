@@ -8,6 +8,8 @@ cmake = ">=3.25"
 ninja = "*"
 cxx-compiler = "*"
 pkg-config = "*"
+# Pinned to a major version, since formatting output changes between releases
+clang-format = "23.*"
 fftw = "3.3.11.*"
 
 # Windowing and GL for sokol_app on Linux (X11 + GLX)
@@ -25,6 +27,10 @@ build = { cmd = "cmake --build --preset native-release", depends-on = ["configur
 test = { cmd = "ctest --preset native-release", depends-on = ["build"] }
 bench = { cmd = "build/native-release/ie_bench", depends-on = ["build"] }
 start = { cmd = "build/native-release/interactive_earth", depends-on = ["build"] }
+format = "clang-format -i src/*.cpp src/*.h bench/*.cpp tests/*.cpp"
+format-check = "clang-format --dry-run --Werror src/*.cpp src/*.h bench/*.cpp tests/*.cpp"
+# Format staged C++ files on commit (tools/git-hooks/pre-commit)
+install-hooks = "git config core.hooksPath tools/git-hooks"
 
 # WebAssembly: the Emscripten SDK is pinned in .emsdk-version and installed
 # into .emsdk/ by `pixi run setup-emsdk`.

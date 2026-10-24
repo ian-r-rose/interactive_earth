@@ -25,87 +25,89 @@ static const short triangles_per_quad = 2;
 
 class RenderingPlugin
 {
-  public:
-    RenderingPlugin( const ConvectionSimulator &sim ) : sim(sim) {}
-    void setup();
-    void draw();
-    void cleanup();
+public:
+  RenderingPlugin(const ConvectionSimulator &sim) : sim(sim) {}
+  void setup();
+  void draw();
+  void cleanup();
 
-  protected:
-    const ConvectionSimulator &sim;
+protected:
+  const ConvectionSimulator &sim;
 };
-
 
 class Core : RenderingPlugin
 {
-  public:
-    Core( const ConvectionSimulator &sim ) : RenderingPlugin(sim) {}
-    void setup();
-    void draw();
-    void cleanup();
-  private:
-    //Data for rendering with OpenGL
-    GLfloat* vertices;
-    GLfloat* vertex_colors;
-    GLuint* triangle_vertex_indices;
+public:
+  Core(const ConvectionSimulator &sim) : RenderingPlugin(sim) {}
+  void setup();
+  void draw();
+  void cleanup();
 
-    GLuint plugin_program;
-    GLuint plugin_vertices;
-    GLuint plugin_vertex_colors;
-    GLuint plugin_triangle_vertex_indices;
-    GLint plugin_attribute_coord2d;
-    GLint plugin_attribute_v_color;
+private:
+  //Data for rendering with OpenGL
+  GLfloat *vertices;
+  GLfloat *vertex_colors;
+  GLuint *triangle_vertex_indices;
+
+  GLuint plugin_program;
+  GLuint plugin_vertices;
+  GLuint plugin_vertex_colors;
+  GLuint plugin_triangle_vertex_indices;
+  GLint plugin_attribute_coord2d;
+  GLint plugin_attribute_v_color;
 };
 
 class Axis : RenderingPlugin
 {
-  public:
-    Axis( const ConvectionSimulator &sim ) : RenderingPlugin(sim) {}
-    void setup();
-    void draw();
-    void cleanup();
-  private:
-    //Data for rendering with OpenGL
-    GLfloat* vertices;
-    GLfloat* vertex_colors;
-    GLuint* triangle_vertex_indices;
+public:
+  Axis(const ConvectionSimulator &sim) : RenderingPlugin(sim) {}
+  void setup();
+  void draw();
+  void cleanup();
 
-    GLuint plugin_program;
-    GLuint plugin_vertices;
-    GLuint plugin_vertex_colors;
-    GLuint plugin_triangle_vertex_indices;
-    GLint plugin_attribute_coord2d;
-    GLint plugin_attribute_v_color;
+private:
+  //Data for rendering with OpenGL
+  GLfloat *vertices;
+  GLfloat *vertex_colors;
+  GLuint *triangle_vertex_indices;
+
+  GLuint plugin_program;
+  GLuint plugin_vertices;
+  GLuint plugin_vertex_colors;
+  GLuint plugin_triangle_vertex_indices;
+  GLint plugin_attribute_coord2d;
+  GLint plugin_attribute_v_color;
 };
 
 class Seismograph : RenderingPlugin
 {
-  public:
-    Seismograph( const ConvectionSimulator &sim ) : RenderingPlugin(sim),
-                                                    n_lines(1000),
-                                                    n_vertices(n_lines+1 /*endpoint*/ + vertices_per_triangle /*seismometer*/)
-                                                    {}
-    void setup();
-    void draw();
-    void cleanup();
+public:
+  Seismograph(const ConvectionSimulator &sim)
+      : RenderingPlugin(sim), n_lines(1000),
+        n_vertices(n_lines + 1 /*endpoint*/ + vertices_per_triangle /*seismometer*/)
+  {
+  }
+  void setup();
+  void draw();
+  void cleanup();
 
-    void clear_record();
+  void clear_record();
 
-  private:
-    const unsigned int n_lines;
-    const unsigned int n_vertices;
+private:
+  const unsigned int n_lines;
+  const unsigned int n_vertices;
 
-    //Data for rendering with OpenGL
-    GLfloat* vertices;
-    GLfloat* vertex_colors;
-    GLuint* line_vertex_indices;
+  //Data for rendering with OpenGL
+  GLfloat *vertices;
+  GLfloat *vertex_colors;
+  GLuint *line_vertex_indices;
 
-    GLuint plugin_program;
-    GLuint plugin_vertices;
-    GLuint plugin_vertex_colors;
-    GLuint plugin_line_vertex_indices;
-    GLint plugin_attribute_coord2d;
-    GLint plugin_attribute_v_color;
+  GLuint plugin_program;
+  GLuint plugin_vertices;
+  GLuint plugin_vertex_colors;
+  GLuint plugin_line_vertex_indices;
+  GLint plugin_attribute_coord2d;
+  GLint plugin_attribute_v_color;
 };
 
 #endif

@@ -54,6 +54,15 @@ pixi run bench-wasm    # single-threaded benchmark under node
 `web/dev.html` is a minimal page for local testing; add `?log` to the URL to also
 log the timing overlay to the console.
 
+## Development
+
+Code is formatted with clang-format (`.clang-format`, pinned to one major version by pixi):
+
+```
+pixi run format          # format all sources
+pixi run install-hooks   # once per clone: format staged files on every commit
+```
+
 ## User input
 With the simulation running, the user can make the following changes:
 - put in positive temperature anomalies (add heat) by clicking

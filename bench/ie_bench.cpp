@@ -27,10 +27,9 @@
 
 static void usage()
 {
-  std::fprintf(stderr,
-    "usage: ie_bench [--ntheta N] [--nr N] [--ra RA] [--steps N] [--warmup N]\n"
-    "                [--wave-steps N] [--threads N] [--composition] [--json]\n"
-    "                [--dump out.ppm]\n");
+  std::fprintf(stderr, "usage: ie_bench [--ntheta N] [--nr N] [--ra RA] [--steps N] [--warmup N]\n"
+                       "                [--wave-steps N] [--threads N] [--composition] [--json]\n"
+                       "                [--dump out.ppm]\n");
   std::exit(2);
 }
 
@@ -40,14 +39,14 @@ static bool dump_temperature(const ConvectionSimulator &sim, const char *path, i
 {
   const RegularGrid &grid = sim.get_grid();
   const double *T = sim.temperature();
-  std::vector<unsigned char> img(3*size*size, 0);
+  std::vector<unsigned char> img(3 * size * size, 0);
   for (int py = 0; py < size; ++py)
     for (int px = 0; px < size; ++px)
     {
       //Pixel center in [-1,1], y up
-      const double x = 2.*(px + 0.5)/size - 1.;
-      const double y = 1. - 2.*(py + 0.5)/size;
-      const double r = std::sqrt(x*x + y*y);
+      const double x = 2. * (px + 0.5) / size - 1.;
+      const double y = 1. - 2. * (py + 0.5) / size;
+      const double r = std::sqrt(x * x + y * y);
       color c;
       if (r > grid.r_outer)
         continue;
@@ -56,18 +55,20 @@ static bool dump_temperature(const ConvectionSimulator &sim, const char *path, i
       else
       {
         double theta = std::atan2(y, x);
-        if (theta < 0.) theta += 2.*M_PI;
-        const int i = int(theta/grid.dtheta + 0.5) % grid.ntheta;
-        const int j = std::min(grid.nr-1, int((r - grid.r_inner)/grid.dr + 0.5));
-        c = hot(T[j*grid.ntheta + i]);
+        if (theta < 0.)
+          theta += 2. * M_PI;
+        const int i = int(theta / grid.dtheta + 0.5) % grid.ntheta;
+        const int j = std::min(grid.nr - 1, int((r - grid.r_inner) / grid.dr + 0.5));
+        c = hot(T[j * grid.ntheta + i]);
       }
-      unsigned char *p = &img[3*(py*size + px)];
-      p[0] = (unsigned char)(255.*std::min(1., std::max(0., c.R)) + 0.5);
-      p[1] = (unsigned char)(255.*std::min(1., std::max(0., c.G)) + 0.5);
-      p[2] = (unsigned char)(255.*std::min(1., std::max(0., c.B)) + 0.5);
+      unsigned char *p = &img[3 * (py * size + px)];
+      p[0] = (unsigned char)(255. * std::min(1., std::max(0., c.R)) + 0.5);
+      p[1] = (unsigned char)(255. * std::min(1., std::max(0., c.G)) + 0.5);
+      p[2] = (unsigned char)(255. * std::min(1., std::max(0., c.B)) + 0.5);
     }
   FILE *f = std::fopen(path, "wb");
-  if (!f) return false;
+  if (!f)
+    return false;
   std::fprintf(f, "P6\n%d %d\n255\n", size, size);
   std::fwrite(img.data(), 1, img.size(), f);
   std::fclose(f);
@@ -85,28 +86,41 @@ int main(int argc, char **argv)
   {
     const std::string a = argv[i];
     const bool has_value = i + 1 < argc;
-    if (a == "--composition") composition = true;
-    else if (a == "--json") json = true;
-    else if (!has_value) usage();
-    else if (a == "--ntheta") ntheta = std::atoi(argv[++i]);
-    else if (a == "--nr") nr = std::atoi(argv[++i]);
-    else if (a == "--ra") ra = std::atof(argv[++i]);
-    else if (a == "--steps") steps = std::atoi(argv[++i]);
-    else if (a == "--warmup") warmup = std::atoi(argv[++i]);
-    else if (a == "--wave-steps") wave_steps = std::atoi(argv[++i]);
-    else if (a == "--dump") dump_path = argv[++i];
+    if (a == "--composition")
+      composition = true;
+    else if (a == "--json")
+      json = true;
+    else if (!has_value)
+      usage();
+    else if (a == "--ntheta")
+      ntheta = std::atoi(argv[++i]);
+    else if (a == "--nr")
+      nr = std::atoi(argv[++i]);
+    else if (a == "--ra")
+      ra = std::atof(argv[++i]);
+    else if (a == "--steps")
+      steps = std::atoi(argv[++i]);
+    else if (a == "--warmup")
+      warmup = std::atoi(argv[++i]);
+    else if (a == "--wave-steps")
+      wave_steps = std::atoi(argv[++i]);
+    else if (a == "--dump")
+      dump_path = argv[++i];
     else if (a == "--threads")
     {
       const int t = std::atoi(argv[++i]);
 #ifdef _OPENMP
       omp_set_num_threads(t);
 #else
-      if (t != 1) std::fprintf(stderr, "Built without OpenMP; ignoring --threads\n");
+      if (t != 1)
+        std::fprintf(stderr, "Built without OpenMP; ignoring --threads\n");
 #endif
     }
-    else usage();
+    else
+      usage();
   }
-  if (steps < 1) usage();
+  if (steps < 1)
+    usage();
 
   int threads = 1;
 #ifdef _OPENMP
@@ -150,9 +164,10 @@ int main(int argc, char **argv)
   {
     std::printf("{\"ntheta\": %d, \"nr\": %d, \"ra\": %g, \"ra_effective\": %.10g, "
                 "\"composition\": %s, \"steps\": %d, \"warmup\": %d, \"threads\": %d,\n",
-                ntheta, nr, ra, sim.rayleigh_number(), composition ? "true" : "false",
-                steps, warmup, threads);
-    std::printf(" \"steps_per_s\": %.2f,\n \"phases_ms\": %s,\n", 1000./step_ms, prof.json().c_str());
+                ntheta, nr, ra, sim.rayleigh_number(), composition ? "true" : "false", steps,
+                warmup, threads);
+    std::printf(" \"steps_per_s\": %.2f,\n \"phases_ms\": %s,\n", 1000. / step_ms,
+                prof.json().c_str());
     std::printf(" \"diag\": {\"nu\": %.10g, \"mean_T\": %.10g, \"rms_T\": %.10g, \"min_T\": %.10g, "
                 "\"max_T\": %.10g, \"v_rms\": %.10g, \"v_max\": %.10g, \"finite\": %s}}\n",
                 d.nusselt, d.mean_T, d.rms_T, d.min_T, d.max_T, d.v_rms, d.v_max,
@@ -160,20 +175,21 @@ int main(int argc, char **argv)
   }
   else
   {
-    std::printf("%dx%d  Ra=%.3g  threads=%d  steps=%d (+%d warmup)\n",
-                ntheta, nr, sim.rayleigh_number(), threads, steps, warmup);
+    std::printf("%dx%d  Ra=%.3g  threads=%d  steps=%d (+%d warmup)\n", ntheta, nr,
+                sim.rayleigh_number(), threads, steps, warmup);
     std::printf("%-16s %9s %9s %9s %7s\n", "phase", "median", "p95", "mean", "%step");
     for (int i = 0; i < static_cast<int>(Phase::count); ++i)
     {
       const Phase p = static_cast<Phase>(i);
-      if (!prof.has(p)) continue;
+      if (!prof.has(p))
+        continue;
       std::printf("%-16s %9.3f %9.3f %9.3f %6.1f%%\n", phase_name(p), prof.percentile(p, 0.5),
                   prof.percentile(p, 0.95), prof.mean(p),
-                  p == Phase::waves ? 0. : 100.*prof.mean(p)/prof.mean(Phase::step));
+                  p == Phase::waves ? 0. : 100. * prof.mean(p) / prof.mean(Phase::step));
     }
-    std::printf("%.1f steps/s\n", 1000./step_ms);
-    std::printf("Nu=%.6g  T mean=%.4g rms=%.4g [%.3g, %.3g]  v rms=%.4g max=%.4g  %s\n",
-                d.nusselt, d.mean_T, d.rms_T, d.min_T, d.max_T, d.v_rms, d.v_max,
+    std::printf("%.1f steps/s\n", 1000. / step_ms);
+    std::printf("Nu=%.6g  T mean=%.4g rms=%.4g [%.3g, %.3g]  v rms=%.4g max=%.4g  %s\n", d.nusselt,
+                d.mean_T, d.rms_T, d.min_T, d.max_T, d.v_rms, d.v_max,
                 d.finite ? "finite" : "NON-FINITE");
   }
   return d.finite ? 0 : 1;
