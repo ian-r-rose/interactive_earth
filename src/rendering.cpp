@@ -1,311 +1,174 @@
 #include <cmath>
 #include "rendering.h"
-#include "color.h"
+#include "gl_util.h"
 #include "profiler.h"
 
 //get access to some of the globals
 extern const double flattening;
 extern color (*colormap)(double);
 
+//Number of entries in the colormap lookup table, matching color.cpp
+static const int colormap_size = 256;
+
+//A single triangle that covers the whole viewport, generated from the
+//vertex index, so no vertex buffers are needed.
+static const char *vertex_source = R"(
+out vec2 position;
+void main()
+{
+  vec2 corner = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  position = 2.0 * corner - 1.0;  // (-1,-1), (3,-1), (-1,3)
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+)";
+
+//Map each pixel back to polar coordinates, sample the field there, and
+//color it. The outer radius is 1 in normalized device coordinates.
+static const char *fragment_source = R"(
+in vec2 position;
+uniform sampler2D field;          // (T or C, displacement), one texel per cell
+uniform sampler2D colormap;       // lookup table, one row
+uniform mat2 inverse_shape;       // undoes the rendered flattening
+uniform float r_inner;
+uniform vec2 grid_size;           // (ntheta, nr)
+
+const float two_pi = 6.28318530718;
+
+void main()
+{
+  vec2 p = inverse_shape * position;
+  float r = length(p);
+  if (r > 1.0 || r < r_inner)
+    discard;
+  float theta = atan(p.y, p.x);
+  if (theta < 0.0)
+    theta += two_pi;
+
+  // Cell (i, j) sits at theta = i dtheta and r = r_inner + j dr; put those
+  // at texel centers. The texture repeats in theta, which handles the seam.
+  float u = theta / two_pi + 0.5 / grid_size.x;
+  float v = ((r - r_inner) / (1.0 - r_inner) * (grid_size.y - 1.0) + 0.5) / grid_size.y;
+  vec2 value = texture(field, vec2(u, v)).rg;
+
+  // Same lookup as color.cpp: nearest entry to value * size, clamped
+  int size = textureSize(colormap, 0).x;
+  int index = clamp(int(floor(value.r * float(size) + 0.5)), 0, size - 1);
+  vec3 rgb = texelFetch(colormap, ivec2(index, 0), 0).rgb;
+
+  // Seismic displacement brightens or darkens the field
+  frag_color = vec4(rgb + value.g, 1.0);
+}
+)";
+
 void Mantle::setup()
 {
+  program = create_program(vertex_source, fragment_source, "Mantle");
+  uniform_field = glGetUniformLocation(program, "field");
+  uniform_colormap = glGetUniformLocation(program, "colormap");
+  uniform_inverse_shape = glGetUniformLocation(program, "inverse_shape");
+  uniform_r_inner = glGetUniformLocation(program, "r_inner");
+  uniform_grid_size = glGetUniformLocation(program, "grid_size");
+
   const RegularGrid &grid = sim.get_grid();
+  staging.resize(2 * grid.ncells);
 
-#ifndef LEGACY_OPENGL
-  //Setup the vertices, indices, and colors
+  //Field texture: half floats are plenty for colors, and are filterable
+  //everywhere (including WebGL2), unlike 32 bit floats.
+  glGenTextures(1, &field_texture);
+  glBindTexture(GL_TEXTURE_2D, field_texture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, grid.ntheta, grid.nr, 0, GL_RG, GL_FLOAT, nullptr);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+  //Colormap lookup table, read with texelFetch
+  glGenTextures(1, &colormap_texture);
+  glBindTexture(GL_TEXTURE_2D, colormap_texture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, colormap_size, 1, 0, GL_RGBA, GL_FLOAT, nullptr);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  upload_colormap();
+}
+
+//Sample the current colormap at the points color.cpp uses for each entry
+void Mantle::upload_colormap()
+{
+  std::vector<float> table(4 * colormap_size);
+  for (int i = 0; i < colormap_size; ++i)
   {
-    const short triangles_per_quad = 2;
-    const short vertices_per_triangle = 3;
-    const short coordinates_per_vertex = 2;
-    const short colors_per_vertex = 3;
-    const unsigned long n_triangles = grid.ntheta * (grid.nr - 1) * triangles_per_quad;
-    const unsigned long n_vertices = grid.ntheta * grid.nr;
-
-    vertices = new GLfloat[n_vertices * coordinates_per_vertex];
-    vertex_colors = new GLfloat[n_vertices * colors_per_vertex];
-    triangle_vertex_indices = new GLuint[n_triangles * vertices_per_triangle];
-
-    unsigned long i = 0;
-    for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    {
-      if (!cell->at_top_boundary())
-      {
-        //First triangle
-        triangle_vertex_indices[i + 0] = cell->self();
-        triangle_vertex_indices[i + 1] = cell->upright();
-        triangle_vertex_indices[i + 2] = cell->up();
-
-        //Second triangle
-        triangle_vertex_indices[i + 3] = cell->self();
-        triangle_vertex_indices[i + 4] = cell->right();
-        triangle_vertex_indices[i + 5] = cell->upright();
-
-        i += triangles_per_quad * vertices_per_triangle;
-      }
-    }
-
-    glGenBuffers(1, &ibo_triangle_vertex_indices);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_triangle_vertex_indices);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * n_triangles * vertices_per_triangle,
-                 triangle_vertex_indices, GL_STATIC_DRAW);
-
-    glGenBuffers(1, &vbo_vertices);
-    glGenBuffers(1, &vbo_colors);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    const color c = colormap(double(i) / colormap_size);
+    table[4 * i + 0] = c.R;
+    table[4 * i + 1] = c.G;
+    table[4 * i + 2] = c.B;
+    table[4 * i + 3] = 1.0f;
   }
-
-  GLint compile_ok = GL_FALSE, link_ok = GL_FALSE;
-
-  GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-  const char *vs_source = IE_GLSL_VERTEX_PRELUDE "in vec2 coord2d;"
-                                                 "in vec3 v_color;"
-                                                 "out vec3 f_color;"
-                                                 "void main(void) {"
-                                                 "  f_color = v_color;"
-                                                 "  gl_Position = vec4(coord2d, 0.0, 1.0);"
-                                                 "}";
-
-  glShaderSource(vs, 1, &vs_source, NULL);
-  glCompileShader(vs);
-  glGetShaderiv(vs, GL_COMPILE_STATUS, &compile_ok);
-  if (!compile_ok)
-  {
-    fprintf(stderr, "Error in vertex shader\n");
-    return;
-  }
-
-  GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-  const char *fs_source = IE_GLSL_FRAGMENT_PRELUDE "in vec3 f_color;"
-                                                   "void main(void) {"
-                                                   "  frag_color = vec4(f_color, 1.0);"
-                                                   "}";
-  glShaderSource(fs, 1, &fs_source, NULL);
-  glCompileShader(fs);
-  glGetShaderiv(fs, GL_COMPILE_STATUS, &compile_ok);
-  if (!compile_ok)
-  {
-    fprintf(stderr, "Error in fragment shader\n");
-    return;
-  }
-
-  program = glCreateProgram();
-  glAttachShader(program, vs);
-  glAttachShader(program, fs);
-  glLinkProgram(program);
-  glGetProgramiv(program, GL_LINK_STATUS, &link_ok);
-  if (!link_ok)
-  {
-    fprintf(stderr, "glLinkProgram:");
-    return;
-  }
-
-  const char *attribute_name = "coord2d";
-  attribute_coord2d = glGetAttribLocation(program, attribute_name);
-  if (attribute_coord2d == -1)
-  {
-    fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-    return;
-  }
-  attribute_name = "v_color";
-  attribute_v_color = glGetAttribLocation(program, attribute_name);
-  if (attribute_v_color == -1)
-  {
-    fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-    return;
-  }
-
-#endif //LEGACY_OPENGL
-
-  return;
+  glBindTexture(GL_TEXTURE_2D, colormap_texture);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, colormap_size, 1, GL_RGBA, GL_FLOAT, table.data());
+  glBindTexture(GL_TEXTURE_2D, 0);
+  uploaded_colormap = colormap;
 }
 
 void Mantle::cleanup()
 {
-#ifndef LEGACY_OPENGL
-  delete[] vertices;
-  delete[] vertex_colors;
-  delete[] triangle_vertex_indices;
-
   glDeleteProgram(program);
-  glDeleteBuffers(1, &vbo_vertices);
-  glDeleteBuffers(1, &vbo_colors);
-  glDeleteBuffers(1, &ibo_triangle_vertex_indices);
-#endif //LEGACY_OPENGL
+  glDeleteTextures(1, &field_texture);
+  glDeleteTextures(1, &colormap_texture);
 }
 
 void Mantle::draw(bool draw_composition)
 {
   const RegularGrid &grid = sim.get_grid();
-  const double *T = sim.temperature();
-  const double *C = sim.composition();
-  const double *D = sim.displacement();
 
-  double displacement_factor = 1.0;
-#ifndef LEGACY_OPENGL
-  const short triangles_per_quad = 2;
-  const short vertices_per_triangle = 3;
-  const short colors_per_vertex = 3;
-  const short coordinates_per_vertex = 2;
-  const unsigned long n_triangles = grid.ntheta * (grid.nr - 1) * triangles_per_quad;
-  const unsigned long n_vertices = grid.ntheta * grid.nr;
-
-  //Parameters for ellipticity, if required.
-  //angle is the angle of the semimajor axis, which
-  //defaults to the spin axis+90 degrees.
-  //a and b are the semimajor and semiminor axes.
-  const float angle = sim.spin_angle() + M_PI / 2.;
-  const float a = 1.0f;
-  const float b = 1.0f - flattening;
-
+  //Interleave the field and the displacement for upload
   {
     IE_PROFILE(render_prep);
-    unsigned long v = 0, i = 0;
-    for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    const double *field = draw_composition ? sim.composition() : sim.temperature();
+    const double *D = sim.displacement();
+    for (int k = 0; k < grid.ncells; ++k)
     {
-      //Coordinates for this cell
-      const float r = cell->radius();
-      const float theta = cell->location().theta;
-
-      //This is kind of cool: add ellipticity to the domain rendering
-      //using an epicycle on the normal rendering.
-      //TODO: offsetting the epicycle seems to work with 2*angle.
-      //Why not 1*angle? Figure this out.
-      vertices[v + 0] =
-          r * (a + b) / 2. * std::cos(theta) + r * (a - b) / 2. * std::cos(-theta + 2. * angle);
-      vertices[v + 1] =
-          r * (a + b) / 2. * std::sin(theta) + r * (a - b) / 2. * std::sin(-theta + 2. * angle);
-
-      color c;
-      if (draw_composition)
-        c = colormap(C[cell->self()]);
-      else
-        c = colormap(T[cell->self()]);
-
-      double displacement =
-          displacement_factor * D[cell->self()]; //Perturb color if there is displacement
-      c.R += displacement;
-      c.G += displacement;
-      c.B += displacement;
-
-      vertex_colors[i + 0] = c.R;
-      vertex_colors[i + 1] = c.G;
-      vertex_colors[i + 2] = c.B;
-
-      i += colors_per_vertex;
-      v += coordinates_per_vertex;
+      staging[2 * k + 0] = float(field[k]);
+      staging[2 * k + 1] = float(D[k]);
     }
   }
 
   IE_PROFILE(render_gl);
+  if (colormap != uploaded_colormap)
+    upload_colormap();
+
+  glBindTexture(GL_TEXTURE_2D, field_texture);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, grid.ntheta, grid.nr, GL_RG, GL_FLOAT, staging.data());
+
+  //The domain is rendered flattened along the spin axis, as if under
+  //centrifugal forces: positions are R(angle) diag(a, b) R(-angle) applied
+  //to the circular ones. The shader needs the inverse of that.
+  const double angle = sim.spin_angle() + M_PI / 2.;
+  const double a = 1.0, b = 1.0 - flattening;
+  const double c = std::cos(angle), s = std::sin(angle);
+  const double ia = 1. / a, ib = 1. / b;
+  //Symmetric, so column-major order is the same as row-major
+  const GLfloat inverse_shape[4] = {float(c * c * ia + s * s * ib), float(c * s * (ia - ib)),
+                                    float(c * s * (ia - ib)), float(s * s * ia + c * c * ib)};
+
   glClearColor(0.0, 0.0, 0.0, 1.0);
   glClear(GL_COLOR_BUFFER_BIT);
 
   glUseProgram(program);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, field_texture);
+  glActiveTexture(GL_TEXTURE1);
+  glBindTexture(GL_TEXTURE_2D, colormap_texture);
+  glUniform1i(uniform_field, 0);
+  glUniform1i(uniform_colormap, 1);
+  glUniformMatrix2fv(uniform_inverse_shape, 1, GL_FALSE, inverse_shape);
+  glUniform1f(uniform_r_inner, float(grid.r_inner));
+  glUniform2f(uniform_grid_size, float(grid.ntheta), float(grid.nr));
 
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_triangle_vertex_indices);
+  glDrawArrays(GL_TRIANGLES, 0, 3);
 
-  glEnableVertexAttribArray(attribute_coord2d);
-  /* Describe our vertices array*/
-  glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n_vertices * coordinates_per_vertex, vertices,
-               GL_DYNAMIC_DRAW);
-  glVertexAttribPointer(attribute_coord2d, // attribute
-                        2,                 // number of elements per vertex (x,y)
-                        GL_FLOAT,          // the type of each element
-                        GL_FALSE,          // take our values as-is
-                        0,                 // no extra data between each position
-                        0                  // offset of first element
-  );
-
-  glEnableVertexAttribArray(attribute_v_color);
-  /* Describe our color array*/
-  glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n_vertices * colors_per_vertex, vertex_colors,
-               GL_DYNAMIC_DRAW);
-  glVertexAttribPointer(attribute_v_color, // attribute
-                        3,                 // number of elements per verte (r,g,b)
-                        GL_FLOAT,          // the type of each element
-                        GL_FALSE,          // take our values as-is
-                        0,                 // no extra data between each position
-                        0);
-
-  /* Draw the triangles */
-  glDrawElements(GL_TRIANGLES, n_triangles * vertices_per_triangle, GL_UNSIGNED_INT, 0);
-
-  glDisableVertexAttribArray(attribute_coord2d);
-  glDisableVertexAttribArray(attribute_v_color);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-#else
-
-  GLfloat DX = 2.0 * M_PI / (grid.ntheta);
-  GLfloat DY = 1.0 / (grid.nr - 1);
-
-  glClearColor(0.0, 0.0, 0.0, 0.0);
-  glClear(GL_COLOR_BUFFER_BIT);
-  glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
-  glBegin(GL_TRIANGLE_STRIP);
-  for (RegularGrid::iterator cell = grid.begin(); !cell->at_top_boundary(); ++cell)
-  {
-    if (cell->at_left_boundary() && cell->self() != 0.)
-      glBegin(GL_TRIANGLE_STRIP);
-
-    color c_s = colormap(T[cell->self()]);
-    color c_u = colormap(T[cell->up()]);
-
-    c_s.R += displacement_factor * D[cell->self()];
-    c_s.G += displacement_factor * D[cell->self()];
-    c_s.B += displacement_factor * D[cell->self()];
-    c_u.R += displacement_factor * D[cell->up()];
-    c_u.G += displacement_factor * D[cell->up()];
-    c_u.B += displacement_factor * D[cell->up()];
-
-    const float r = grid.r_inner + (cell->yindex() * DY * (1.0f - grid.r_inner));
-    const float r_up = grid.r_inner + ((cell->yindex() + 1) * DY * (1.0f - grid.r_inner));
-    const float theta = cell->xindex() * DX;
-
-    glColor3f(c_s.R, c_s.G, c_s.B);
-    glVertex2f(r * std::cos(theta), r * std::sin(theta));
-    glColor3f(c_u.R, c_u.G, c_u.B);
-    glVertex2f(r_up * std::cos(theta), r_up * std::sin(theta));
-
-    //Add last strip for periodicity
-    if (cell->at_right_boundary())
-    {
-      color c_s, c_u;
-      if (draw_composition)
-      {
-        c_s = colormap(C[cell->self()]);
-        c_u = colormap(C[cell->up()]);
-      }
-      else
-      {
-        c_s = colormap(T[cell->self()]);
-        c_u = colormap(T[cell->up()]);
-      }
-
-      c_s.R += displacement_factor * D[cell->right()];
-      c_s.G += displacement_factor * D[cell->right()];
-      c_s.B += displacement_factor * D[cell->right()];
-      c_u.R += displacement_factor * D[cell->upright()];
-      c_u.G += displacement_factor * D[cell->upright()];
-      c_u.B += displacement_factor * D[cell->upright()];
-
-      const float r = grid.r_inner + (cell->yindex() * DY * (1.0f - grid.r_inner));
-      const float r_up = grid.r_inner + ((cell->yindex() + 1) * DY * (1.0f - grid.r_inner));
-      const float theta = 0.0;
-
-      glColor3f(c_s.R, c_s.G, c_s.B);
-      glVertex2f(r * std::cos(theta), r * std::sin(theta));
-      glColor3f(c_u.R, c_u.G, c_u.B);
-      glVertex2f(r_up * std::cos(theta), r_up * std::sin(theta));
-      glEnd();
-    }
-  }
-  glFlush();
-
-#endif //LEGACY_OPENGL
+  glActiveTexture(GL_TEXTURE1);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, 0);
 }

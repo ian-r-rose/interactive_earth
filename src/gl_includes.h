@@ -10,7 +10,8 @@
 
 #if defined(__EMSCRIPTEN__)
 #include <GLES3/gl3.h>
-#define IE_GLSL_VERSION "#version 300 es\nprecision mediump float;\n"
+//highp is needed to resolve 1000+ angular cells in the fragment shader
+#define IE_GLSL_VERSION "#version 300 es\nprecision highp float;\n"
 #elif defined(__APPLE__)
 #include <OpenGL/gl3.h>
 #define IE_GLSL_VERSION "#version 330 core\n"

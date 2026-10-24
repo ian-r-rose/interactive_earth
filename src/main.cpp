@@ -256,9 +256,9 @@ void text_output()
                         prof.mean(Phase::stokes_tridiag) + prof.mean(Phase::stokes_velocity);
   std::cout << std::fixed << std::setprecision(1) << "| step " << prof.mean(Phase::step)
             << " ms (stokes " << stokes << ", advect " << prof.mean(Phase::advect) << ", diffuse "
-            << diffuse << ")  render "
-            << prof.mean(Phase::render_prep) + prof.mean(Phase::render_gl) << " ms  | "
-            << 1000. / prof.mean(Phase::frame) << " fps";
+            << diffuse << ")  render " << prof.mean(Phase::render_prep) << " + "
+            << prof.mean(Phase::render_gl) << " ms  | " << 1000. / prof.mean(Phase::frame)
+            << " fps";
   std::cout.unsetf(std::ios_base::floatfield);
 
   //End the line, and flush so the output appears even when piped

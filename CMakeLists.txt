@@ -70,7 +70,7 @@ endif()
 # --- Interactive app --------------------------------------------------------
 # Windowing, input, and the GL context come from the vendored sokol_app.h.
 add_executable(interactive_earth
-  src/main.cpp src/rendering.cpp src/rendering_plugins.cpp src/sokol_app_impl.cpp)
+  src/main.cpp src/rendering.cpp src/rendering_plugins.cpp src/gl_util.cpp src/sokol_app_impl.cpp)
 target_include_directories(interactive_earth SYSTEM PRIVATE third_party/sokol)
 target_link_libraries(interactive_earth PRIVATE ie_core)
 if(EMSCRIPTEN)
