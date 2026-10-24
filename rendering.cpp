@@ -1,23 +1,16 @@
 #include <cmath>
-#include "convection.h"
+#include "rendering.h"
 #include "color.h"
-
-#ifndef LEGACY_OPENGL
-static GLuint program;
-static GLuint vbo_vertices;
-static GLuint vbo_colors;
-static GLuint ibo_triangle_vertex_indices;
-static GLint attribute_coord2d;
-static GLint attribute_v_color;
-#endif //LEGACY_OPENGL
 
 //get access to some of the globals
 extern const double flattening;
 extern color (*colormap)(double);
 
 
-void ConvectionSimulator::setup_opengl()
+void Mantle::setup()
 {
+  const RegularGrid &grid = sim.get_grid();
+
 #ifndef LEGACY_OPENGL
   //Setup the vertices, indices, and colors
   {
@@ -138,7 +131,7 @@ void ConvectionSimulator::setup_opengl()
   return;
 }
 
-void ConvectionSimulator::cleanup_opengl()
+void Mantle::cleanup()
 {
 #ifndef LEGACY_OPENGL
   delete[] vertices;
@@ -152,8 +145,13 @@ void ConvectionSimulator::cleanup_opengl()
 #endif //LEGACY_OPENGL
 }
 
-void ConvectionSimulator::draw( bool draw_composition )
+void Mantle::draw( bool draw_composition )
 {
+  const RegularGrid &grid = sim.get_grid();
+  const double *T = sim.temperature();
+  const double *C = sim.composition();
+  const double *D = sim.displacement();
+
   double displacement_factor = 1.0;
 #ifndef LEGACY_OPENGL
   const short triangles_per_quad = 2;
@@ -167,7 +165,7 @@ void ConvectionSimulator::draw( bool draw_composition )
   //angle is the angle of the semimajor axis, which
   //defaults to the spin axis+90 degrees.
   //a and b are the semimajor and semiminor axes.
-  const float angle = this->spin_angle() + M_PI/2.;
+  const float angle = sim.spin_angle() + M_PI/2.;
   const float a = 1.0f;
   const float b = 1.0f-flattening;
 

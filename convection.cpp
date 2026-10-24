@@ -357,13 +357,13 @@ inline double ConvectionSimulator::evaluate_composition(const Point &p)
 
 void ConvectionSimulator::semi_lagrangian_advect_temperature()
 {
-  advection_field field = temperature;
+  advection_field field = advection_field::temperature;
   semi_lagrangian_advect( field );
 }
 
 void ConvectionSimulator::semi_lagrangian_advect_composition()
 {
-  advection_field field = composition;
+  advection_field field = advection_field::composition;
   semi_lagrangian_advect( field );
 }
 
@@ -438,17 +438,17 @@ void ConvectionSimulator::semi_lagrangian_advect( const advection_field field )
       takeoff_point.theta = fast_fmod(takeoff_point.theta + grid.lx, grid.lx);
       takeoff_point.r = dmin( grid.lr, dmax( takeoff_point.r, 0.0) );
     }
-    if (field == temperature)
+    if (field == advection_field::temperature)
       scratch[cell->self()] = evaluate_temperature(takeoff_point);  //Store the temperature we found
-    else if (field == composition)
+    else if (field == advection_field::composition)
       scratch[cell->self()] = evaluate_composition(takeoff_point);  //Store the composition we found
   }
 
   //Copy the scratch vector into the temperature or composition vector.
-  if (field == temperature)
+  if (field == advection_field::temperature)
     for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
       T[cell->self()] = scratch[cell->self()];
-  else if (field == composition)
+  else if (field == advection_field::composition)
     for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
       C[cell->self()] = scratch[cell->self()];
 }

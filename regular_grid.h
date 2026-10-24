@@ -139,19 +139,19 @@ class RegularGrid
                   : r_inner(inner_radius), r_outer(1.0), ltheta(2.0*M_PI), lr(1.0-inner_radius),
                     ntheta(num_theta), nr(num_r), dtheta(ltheta/ntheta), dr(lr/(nr-1)), ncells(ntheta*nr)
                   {}
-    const iterator begin() { return iterator(0, *this); }
-    const iterator end() {return iterator(ncells, *this);}
-    const reverse_iterator rbegin() { return reverse_iterator(ncells-1, *this); }
-    const reverse_iterator rend() {return reverse_iterator(-1, *this);}
+    const iterator begin() const { return iterator(0, *this); }
+    const iterator end() const {return iterator(ncells, *this);}
+    const reverse_iterator rbegin() const { return reverse_iterator(ncells-1, *this); }
+    const reverse_iterator rend() const {return reverse_iterator(-1, *this);}
 
     //Get handles to cell id and cell iterators at a point
     inline int cell_id( const Point &p) const { int xindex = fast_floor(p.x/dx); int yindex=fast_floor(p.y/dy);
                                    return keep_in_domain(xindex, yindex); }
     inline int keep_in_domain( int xindex, int yindex) const { return nx*(yindex < 0 ? 0 : (yindex >= ny ? ny-1: yindex))
                               + (xindex % nx + nx) %nx ; }
-    iterator cell_at_point( const Point &p) { return iterator(cell_id(p), *this); }
+    iterator cell_at_point( const Point &p) const { return iterator(cell_id(p), *this); }
 
-    iterator lower_left_cell( const Point &p) { return cell_at_point(p); }
+    iterator lower_left_cell( const Point &p) const { return cell_at_point(p); }
 
 };
 

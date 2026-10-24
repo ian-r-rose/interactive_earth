@@ -1,12 +1,12 @@
-#include "GL/glew.h"
-#include "SDL2/SDL_opengl.h"
-#include "SDL2/SDL.h"
-#include "convection.h"
+#include "rendering.h"
 #include "rendering_plugins.h"
 #include "color.h"
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <iomanip>
+#include <vector>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -79,6 +79,7 @@ double simulation_time = 0.0;
 
 //Global solver
 ConvectionSimulator simulator(r_inner, ntheta,nr, include_composition);
+Mantle mantle(simulator);
 Axis axis(simulator);
 Core core(simulator);
 Seismograph seismograph(simulator);
@@ -86,6 +87,33 @@ Seismograph seismograph(simulator);
 //Structures for initializing a window and OpenGL conext
 SDL_GLContext context;
 SDL_Window *window=NULL;
+
+//Deterministic screenshot mode for regression checks. If IE_SCREENSHOT
+//is set, seed convection with fixed heat sources, run IE_SCREENSHOT_STEPS
+//timesteps, write the framebuffer to that path as a PPM, and quit.
+const char *screenshot_path = std::getenv("IE_SCREENSHOT");
+const int screenshot_steps = std::getenv("IE_SCREENSHOT_STEPS") ?
+                             std::atoi(std::getenv("IE_SCREENSHOT_STEPS")) : 200;
+
+void quit();
+
+void save_screenshot(const char *path)
+{
+  std::vector<unsigned char> pixels(3*xpix*ypix);
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
+  glReadPixels(0, 0, xpix, ypix, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+  FILE *f = std::fopen(path, "wb");
+  if (!f)
+  {
+    std::cerr<<"Could not open "<<path<<std::endl;
+    return;
+  }
+  std::fprintf(f, "P6\n%d %d\n255\n", xpix, ypix);
+  //OpenGL rows start at the bottom
+  for (int row = ypix-1; row >= 0; --row)
+    std::fwrite(&pixels[3*xpix*row], 1, 3*xpix, f);
+  std::fclose(f);
+}
 
 //Given an x and y location, compute the r, theta location of the 
 //simulator domain. Can handle the case of ellipticity.
@@ -218,12 +246,18 @@ void text_output()
 void timestep()
 {
   static int i=0;  //Keep track of timestep number
-  simulator.draw( include_composition && draw_composition );  //Draw to screen
+  mantle.draw( include_composition && draw_composition );  //Draw to screen
   core.draw();
   if (include_tpw && !seismic_mode)
     axis.draw();
   if (seismic_mode)
     seismograph.draw();
+
+  if (screenshot_path && i == screenshot_steps)
+  {
+    save_screenshot(screenshot_path);
+    quit();
+  }
 
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
@@ -237,6 +271,15 @@ void timestep()
       simulator.add_heat(click_theta, click_r, (click_state==1 ? true : false));
     if(click_state != 0 && include_composition && draw_composition && in_domain(click_theta, click_r) )
       simulator.add_composition(click_theta, click_r);
+
+    //Same fixed heat sources as the headless benchmark
+    if (screenshot_path && i < 30)
+    {
+      for (int k = 0; k < 4; ++k)
+        simulator.add_heat(0.3 + k*M_PI/2., 0.05, true);
+      for (int k = 0; k < 2; ++k)
+        simulator.add_heat(1.0 + k*M_PI, 0.45, false);
+    }
 
     //The user can do some neat painting by turning off advection and diffusion
     if (advection_diffusion)
@@ -341,7 +384,7 @@ void init()
     }
 
 
-    simulator.setup_opengl();
+    mantle.setup();
     core.setup();
     if (include_tpw)
       axis.setup();
@@ -351,7 +394,7 @@ void init()
 //Cleanup
 void quit()
 {
-    simulator.cleanup_opengl();
+    mantle.cleanup();
     core.cleanup();
     if(include_tpw)
       axis.cleanup();
@@ -367,6 +410,9 @@ void loop()
   SDL_Event event;
   while(SDL_PollEvent(&event))
   {
+    //Screenshot mode must be deterministic, so ignore user input
+    if (screenshot_path && event.type != SDL_QUIT)
+      continue;
     switch(event.type)
     {
       case SDL_QUIT:

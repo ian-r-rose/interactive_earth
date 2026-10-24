@@ -1,7 +1,7 @@
 #ifndef RENDERING_PLUGINS_H
 #define RENDERING_PLUGINS_H
 
-#include "convection.h"
+#include "rendering.h"
 
 extern const double r_inner;
 extern const unsigned int nr, ntheta;

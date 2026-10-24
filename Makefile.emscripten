@@ -15,16 +15,16 @@ LINK_FLAGS = -s ALLOW_MEMORY_GROWTH=0 -s TOTAL_MEMORY=67108864 -s WASM=1 -s EXTR
 convection: convection.o main.o rendering.o rendering_plugins.o color.o
 	$(CXX) $(CXX_FLAGS) convection.o rendering.o main.o rendering_plugins.o color.o -o interactive_earth.html $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
-main.o: main.cpp convection.h regular_grid.h rendering_plugins.h
+main.o: main.cpp rendering.h convection.h regular_grid.h rendering_plugins.h
 	$(CXX) $(CXX_FLAGS) -c main.cpp $(INCLUDE_DIRS) $(DEFINES) 
 
 convection.o: convection.cpp convection.h regular_grid.h tridiagonal_matrix_solver.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) convection.cpp
 
-rendering.o: rendering.cpp convection.h regular_grid.h color.h
+rendering.o: rendering.cpp rendering.h convection.h regular_grid.h color.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) rendering.cpp
 
-rendering_plugins.o: rendering_plugins.cpp convection.h rendering_plugins.h color.h
+rendering_plugins.o: rendering_plugins.cpp rendering.h convection.h rendering_plugins.h color.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) rendering_plugins.cpp
 
 color.o: color.h color.cpp

@@ -1,30 +1,18 @@
-// Temporary baseline harness for the *unmodified* solver.
-// Superseded by ie_bench once the physics/render split lands.
-// Reads private solver state for diagnostics; do not imitate.
+// Temporary headless baseline harness for the solver.
+// Superseded by ie_bench.
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <complex>
 #include <cstdio>
 #include <cstdlib>
-#include <iterator>
 #include <string>
 #include <vector>
-#include "GL/glew.h"
-#include "SDL2/SDL.h"
-#include "SDL2/SDL_opengl.h"
-#include "fftw3.h"
 
-#define private public
 #include "../convection.h"
-#undef private
 
 #ifdef _OPENMP
 #include <omp.h>
 #endif
-
-// Globals referenced by rendering code are not linked here.
-const double flattening = 0.0;
 
 using clk = std::chrono::steady_clock;
 
@@ -107,17 +95,18 @@ int main(int argc, char **argv)
   const double seis = sim.seismometer_reading();
 
   // Diagnostics.
-  const int n = sim.grid.ncells;
+  const int n = sim.get_grid().ncells;
   double sumT = 0, sumT2 = 0, v2 = 0, vmax = 0;
   bool finite = true;
+  const double *T = sim.temperature(), *u = sim.velocity_theta(), *v = sim.velocity_r();
   for (int i = 0; i < n; ++i)
   {
-    sumT += sim.T[i];
-    sumT2 += sim.T[i] * sim.T[i];
-    const double vv = sim.u[i] * sim.u[i] + sim.v[i] * sim.v[i];
+    sumT += T[i];
+    sumT2 += T[i] * T[i];
+    const double vv = u[i] * u[i] + v[i] * v[i];
     v2 += vv;
     vmax = std::max(vmax, std::sqrt(vv));
-    finite = finite && std::isfinite(sim.T[i]) && std::isfinite(vv);
+    finite = finite && std::isfinite(T[i]) && std::isfinite(vv);
   }
 
   printf("{\n  \"ntheta\": %d, \"nr\": %d, \"ra\": %g, \"ra_effective\": %g,\n", ntheta, nr, ra,

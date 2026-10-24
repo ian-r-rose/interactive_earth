@@ -4,9 +4,6 @@
 #include <complex>
 #include "fftw3.h"
 #include "regular_grid.h"
-#include "GL/glew.h"
-#include "SDL2/SDL.h"
-#include "SDL2/SDL_opengl.h"
 #include "tridiagonal_matrix_solver.h"
 
 
@@ -14,7 +11,7 @@ class ConvectionSimulator
 {
   private:
 
-    enum advection_field { temperature, composition };
+    enum class advection_field { temperature, composition };
 
     //Current model parameters
     double Ra;  //Rayleigh number
@@ -57,11 +54,6 @@ class ConvectionSimulator
     std::complex<double> *scratch1_spectral, *scratch2_spectral;  //Scratch complex vectors for temporary stuff
 
 
-    //Data for rendering with OpenGL
-    GLfloat* vertices;
-    GLfloat* vertex_colors;
-    GLuint* triangle_vertex_indices;
-
     //workhorse functions
     void initialize_temperature();  //just like it says
     void initialize_composition();  //just like it says
@@ -94,6 +86,15 @@ class ConvectionSimulator
     double timestep() const; //Return the timestep for the simulation.
     void seismometer_position( double &theta, double &r) const; //Query the current location of the seismometer
 
+    //Read-only access to the solver state, for rendering and diagnostics
+    const RegularGrid &get_grid() const { return grid; }
+    bool has_composition() const { return include_composition; }
+    const double *temperature() const { return T; }
+    const double *composition() const { return C; }
+    const double *displacement() const { return D; }
+    const double *velocity_theta() const { return u; }
+    const double *velocity_r() const { return v; }
+
     void earthquake(double x, double y);  //Add source term for wave equation
     void propagate_seismic_waves(); //evolve the wave equation
     void clear_seismic_waves(); //zero out the displacement vectors
@@ -107,11 +108,6 @@ class ConvectionSimulator
     void true_polar_wander(); //Perform TPW
 
     void solve_stokes(); //Solve for velocity field
-
-    void draw(bool);  //Render using OpenGL
-
-    void setup_opengl();  //Setup OpenGL data structures
-    void cleanup_opengl(); //Cleanup OpenGL data structures
 
     void update_state(double rayleigh);  //Update the state of the solver
 };
