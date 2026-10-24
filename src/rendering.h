@@ -1,9 +1,7 @@
 #ifndef RENDERING_H
 #define RENDERING_H
 
-#include "GL/glew.h"
-#include "SDL2/SDL.h"
-#include "SDL2/SDL_opengl.h"
+#include "gl_includes.h"
 #include "convection.h"
 
 //Renders the temperature (or composition) field of the

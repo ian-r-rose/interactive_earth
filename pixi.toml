@@ -9,12 +9,13 @@ ninja = "*"
 cxx-compiler = "*"
 pkg-config = "*"
 fftw = "3.3.11.*"
-# Temporary: only needed until the sokol_app port.
-sdl2 = "*"
-glew = "*"
 
+# Windowing and GL for sokol_app on Linux (X11 + GLX)
 [target.linux-64.dependencies]
 libgl-devel = "*"
+xorg-libx11 = "*"
+xorg-libxi = "*"
+xorg-libxcursor = "*"
 
 # Thin wrappers around the CMake presets; `cmake --preset ...` works the same
 # outside pixi given the dependencies above.

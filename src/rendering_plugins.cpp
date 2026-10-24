@@ -60,15 +60,10 @@ void Core::setup()
 
   GLuint vs = glCreateShader(GL_VERTEX_SHADER);
   const char *vs_source =
-#ifdef GL_ES_VERSION_2_0
-    "#version 100\n"  // OpenGL ES 2.0
-    "precision mediump float;"
-#else
-    "#version 120\n"  // OpenGL 2.1
-#endif
-    "attribute vec2 plugin_coord2d;"
-    "attribute vec3 plugin_v_color;"
-    "varying vec3 f_color;"
+    IE_GLSL_VERTEX_PRELUDE
+    "in vec2 plugin_coord2d;"
+    "in vec3 plugin_v_color;"
+    "out vec3 f_color;"
     "void main(void) {"
     "  f_color = plugin_v_color;"
     "  gl_Position = vec4(plugin_coord2d, 0.0, 1.0);"
@@ -84,15 +79,10 @@ void Core::setup()
 
   GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
   const char *fs_source =
-#ifdef GL_ES_VERSION_2_0
-    "#version 100\n"  // OpenGL ES 2.0
-    "precision mediump float;"
-#else
-    "#version 120\n"  // OpenGL 2.1
-#endif
-    "varying vec3 f_color;"
+    IE_GLSL_FRAGMENT_PRELUDE
+    "in vec3 f_color;"
     "void main(void) {"
-    "  gl_FragColor = vec4(f_color, 1.0);"
+    "  frag_color = vec4(f_color, 1.0);"
     "}";
   glShaderSource(fs, 1, &fs_source, NULL);
   glCompileShader(fs);
@@ -254,15 +244,10 @@ void Axis::setup()
 
   GLuint vs = glCreateShader(GL_VERTEX_SHADER);
   const char *vs_source =
-#ifdef GL_ES_VERSION_2_0
-    "#version 100\n"  // OpenGL ES 2.0
-    "precision mediump float;"
-#else
-    "#version 120\n"  // OpenGL 2.1
-#endif
-    "attribute vec2 plugin_coord2d;"
-    "attribute vec3 plugin_v_color;"
-    "varying vec3 f_color;"
+    IE_GLSL_VERTEX_PRELUDE
+    "in vec2 plugin_coord2d;"
+    "in vec3 plugin_v_color;"
+    "out vec3 f_color;"
     "void main(void) {"
     "  f_color = plugin_v_color;"
     "  gl_Position = vec4(plugin_coord2d, 0.0, 1.0);"
@@ -278,15 +263,10 @@ void Axis::setup()
 
   GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
   const char *fs_source =
-#ifdef GL_ES_VERSION_2_0
-    "#version 100\n"  // OpenGL ES 2.0
-    "precision mediump float;"
-#else
-    "#version 120\n"  // OpenGL 2.1
-#endif
-    "varying vec3 f_color;"
+    IE_GLSL_FRAGMENT_PRELUDE
+    "in vec3 f_color;"
     "void main(void) {"
-    "  gl_FragColor = vec4(f_color, 1.0);"
+    "  frag_color = vec4(f_color, 1.0);"
     "}";
   glShaderSource(fs, 1, &fs_source, NULL);
   glCompileShader(fs);
@@ -502,15 +482,10 @@ void Seismograph::setup()
 
   GLuint vs = glCreateShader(GL_VERTEX_SHADER);
   const char *vs_source =
-#ifdef GL_ES_VERSION_2_0
-    "#version 100\n"  // OpenGL ES 2.0
-    "precision mediump float;"
-#else
-    "#version 120\n"  // OpenGL 2.1
-#endif
-    "attribute vec2 plugin_coord2d;"
-    "attribute vec4 plugin_v_color;"
-    "varying vec4 f_color;"
+    IE_GLSL_VERTEX_PRELUDE
+    "in vec2 plugin_coord2d;"
+    "in vec4 plugin_v_color;"
+    "out vec4 f_color;"
     "void main(void) {"
     "  f_color = plugin_v_color;"
     "  gl_Position = vec4(plugin_coord2d, 0.0, 1.0);"
@@ -526,15 +501,10 @@ void Seismograph::setup()
 
   GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
   const char *fs_source =
-#ifdef GL_ES_VERSION_2_0
-    "#version 100\n"  // OpenGL ES 2.0
-    "precision mediump float;"
-#else
-    "#version 120\n"  // OpenGL 2.1
-#endif
-    "varying vec4 f_color;"
+    IE_GLSL_FRAGMENT_PRELUDE
+    "in vec4 f_color;"
     "void main(void) {"
-    "  gl_FragColor = f_color;"
+    "  frag_color = f_color;"
     "}";
   glShaderSource(fs, 1, &fs_source, NULL);
   glCompileShader(fs);

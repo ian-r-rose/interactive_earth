@@ -16,7 +16,7 @@ An introduction to the underlying science can be found [here](http://ian-r-rose.
 ## Building
 
 The build uses CMake. The easiest way to get a known-good toolchain
-(compiler, CMake, Ninja, FFTW, SDL2, GLEW) is [pixi](https://pixi.sh),
+(compiler, CMake, Ninja, FFTW, and the X11/OpenGL libraries) is [pixi](https://pixi.sh),
 which installs pinned versions from `pixi.lock` into the project directory:
 
 ```
@@ -25,6 +25,7 @@ pixi run test     # physics regression tests
 pixi run bench    # headless solver benchmark, e.g. pixi run bench --ra 1e6 --threads 1
 ```
 
+Windowing and input use the vendored [sokol_app.h](https://github.com/floooh/sokol) in `third_party/`.
 Without pixi, install those dependencies however you like and use the presets directly:
 
 ```

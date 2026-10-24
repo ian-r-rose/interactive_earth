@@ -62,15 +62,10 @@ void Mantle::setup()
 
   GLuint vs = glCreateShader(GL_VERTEX_SHADER);
   const char *vs_source =
-#ifdef GL_ES_VERSION_2_0
-    "#version 100\n"  // OpenGL ES 2.0
-    "precision mediump float;"
-#else
-    "#version 120\n"  // OpenGL 2.1
-#endif
-    "attribute vec2 coord2d;"
-    "attribute vec3 v_color;"
-    "varying vec3 f_color;"
+    IE_GLSL_VERTEX_PRELUDE
+    "in vec2 coord2d;"
+    "in vec3 v_color;"
+    "out vec3 f_color;"
     "void main(void) {"
     "  f_color = v_color;"
     "  gl_Position = vec4(coord2d, 0.0, 1.0);"
@@ -86,15 +81,10 @@ void Mantle::setup()
 
   GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
   const char *fs_source =
-#ifdef GL_ES_VERSION_2_0
-    "#version 100\n"  // OpenGL ES 2.0
-    "precision mediump float;"
-#else
-    "#version 120\n"  // OpenGL 2.1
-#endif
-    "varying vec3 f_color;"
+    IE_GLSL_FRAGMENT_PRELUDE
+    "in vec3 f_color;"
     "void main(void) {"
-    "  gl_FragColor = vec4(f_color, 1.0);"
+    "  frag_color = vec4(f_color, 1.0);"
     "}";
   glShaderSource(fs, 1, &fs_source, NULL);
   glCompileShader(fs);

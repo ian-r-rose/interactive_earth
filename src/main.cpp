@@ -10,10 +10,10 @@
 #include <iomanip>
 #include <vector>
 
+#include "sokol_app.h"
+
 #ifdef __EMSCRIPTEN__
-#include <emscripten/emscripten.h>
 #include <emscripten/bind.h>
-#include <emscripten/html5.h>
 #endif
 
 /*********************************************
@@ -55,9 +55,9 @@ const double flattening = 0.0;
 const double ltheta = 2.*M_PI;
 const double lr = 1.0-r_inner;
 
-//Total number of pixels in x and y directions
-int xpix;
-int ypix;
+//The simulation is drawn in a square viewport centered in the window.
+//Its lower left corner (in GL coordinates) and size, in pixels.
+int view_x = 0, view_y = 0, view_size = 1;
 
 //Whether to add heat to the simulation on mouse click.
 int click_state = 0;
@@ -86,9 +86,8 @@ Axis axis(simulator);
 Core core(simulator);
 Seismograph seismograph(simulator);
 
-//Structures for initializing a window and OpenGL conext
-SDL_GLContext context;
-SDL_Window *window=NULL;
+//A vertex array object must be bound to draw with a core profile context
+GLuint vertex_array;
 
 //Deterministic screenshot mode for regression checks. If IE_SCREENSHOT
 //is set, seed convection with fixed heat sources, run IE_SCREENSHOT_STEPS
@@ -97,24 +96,32 @@ const char *screenshot_path = std::getenv("IE_SCREENSHOT");
 const int screenshot_steps = std::getenv("IE_SCREENSHOT_STEPS") ?
                              std::atoi(std::getenv("IE_SCREENSHOT_STEPS")) : 200;
 
-void quit();
-
 void save_screenshot(const char *path)
 {
-  std::vector<unsigned char> pixels(3*xpix*ypix);
+  const int n = view_size;
+  std::vector<unsigned char> pixels(3*n*n);
   glPixelStorei(GL_PACK_ALIGNMENT, 1);
-  glReadPixels(0, 0, xpix, ypix, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+  glReadPixels(view_x, view_y, n, n, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
   FILE *f = std::fopen(path, "wb");
   if (!f)
   {
     std::cerr<<"Could not open "<<path<<std::endl;
     return;
   }
-  std::fprintf(f, "P6\n%d %d\n255\n", xpix, ypix);
+  std::fprintf(f, "P6\n%d %d\n255\n", n, n);
   //OpenGL rows start at the bottom
-  for (int row = ypix-1; row >= 0; --row)
-    std::fwrite(&pixels[3*xpix*row], 1, 3*xpix, f);
+  for (int row = n-1; row >= 0; --row)
+    std::fwrite(&pixels[3*n*row], 1, 3*n, f);
   std::fclose(f);
+}
+
+//Convert window coordinates (in pixels, from the top left) into
+//coordinates in [-0.5, 0.5] relative to the square viewport, y up.
+inline void window_to_view( const float wx, const float wy, float *x, float *y )
+{
+  const float top = sapp_heightf() - float(view_y + view_size);
+  *x = (wx - float(view_x))/float(view_size) - 0.5f;
+  *y = 1.0f - (wy - top)/float(view_size) - 0.5f;
 }
 
 //Given an x and y location, compute the r, theta location of the 
@@ -146,10 +153,10 @@ inline void compute_simulator_location( const float x, const float y, float *the
 }
 
 //Update where to add heat
-inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
+inline void handle_mouse_motion(const sapp_event *event)
 {
-  float x = float(event->x)/float(xpix)-0.5f;
-  float y = 1.0f-float(event->y)/float(ypix)-0.5f;
+  float x, y;
+  window_to_view(event->mouse_x, event->mouse_y, &x, &y);
 
   float theta, r;
   compute_simulator_location( x, y, &theta, &r);
@@ -159,26 +166,30 @@ inline void handle_mouse_motion(SDL_MouseMotionEvent *event)
 }
 
 //Change the Rayleigh number on scrolling
-inline void handle_mouse_wheel(SDL_MouseWheelEvent *event)
+inline void handle_mouse_wheel(const sapp_event *event)
 {
+  if (event->scroll_y == 0.f)
+    return;
   double rayleigh = simulator.rayleigh_number();
-  double factor = std::pow(10.0, 1./100.* (event->y < 0 ? -1. : 1.0) );
+  double factor = std::pow(10.0, 1./100.* (event->scroll_y < 0 ? -1. : 1.0) );
   simulator.update_state( rayleigh * factor );
 }
 
 //Toggle whether to add heat, and whether it should
 //be positive or negative
-inline void handle_mouse_button(SDL_MouseButtonEvent *event)
+inline void handle_mouse_button(const sapp_event *event)
 {
-  if(event->state==SDL_PRESSED)
+  if(event->type == SAPP_EVENTTYPE_MOUSE_DOWN)
   {
-    if(event->button == SDL_BUTTON_LEFT)
-      click_state = 1;
-    if(event->button == SDL_BUTTON_RIGHT)
+    //Ctrl-click acts as a right click, for one-button mice and trackpads
+    const bool ctrl = event->modifiers & SAPP_MODIFIER_CTRL;
+    if(event->mouse_button == SAPP_MOUSEBUTTON_LEFT)
+      click_state = ctrl ? -1 : 1;
+    if(event->mouse_button == SAPP_MOUSEBUTTON_RIGHT)
       click_state = -1;
 
-    float x = float(event->x)/float(xpix)-0.5f;
-    float y = 1.0f-float(event->y)/float(ypix)-0.5f;
+    float x, y;
+    window_to_view(event->mouse_x, event->mouse_y, &x, &y);
 
     float theta, r;
     compute_simulator_location(x, y, &theta, &r);
@@ -274,7 +285,8 @@ void timestep()
   if (screenshot_path && i == screenshot_steps)
   {
     save_screenshot(screenshot_path);
-    quit();
+    sapp_quit();
+    return;
   }
 
   //Do the convection problem if not in seismic mode
@@ -338,157 +350,40 @@ void timestep()
 }
 
 
-//Initialize the windows, set up all the OpenGL stuff
+//Set up all the OpenGL stuff, once the window and context exist
 void init()
 {
-    SDL_Init(SDL_INIT_VIDEO);
-    SDL_SetHint(SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, "1");
+  glGenVertexArrays(1, &vertex_array);
+  glBindVertexArray(vertex_array);
 
-#ifndef __EMSCRIPTEN__
-    //Get the number of displays
-    unsigned int n_displays = SDL_GetNumVideoDisplays();
-    if (n_displays < 1)
-       std::cerr<<"SDL : Could not find displays"<<std::endl;
-
-    //Identify the largest display
-    int max_display_dimension = 0;
-    SDL_Rect draw_rect;
-    float screen_fraction = 0.8;
-    for (unsigned int i=0; i < n_displays; ++i)
-    {
-      SDL_Rect r;
-      SDL_GetDisplayBounds( i, &r );
-      if ( r.w > max_display_dimension )
-      {
-        max_display_dimension = r.w;
-        draw_rect = r;
-      }
-      if ( r.h > max_display_dimension )
-      {
-        max_display_dimension = r.h;
-        draw_rect = r;
-      }
-    }
-    //set the size of the window
-    xpix = int( screen_fraction * float( (draw_rect.w < draw_rect.h ? draw_rect.w : draw_rect.h )) );
-    ypix = xpix;
-
-    window = SDL_CreateWindow(
-       "Convection",
-        draw_rect.x + draw_rect.w/2 - xpix/2 , draw_rect.y + draw_rect.h/2 - ypix/2,
-        xpix, ypix,
-        SDL_WINDOW_OPENGL);
-#else
-    int width, height;
-    emscripten_get_canvas_element_size("#canvas", &width, &height);
-    xpix = (width < height ? width : height);
-    ypix = xpix;
-
-    window = SDL_CreateWindow(
-       "Convection",
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        xpix, ypix,
-        SDL_WINDOW_OPENGL);
-#endif
-
-    context = SDL_GL_CreateContext(window);
-    if (!context)
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext(): %s\n", SDL_GetError());
-
-    glewExperimental=GL_TRUE;
-    GLenum glew_status = glewInit();
-    if (glew_status != GLEW_OK) {
-      fprintf(stderr, "Error: %s\n", glewGetErrorString(glew_status));
-    }
-
-
-    mantle.setup();
-    core.setup();
-    if (include_tpw)
-      axis.setup();
-    seismograph.setup();
+  mantle.setup();
+  core.setup();
+  if (include_tpw)
+    axis.setup();
+  seismograph.setup();
 }
 
 //Cleanup
-void quit()
+void cleanup()
 {
-    mantle.cleanup();
-    core.cleanup();
-    if(include_tpw)
-      axis.cleanup();
-    seismograph.cleanup();
-
-    SDL_GL_DeleteContext(context);
-    SDL_Quit();
-    exit(0);
+  mantle.cleanup();
+  core.cleanup();
+  if(include_tpw)
+    axis.cleanup();
+  seismograph.cleanup();
+  glDeleteVertexArrays(1, &vertex_array);
 }
 
-void loop()
+void frame()
 {
-  SDL_Event event;
-  while(SDL_PollEvent(&event))
-  {
-    //Screenshot mode must be deterministic, so ignore user input
-    if (screenshot_path && event.type != SDL_QUIT)
-      continue;
-    switch(event.type)
-    {
-      case SDL_QUIT:
-        quit();
-      case SDL_KEYDOWN:
-        //Some systems seem to have a hair trigger on the
-        //keypress repeats. Filter those out.
-        if(!event.key.repeat)
-        {
-          switch(event.key.keysym.sym)
-          {
-            case SDLK_SPACE:
-              seismic_mode = !seismic_mode;
-              simulator.clear_seismic_waves();
-              seismograph.clear_record();
-              break;
+  //Fit the largest square that we can in the window
+  const int width = sapp_width(), height = sapp_height();
+  view_size = (width < height ? width : height);
+  view_x = (width - view_size)/2;
+  view_y = (height - view_size)/2;
+  glViewport(view_x, view_y, view_size, view_size);
 
-#ifndef __EMSCRIPTEN__
-            //Quitting should be handled by navigating to another
-            //webpage or closing the browser when using, emscripten,
-            //so just disable quitting on escape
-            case SDLK_ESCAPE:
-              quit();
-              break;
-#endif
-            case SDLK_TAB:
-              draw_composition = !draw_composition;
-              break;
-
-            case SDLK_BACKSPACE:
-              advection_diffusion = !advection_diffusion;
-              break;
-
-            case SDLK_c:
-              cycle_colorscale();
-              break;
-
-            default:
-              break;
-          }
-        }
-        break;
-      case SDL_MOUSEBUTTONDOWN:
-      case SDL_MOUSEBUTTONUP:
-        handle_mouse_button(&event.button);
-        break;
-      case SDL_MOUSEMOTION:
-        handle_mouse_motion(&event.motion);
-        break;
-      case SDL_MOUSEWHEEL:
-        handle_mouse_wheel(&event.wheel);
-        break;
-      default:
-        break;
-    }
-  }
   timestep();
-  SDL_GL_SwapWindow(window);
 
   //Time between frames, including any wait for vsync
   static double last_frame = now_ms();
@@ -498,23 +393,80 @@ void loop()
   profiler().commit();
 }
 
-int main(int argc, char** argv)
+void event(const sapp_event *event)
 {
-    init();
+  //Screenshot mode must be deterministic, so ignore user input
+  if (screenshot_path)
+    return;
 
-    //The browser needs to handle the event loop if we are using
-    //Emscripten, so in that case we need to give the event loop
-    //away.  Otherwise we do it.
-#ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop(loop, 0, 1);
-#else
-    while (true) {
-        loop();
-    }
+  switch(event->type)
+  {
+    case SAPP_EVENTTYPE_KEY_DOWN:
+      //Some systems seem to have a hair trigger on the
+      //keypress repeats. Filter those out.
+      if(event->key_repeat)
+        break;
+      switch(event->key_code)
+      {
+        case SAPP_KEYCODE_SPACE:
+          seismic_mode = !seismic_mode;
+          simulator.clear_seismic_waves();
+          seismograph.clear_record();
+          break;
+
+#ifndef __EMSCRIPTEN__
+        //Quitting should be handled by navigating to another
+        //webpage or closing the browser when using, emscripten,
+        //so just disable quitting on escape
+        case SAPP_KEYCODE_ESCAPE:
+          sapp_request_quit();
+          break;
 #endif
+        case SAPP_KEYCODE_TAB:
+          draw_composition = !draw_composition;
+          sapp_consume_event();  //Don't move the browser's focus
+          break;
 
-    quit();
-    return 0;
+        case SAPP_KEYCODE_BACKSPACE:
+          advection_diffusion = !advection_diffusion;
+          sapp_consume_event();  //Don't navigate back in the browser
+          break;
+
+        case SAPP_KEYCODE_C:
+          cycle_colorscale();
+          break;
+
+        default:
+          break;
+      }
+      break;
+    case SAPP_EVENTTYPE_MOUSE_DOWN:
+    case SAPP_EVENTTYPE_MOUSE_UP:
+      handle_mouse_button(event);
+      break;
+    case SAPP_EVENTTYPE_MOUSE_MOVE:
+      handle_mouse_motion(event);
+      break;
+    case SAPP_EVENTTYPE_MOUSE_SCROLL:
+      handle_mouse_wheel(event);
+      sapp_consume_event();  //Don't scroll the page
+      break;
+    default:
+      break;
+  }
+}
+
+sapp_desc sokol_main(int argc, char **argv)
+{
+  sapp_desc desc = {};
+  desc.init_cb = init;
+  desc.frame_cb = frame;
+  desc.cleanup_cb = cleanup;
+  desc.event_cb = event;
+  desc.window_title = "Convection";
+  desc.gl.major_version = 3;
+  desc.gl.minor_version = 3;
+  return desc;
 }
 
 

@@ -64,22 +64,28 @@ if(NOT EMSCRIPTEN)
 endif()
 
 # --- Interactive app --------------------------------------------------------
-add_executable(interactive_earth src/main.cpp src/rendering.cpp src/rendering_plugins.cpp)
+# Windowing, input, and the GL context come from the vendored sokol_app.h.
+add_executable(interactive_earth
+  src/main.cpp src/rendering.cpp src/rendering_plugins.cpp src/sokol_app_impl.cpp)
+target_include_directories(interactive_earth SYSTEM PRIVATE third_party/sokol)
 target_link_libraries(interactive_earth PRIVATE ie_core)
 if(EMSCRIPTEN)
-  target_compile_definitions(interactive_earth PRIVATE GL_ES_VERSION_2_0)
-  target_compile_options(interactive_earth PRIVATE -sUSE_SDL=2)
+  target_compile_definitions(interactive_earth PRIVATE SOKOL_GLES3)
   target_link_options(interactive_earth PRIVATE
-    -sUSE_SDL=2
     -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2
     -sINITIAL_MEMORY=64MB -sALLOW_MEMORY_GROWTH=1
     -lembind)
   configure_file(web/dev.html ${CMAKE_CURRENT_BINARY_DIR}/index.html COPYONLY)
 else()
-  find_package(SDL2 CONFIG REQUIRED)
-  find_package(GLEW REQUIRED)
+  target_compile_definitions(interactive_earth PRIVATE SOKOL_GLCORE)
   find_package(OpenGL REQUIRED)
-  target_link_libraries(interactive_earth PRIVATE SDL2::SDL2 GLEW::GLEW OpenGL::GL)
+  find_package(X11 REQUIRED)
+  find_package(Threads REQUIRED)
+  if(NOT X11_Xi_FOUND OR NOT X11_Xcursor_FOUND)
+    message(FATAL_ERROR "sokol_app needs the Xi and Xcursor X11 extensions")
+  endif()
+  target_link_libraries(interactive_earth PRIVATE
+    OpenGL::GL X11::X11 X11::Xi X11::Xcursor Threads::Threads ${CMAKE_DL_LIBS} m)
 endif()
 
 # --- Benchmark and tests ----------------------------------------------------
