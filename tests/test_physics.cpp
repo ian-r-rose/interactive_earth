@@ -17,8 +17,8 @@
 #include <omp.h>
 #endif
 
-#include "../convection.h"
-#include "../harness.h"
+#include "convection.h"
+#include "harness.h"
 
 static int failures = 0;
 

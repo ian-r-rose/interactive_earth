@@ -20,10 +20,10 @@
 #include <omp.h>
 #endif
 
-#include "../color.h"
-#include "../convection.h"
-#include "../harness.h"
-#include "../profiler.h"
+#include "color.h"
+#include "convection.h"
+#include "harness.h"
+#include "profiler.h"
 
 static void usage()
 {

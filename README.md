@@ -13,24 +13,45 @@ More about the project can be found [here](http://ian-r-rose.github.io/interacti
 
 An introduction to the underlying science can be found [here](http://ian-r-rose.github.io/interactive_earth/explanation.html).
 
-## Compiling on Ubuntu Linux
-- Install ```fftw3```, ```SDL2```, and ```GLEW``` using ```apt-get install libfftw3-dev libsdl2-dev libglew-dev```
-- Rename ```Makefile.linux``` to ```makefile```
-- Run ```make``` on the command line to compile the project
-- run the program by typing its path and name in the command line: ```./interactive_earth```
+## Building
 
-## Compiling on a Mac
-- brew install the following dependencies: ```fftw3```, ```SDL2```, ```GLEW```
-- rename ```Makefile.osx``` to ```makefile```
-- run the command ```make``` in the command line
-- run the program by typing its path and name in the command line: ```./interactive_earth```
+The build uses CMake. The easiest way to get a known-good toolchain
+(compiler, CMake, Ninja, FFTW, SDL2, GLEW) is [pixi](https://pixi.sh),
+which installs pinned versions from `pixi.lock` into the project directory:
 
-## Compiling to Javascript
+```
+pixi run start    # build and run the interactive app
+pixi run test     # physics regression tests
+pixi run bench    # headless solver benchmark, e.g. pixi run bench --ra 1e6 --threads 1
+```
 
-Interactive Earth may be run in the web browser by compiling it to Javascript
-using [emscripten](http://kripken.github.io/emscripten-site).
-This takes a bit more work, since you must compile ```SDL2``` and ```fftw3``` manually as well,
-but can be done. The finished product can be seen [here](http://ian-r-rose.github.io/interactive_earth/index.html).
+Without pixi, install those dependencies however you like and use the presets directly:
+
+```
+cmake --preset native-release
+cmake --build --preset native-release
+ctest --preset native-release
+./build/native-release/interactive_earth
+```
+
+There is also a `native-debug` preset with AddressSanitizer and UndefinedBehaviorSanitizer.
+
+## Building for the web
+
+The WebAssembly build uses the Emscripten SDK version pinned in `.emsdk-version`,
+which `pixi run setup-emsdk` installs into `.emsdk/`. FFTW is downloaded and built
+from source with the same toolchain.
+
+```
+pixi run setup-emsdk   # once
+pixi run build-wasm
+pixi run serve-wasm    # then open http://127.0.0.1:8000
+pixi run test-wasm     # run the physics tests under node
+pixi run bench-wasm    # single-threaded benchmark under node
+```
+
+`web/dev.html` is a minimal page for local testing; add `?log` to the URL to also
+log the timing overlay to the console.
 
 ## User input
 With the simulation running, the user can make the following changes:
@@ -40,7 +61,7 @@ With the simulation running, the user can make the following changes:
 - press space to pause the simulation. while it is paused one can click to add earthquakes.
 
 ## Changing simulation behavior for advanced users
-The behavior of the simulation can be modified by changing parameters within the upper part of the main.cpp file. The parameters that readily exposed for being modified include:
+The behavior of the simulation can be modified by changing parameters within the upper part of `src/main.cpp`. The parameters that readily exposed for being modified include:
 - the resolution of the simulation (and thereby how quickly it runs)
 - whether or not to do a true polar wander (TPW) calculation
 - whether to included a chemical field
