@@ -1,62 +1,31 @@
 #ifndef RENDERING_PLUGINS_H
 #define RENDERING_PLUGINS_H
 
+#include <vector>
+#include "gl_util.h"
 #include "rendering.h"
 
 extern const double r_inner;
-extern const unsigned int nr, ntheta;
 extern const double flattening;
 
-//Useful constants
-static const short vertices_per_triangle = 3;
-static const short vertices_per_line = 2;
-static const short coordinates_per_vertex = 2;
-static const short colors_per_vertex = 3;
-static const short triangles_per_quad = 2;
-
 /******************************************
-   Interface for rendering plugins.
-   There is space in the center of the
-   domain which could be used to display
-   various things of interest/supporting
-   data. Define a basic plugin architecture
-   for accomplishing this.
+   Rendering plugins draw on top of the
+   mantle, mostly in the space taken by the
+   core in the center of the domain, to
+   show things of interest or supporting
+   data.
 ******************************************/
 
 class RenderingPlugin
 {
 public:
   RenderingPlugin(const ConvectionSimulator &sim) : sim(sim) {}
-  void setup();
-  void draw();
-  void cleanup();
 
 protected:
   const ConvectionSimulator &sim;
 };
 
-class Core : RenderingPlugin
-{
-public:
-  Core(const ConvectionSimulator &sim) : RenderingPlugin(sim) {}
-  void setup();
-  void draw();
-  void cleanup();
-
-private:
-  //Data for rendering with OpenGL
-  GLfloat *vertices;
-  GLfloat *vertex_colors;
-  GLuint *triangle_vertex_indices;
-
-  GLuint plugin_program;
-  GLuint plugin_vertices;
-  GLuint plugin_vertex_colors;
-  GLuint plugin_triangle_vertex_indices;
-  GLint plugin_attribute_coord2d;
-  GLint plugin_attribute_v_color;
-};
-
+//The spin axis, for true polar wander
 class Axis : RenderingPlugin
 {
 public:
@@ -66,45 +35,31 @@ public:
   void cleanup();
 
 private:
-  //Data for rendering with OpenGL
-  GLfloat *vertices;
-  GLfloat *vertex_colors;
-  GLuint *triangle_vertex_indices;
-
-  GLuint plugin_program;
-  GLuint plugin_vertices;
-  GLuint plugin_vertex_colors;
-  GLuint plugin_triangle_vertex_indices;
-  GLint plugin_attribute_coord2d;
-  GLint plugin_attribute_v_color;
+  ColoredMesh mesh;
 };
 
+//A scrolling trace of the seismometer reading, and a
+//marker for where the seismometer is
 class Seismograph : RenderingPlugin
 {
 public:
   Seismograph(const ConvectionSimulator &sim) : RenderingPlugin(sim) {}
   void setup();
-  void draw();
+  //point_size is the size of one (logical) screen pixel in clip coordinates
+  void draw(float point_size);
   void cleanup();
 
   void clear_record();
 
 private:
-  static const unsigned int n_lines = 1000;
-  static const unsigned int n_vertices =
-      n_lines + 1 /*endpoint*/ + vertices_per_triangle /*seismometer*/;
+  static const int n_points = 1001; //Length of the record
+  //The trace is a strip of triangles, two vertices per point,
+  //followed by the seismometer marker
+  static const int n_vertices = 2 * n_points + 3;
 
-  //Data for rendering with OpenGL
-  GLfloat *vertices;
-  GLfloat *vertex_colors;
-  GLuint *line_vertex_indices;
-
-  GLuint plugin_program;
-  GLuint plugin_vertices;
-  GLuint plugin_vertex_colors;
-  GLuint plugin_line_vertex_indices;
-  GLint plugin_attribute_coord2d;
-  GLint plugin_attribute_v_color;
+  ColoredMesh mesh;
+  std::vector<float> record;     //Recent readings, oldest first
+  std::vector<GLfloat> vertices; //(x, y) per vertex
 };
 
 #endif

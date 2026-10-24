@@ -58,6 +58,8 @@ const double lr = 1.0 - r_inner;
 //The simulation is drawn in a square viewport centered in the window.
 //Its lower left corner (in GL coordinates) and size, in pixels.
 int view_x = 0, view_y = 0, view_size = 1;
+//Size of one logical (unscaled) screen pixel in clip coordinates
+float point_size = 2.f;
 
 //Whether to add heat to the simulation on mouse click.
 int click_state = 0;
@@ -83,11 +85,7 @@ double simulation_time = 0.0;
 ConvectionSimulator simulator(r_inner, ntheta, nr, include_composition);
 Mantle mantle(simulator);
 Axis axis(simulator);
-Core core(simulator);
 Seismograph seismograph(simulator);
-
-//A vertex array object must be bound to draw with a core profile context
-GLuint vertex_array;
 
 //Deterministic screenshot mode for regression checks. If IE_SCREENSHOT
 //is set, seed convection with fixed heat sources, run IE_SCREENSHOT_STEPS
@@ -272,11 +270,10 @@ void timestep()
   mantle.draw(include_composition && draw_composition); //Draw to screen
   {
     IE_PROFILE(render_gl);
-    core.draw();
     if (include_tpw && !seismic_mode)
       axis.draw();
     if (seismic_mode)
-      seismograph.draw();
+      seismograph.draw(point_size);
   }
 
   if (screenshot_path && i == screenshot_steps)
@@ -352,11 +349,7 @@ void timestep()
 //Set up all the OpenGL stuff, once the window and context exist
 void init()
 {
-  glGenVertexArrays(1, &vertex_array);
-  glBindVertexArray(vertex_array);
-
   mantle.setup();
-  core.setup();
   if (include_tpw)
     axis.setup();
   seismograph.setup();
@@ -366,21 +359,22 @@ void init()
 void cleanup()
 {
   mantle.cleanup();
-  core.cleanup();
   if (include_tpw)
     axis.cleanup();
   seismograph.cleanup();
-  glDeleteVertexArrays(1, &vertex_array);
 }
 
 void frame()
 {
-  //Fit the largest square that we can in the window
+  //Fit the largest square that we can in the window. Sizes are in
+  //framebuffer pixels, which may be smaller than logical pixels on
+  //high density displays.
   const int width = sapp_width(), height = sapp_height();
   view_size = (width < height ? width : height);
   view_x = (width - view_size) / 2;
   view_y = (height - view_size) / 2;
   glViewport(view_x, view_y, view_size, view_size);
+  point_size = 2.f * sapp_dpi_scale() / float(view_size);
 
   timestep();
 
@@ -465,6 +459,7 @@ sapp_desc sokol_main(int /*argc*/, char ** /*argv*/)
   desc.window_title = "Convection";
   desc.gl.major_version = 3;
   desc.gl.minor_version = 3;
+  desc.high_dpi = true; //Render at full resolution on high density displays
   return desc;
 }
 

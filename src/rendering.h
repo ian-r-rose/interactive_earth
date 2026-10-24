@@ -6,8 +6,14 @@
 #include "color.h"
 #include "convection.h"
 
-//Renders the temperature (or composition) field of the
-//mantle, perturbed by any seismic displacement.
+//The domain is rendered flattened along the spin axis, as if under
+//centrifugal forces: positions are R(angle) diag(1, 1 - flattening) R(-angle)
+//applied to the circular ones, with angle = spin_angle + pi/2. Returns that
+//matrix (or its inverse) in column-major order.
+void flattening_shape(double spin_angle, bool inverse, double shape[4]);
+
+//Renders the temperature (or composition) field of the mantle, perturbed by
+//any seismic displacement, and the core inside it.
 //
 //The field is uploaded each frame as a texture indexed by (theta, r) cell,
 //and a fragment shader maps every pixel back to polar coordinates, samples
@@ -27,6 +33,7 @@ private:
   const ConvectionSimulator &sim;
 
   GLuint program = 0;
+  GLuint vertex_array = 0;     //Empty; the geometry comes from the vertex index
   GLuint field_texture = 0;    //(field, displacement) per grid cell
   GLuint colormap_texture = 0; //256 entry lookup table
   GLint uniform_field = -1, uniform_colormap = -1;

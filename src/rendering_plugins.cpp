@@ -1,652 +1,143 @@
+#include <algorithm>
 #include <cmath>
 #include "rendering_plugins.h"
-#include "color.h"
 
-extern color (*colormap)(double);
-
-void Core::setup()
-{
-  {
-    const unsigned long n_triangles = ntheta;
-    const unsigned long n_vertices = n_triangles + 1;
-
-    vertices = new GLfloat[n_vertices * coordinates_per_vertex];
-    vertex_colors = new GLfloat[n_vertices * colors_per_vertex];
-    triangle_vertex_indices = new GLuint[n_triangles * vertices_per_triangle];
-
-    color core_color = colormap(1.0);
-
-    //one vertex at the origin
-    vertices[0] = 0.0f;
-    vertices[1] = 0.0f;
-    vertex_colors[0] = core_color.R;
-    vertex_colors[1] = core_color.G;
-    vertex_colors[2] = core_color.B;
-
-    unsigned long c = 3, i = 0; //start at the next vertex index
-    for (unsigned long n = 0; n < n_triangles; ++n)
-    {
-      vertex_colors[c + 0] = core_color.R;
-      vertex_colors[c + 1] = core_color.G;
-      vertex_colors[c + 2] = core_color.B;
-
-      triangle_vertex_indices[i + 0] = 0;
-      triangle_vertex_indices[i + 1] = n + 1;
-      triangle_vertex_indices[i + 2] = (n == n_triangles - 1 ? 1 : n + 2);
-
-      c += colors_per_vertex;
-      i += vertices_per_triangle;
-    }
-
-    glGenBuffers(1, &plugin_triangle_vertex_indices);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_triangle_vertex_indices);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * n_triangles * vertices_per_triangle,
-                 triangle_vertex_indices, GL_STATIC_DRAW);
-
-    glGenBuffers(1, &plugin_vertices);
-
-    glGenBuffers(1, &plugin_vertex_colors);
-    glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n_vertices * colors_per_vertex, vertex_colors,
-                 GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-  }
-
-  GLint compile_ok = GL_FALSE, link_ok = GL_FALSE;
-
-  GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-  const char *vs_source = IE_GLSL_VERTEX_PRELUDE "in vec2 plugin_coord2d;"
-                                                 "in vec3 plugin_v_color;"
-                                                 "out vec3 f_color;"
-                                                 "void main(void) {"
-                                                 "  f_color = plugin_v_color;"
-                                                 "  gl_Position = vec4(plugin_coord2d, 0.0, 1.0);"
-                                                 "}";
-
-  glShaderSource(vs, 1, &vs_source, NULL);
-  glCompileShader(vs);
-  glGetShaderiv(vs, GL_COMPILE_STATUS, &compile_ok);
-  if (!compile_ok)
-  {
-    fprintf(stderr, "Error in vertex shader\n");
-    return;
-  }
-
-  GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-  const char *fs_source = IE_GLSL_FRAGMENT_PRELUDE "in vec3 f_color;"
-                                                   "void main(void) {"
-                                                   "  frag_color = vec4(f_color, 1.0);"
-                                                   "}";
-  glShaderSource(fs, 1, &fs_source, NULL);
-  glCompileShader(fs);
-  glGetShaderiv(fs, GL_COMPILE_STATUS, &compile_ok);
-  if (!compile_ok)
-  {
-    fprintf(stderr, "Error in fragment shader\n");
-    return;
-  }
-
-  plugin_program = glCreateProgram();
-  glAttachShader(plugin_program, vs);
-  glAttachShader(plugin_program, fs);
-  glLinkProgram(plugin_program);
-  glGetProgramiv(plugin_program, GL_LINK_STATUS, &link_ok);
-  if (!link_ok)
-  {
-    fprintf(stderr, "glLinkProgram:");
-    return;
-  }
-
-  const char *attribute_name = "plugin_coord2d";
-  plugin_attribute_coord2d = glGetAttribLocation(plugin_program, attribute_name);
-  if (plugin_attribute_coord2d == -1)
-  {
-    fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-    return;
-  }
-  attribute_name = "plugin_v_color";
-  plugin_attribute_v_color = glGetAttribLocation(plugin_program, attribute_name);
-  if (plugin_attribute_v_color == -1)
-  {
-    fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-    return;
-  }
-  return;
-}
-
-void Core::draw()
-{
-  const unsigned long n_triangles = ntheta;
-  const unsigned long n_vertices = n_triangles + 1;
-  const float dtheta = 2. * M_PI / n_triangles;
-
-  const float angle = sim.spin_angle();
-  const float a = 1.0f;
-  const float b = 1.0f - flattening;
-
-  unsigned long v = 2; //start at the next vertex index after the one in the center
-  for (unsigned long n = 0; n < n_triangles; ++n)
-  {
-    const float theta = dtheta * n;
-    //Vertices of the inner ellipse
-    vertices[v + 0] = r_inner * (a + b) / 2. * std::cos(theta) +
-                      r_inner * (a - b) / 2. * std::cos(-theta + 2. * (angle + M_PI / 2.));
-    vertices[v + 1] = r_inner * (a + b) / 2. * std::sin(theta) +
-                      r_inner * (a - b) / 2. * std::sin(-theta + 2. * (angle + M_PI / 2.));
-
-    v += coordinates_per_vertex;
-  }
-
-  glUseProgram(plugin_program);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_triangle_vertex_indices);
-
-  glEnableVertexAttribArray(plugin_attribute_coord2d);
-
-  glBindBuffer(GL_ARRAY_BUFFER, plugin_vertices);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n_vertices * coordinates_per_vertex, vertices,
-               GL_DYNAMIC_DRAW);
-  glVertexAttribPointer(plugin_attribute_coord2d, // attribute
-                        2,                        // number of elements per vertex (x,y)
-                        GL_FLOAT,                 // the type of each element
-                        GL_FALSE,                 // take our values as-is
-                        0,                        // no extra data between each position
-                        0                         // offset of first element
-  );
-
-  glEnableVertexAttribArray(plugin_attribute_v_color);
-  glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
-  glVertexAttribPointer(plugin_attribute_v_color, // attribute
-                        3,                        // number of elements per verte (r,g,b)
-                        GL_FLOAT,                 // the type of each element
-                        GL_FALSE,                 // take our values as-is
-                        0,                        // no extra data between each position
-                        0);
-
-  glDrawElements(GL_TRIANGLES, n_triangles * vertices_per_triangle, GL_UNSIGNED_INT, 0);
-
-  glDisableVertexAttribArray(plugin_attribute_coord2d);
-  glDisableVertexAttribArray(plugin_attribute_v_color);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
-void Core::cleanup()
-{
-  delete[] vertices;
-  delete[] vertex_colors;
-  delete[] triangle_vertex_indices;
-
-  glDeleteProgram(plugin_program);
-  glDeleteBuffers(1, &plugin_vertices);
-  glDeleteBuffers(1, &plugin_vertex_colors);
-  glDeleteBuffers(1, &plugin_triangle_vertex_indices);
-}
+/* Axis */
 
 void Axis::setup()
 {
-  {
-    const unsigned long n_triangles = 2 /*axis*/ + 2 /*arrowheads*/;
-    const unsigned long n_vertices = 4 /*axis*/ + 6 /*arrowheads*/;
+  //Geometry for a spin angle of zero; draw() rotates it into place.
+  const double r = 0.8 * r_inner * (1.0 - flattening); //Half length of the axis
+  const double arrowhead = 0.1 * r_inner;
+  const double dtheta = 0.5 / r_inner * M_PI / 180.0; //Angular half width of the axis
 
-    vertices = new GLfloat[n_vertices * coordinates_per_vertex];
-    vertex_colors = new GLfloat[n_vertices * colors_per_vertex];
-    triangle_vertex_indices = new GLuint[n_triangles * vertices_per_triangle];
+  const GLfloat positions[] = {//Axis, a thin quad
+                               float(r * std::cos(-dtheta)), float(r * std::sin(-dtheta)),   //
+                               float(-r * std::cos(dtheta)), float(-r * std::sin(dtheta)),   //
+                               float(-r * std::cos(-dtheta)), float(-r * std::sin(-dtheta)), //
+                               float(r * std::cos(dtheta)), float(r * std::sin(dtheta)),     //
+                               //Arrowheads at either end
+                               float(r + arrowhead), 0.f, //
+                               float((r - arrowhead) * std::cos(4. * dtheta)),
+                               float((r - arrowhead) * std::sin(4. * dtheta)),
+                               float((r - arrowhead) * std::cos(-4. * dtheta)),
+                               float((r - arrowhead) * std::sin(-4. * dtheta)),
+                               float(-(r + arrowhead)), 0.f, //
+                               float(-(r - arrowhead) * std::cos(4. * dtheta)),
+                               float(-(r - arrowhead) * std::sin(4. * dtheta)),
+                               float(-(r - arrowhead) * std::cos(-4. * dtheta)),
+                               float(-(r - arrowhead) * std::sin(-4. * dtheta))};
+  const int n_vertices = sizeof(positions) / sizeof(positions[0]) / 2;
 
-    color arrow_color;
-    arrow_color.R = 0.15;
-    arrow_color.G = 0.15;
-    arrow_color.B = 0.15;
-    unsigned int c = 0;
-    for (unsigned int i = 0; i < n_vertices; ++i)
-    {
-      vertex_colors[c + 0] = arrow_color.R;
-      vertex_colors[c + 1] = arrow_color.G;
-      vertex_colors[c + 2] = arrow_color.B;
-      c += colors_per_vertex;
-    }
+  std::vector<GLfloat> colors;
+  for (int i = 0; i < n_vertices; ++i)
+    colors.insert(colors.end(), {0.15f, 0.15f, 0.15f, 1.0f});
 
-    //Axis
-    triangle_vertex_indices[0] = 0;
-    triangle_vertex_indices[1] = 1;
-    triangle_vertex_indices[2] = 2;
-    triangle_vertex_indices[3] = 0;
-    triangle_vertex_indices[4] = 2;
-    triangle_vertex_indices[5] = 3;
-    //Arrowheads
-    triangle_vertex_indices[6] = 4;
-    triangle_vertex_indices[7] = 5;
-    triangle_vertex_indices[8] = 6;
-    triangle_vertex_indices[9] = 7;
-    triangle_vertex_indices[10] = 8;
-    triangle_vertex_indices[11] = 9;
-
-    glGenBuffers(1, &plugin_triangle_vertex_indices);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_triangle_vertex_indices);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * n_triangles * vertices_per_triangle,
-                 triangle_vertex_indices, GL_STATIC_DRAW);
-
-    glGenBuffers(1, &plugin_vertices);
-    glBindBuffer(GL_ARRAY_BUFFER, plugin_vertices);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n_vertices * coordinates_per_vertex, vertices,
-                 GL_DYNAMIC_DRAW);
-
-    glGenBuffers(1, &plugin_vertex_colors);
-    glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n_vertices * colors_per_vertex, vertex_colors,
-                 GL_DYNAMIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-  }
-
-  GLint compile_ok = GL_FALSE, link_ok = GL_FALSE;
-
-  GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-  const char *vs_source = IE_GLSL_VERTEX_PRELUDE "in vec2 plugin_coord2d;"
-                                                 "in vec3 plugin_v_color;"
-                                                 "out vec3 f_color;"
-                                                 "void main(void) {"
-                                                 "  f_color = plugin_v_color;"
-                                                 "  gl_Position = vec4(plugin_coord2d, 0.0, 1.0);"
-                                                 "}";
-
-  glShaderSource(vs, 1, &vs_source, NULL);
-  glCompileShader(vs);
-  glGetShaderiv(vs, GL_COMPILE_STATUS, &compile_ok);
-  if (!compile_ok)
-  {
-    fprintf(stderr, "Error in vertex shader\n");
-    return;
-  }
-
-  GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-  const char *fs_source = IE_GLSL_FRAGMENT_PRELUDE "in vec3 f_color;"
-                                                   "void main(void) {"
-                                                   "  frag_color = vec4(f_color, 1.0);"
-                                                   "}";
-  glShaderSource(fs, 1, &fs_source, NULL);
-  glCompileShader(fs);
-  glGetShaderiv(fs, GL_COMPILE_STATUS, &compile_ok);
-  if (!compile_ok)
-  {
-    fprintf(stderr, "Error in fragment shader\n");
-    return;
-  }
-
-  plugin_program = glCreateProgram();
-  glAttachShader(plugin_program, vs);
-  glAttachShader(plugin_program, fs);
-  glLinkProgram(plugin_program);
-  glGetProgramiv(plugin_program, GL_LINK_STATUS, &link_ok);
-  if (!link_ok)
-  {
-    fprintf(stderr, "glLinkProgram:");
-    return;
-  }
-
-  const char *attribute_name = "plugin_coord2d";
-  plugin_attribute_coord2d = glGetAttribLocation(plugin_program, attribute_name);
-  if (plugin_attribute_coord2d == -1)
-  {
-    fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-    return;
-  }
-  attribute_name = "plugin_v_color";
-  plugin_attribute_v_color = glGetAttribLocation(plugin_program, attribute_name);
-  if (plugin_attribute_v_color == -1)
-  {
-    fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-    return;
-  }
-  return;
+  const GLuint indices[] = {0, 1, 2, 0, 2, 3, 4, 5, 6, 7, 8, 9};
+  mesh.setup(n_vertices, positions, colors.data(), 12, indices, "Axis");
 }
 
 void Axis::draw()
 {
-  const unsigned long n_triangles = 2 /*axis*/ + 2 /*arrowheads*/;
-  const unsigned long n_vertices = 4 /*axis*/ + 6 /*arrowheads*/;
-
-  const float d2r = M_PI / 180.0;
-  const float theta = float(sim.spin_angle());
-  const float r = 0.8 * r_inner * (1.0f - flattening);
-  const float arrowhead = 0.1 * r_inner;
-  const float dtheta = 0.5 / r_inner * d2r;
-
-  //Draw the axis
-  vertices[0] = r * std::cos(theta - dtheta);
-  vertices[1] = r * std::sin(theta - dtheta);
-  vertices[2] = -r * std::cos(theta + dtheta);
-  vertices[3] = -r * std::sin(theta + dtheta);
-  vertices[4] = -r * std::cos(theta - dtheta);
-  vertices[5] = -r * std::sin(theta - dtheta);
-  vertices[6] = r * std::cos(theta + dtheta);
-  vertices[7] = r * std::sin(theta + dtheta);
-  //Draw the arrowheads
-
-  //first arrowhead
-  vertices[8] = (r + arrowhead) * std::cos(theta);
-  vertices[9] = (r + arrowhead) * std::sin(theta);
-  vertices[10] = (r - arrowhead) * std::cos(theta + 4. * dtheta);
-  vertices[11] = (r - arrowhead) * std::sin(theta + 4. * dtheta);
-  vertices[12] = (r - arrowhead) * std::cos(theta - 4. * dtheta);
-  vertices[13] = (r - arrowhead) * std::sin(theta - 4. * dtheta);
-  //second arrowhead
-  vertices[14] = -(r + arrowhead) * std::cos(theta);
-  vertices[15] = -(r + arrowhead) * std::sin(theta);
-  vertices[16] = -(r - arrowhead) * std::cos(theta + 4. * dtheta);
-  vertices[17] = -(r - arrowhead) * std::sin(theta + 4. * dtheta);
-  vertices[18] = -(r - arrowhead) * std::cos(theta - 4. * dtheta);
-  vertices[19] = -(r - arrowhead) * std::sin(theta - 4. * dtheta);
-
-  glEnable(GL_BLEND);
-#ifndef __EMSCRIPTEN__
-  glEnable(GL_POLYGON_SMOOTH);
-#endif
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-  glUseProgram(plugin_program);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_triangle_vertex_indices);
-
-  glEnableVertexAttribArray(plugin_attribute_coord2d);
-
-  glBindBuffer(GL_ARRAY_BUFFER, plugin_vertices);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n_vertices * coordinates_per_vertex, vertices,
-               GL_DYNAMIC_DRAW);
-  glVertexAttribPointer(plugin_attribute_coord2d, // attribute
-                        2,                        // number of elements per vertex (x,y)
-                        GL_FLOAT,                 // the type of each element
-                        GL_FALSE,                 // take our values as-is
-                        0,                        // no extra data between each position
-                        0                         // offset of first element
-  );
-
-  glEnableVertexAttribArray(plugin_attribute_v_color);
-  glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
-  glVertexAttribPointer(plugin_attribute_v_color, // attribute
-                        3,                        // number of elements per verte (r,g,b)
-                        GL_FLOAT,                 // the type of each element
-                        GL_FALSE,                 // take our values as-is
-                        0,                        // no extra data between each position
-                        0);
-
-  glDrawElements(GL_TRIANGLES, n_triangles * vertices_per_triangle, GL_UNSIGNED_INT, 0);
-
-  glDisableVertexAttribArray(plugin_attribute_coord2d);
-  glDisableVertexAttribArray(plugin_attribute_v_color);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-  glDisable(GL_BLEND);
-#ifndef __EMSCRIPTEN__
-  glDisable(GL_POLYGON_SMOOTH);
-#endif
+  GLfloat transform[4];
+  rotation_transform(sim.spin_angle(), transform);
+  mesh.draw(GL_TRIANGLES, 0, 12, transform);
 }
 
 void Axis::cleanup()
 {
-  delete[] vertices;
-  delete[] vertex_colors;
-  delete[] triangle_vertex_indices;
-
-  glDeleteProgram(plugin_program);
-  glDeleteBuffers(1, &plugin_vertices);
-  glDeleteBuffers(1, &plugin_vertex_colors);
-  glDeleteBuffers(1, &plugin_triangle_vertex_indices);
+  mesh.cleanup();
 }
+
+/* Seismograph */
 
 void Seismograph::clear_record()
 {
-  unsigned int v = 0;
-  for (unsigned int i = 0; i < n_lines + 1; ++i)
-  {
-    vertices[v + 1] = 0.f;
-    v += coordinates_per_vertex;
-  }
+  std::fill(record.begin(), record.end(), 0.f);
 }
 
 void Seismograph::setup()
 {
+  record.assign(n_points, 0.f);
+  vertices.assign(2 * n_vertices, 0.f);
+
+  //The trace is black, fading out at either end. The seismometer is blue.
+  std::vector<GLfloat> colors;
+  for (int i = 0; i < n_points; ++i)
   {
-    vertices = new GLfloat[n_vertices * coordinates_per_vertex];
-    vertex_colors = new GLfloat[n_vertices * (colors_per_vertex + 1)];
-    line_vertex_indices =
-        new GLuint[n_lines * vertices_per_line + 1 * vertices_per_triangle /*seismometer*/];
-
-    //Begin with vertices all recording zero
-    unsigned int v = 0;
-    for (unsigned int i = 0; i < n_lines + 1; ++i)
-    {
-      vertices[v + 0] = -0.9f * r_inner * (1.0f - flattening) +
-                        float(i) / float(n_vertices) * 1.8f * r_inner * (1.0f - flattening);
-      vertices[v + 1] = 0.f;
-      v += coordinates_per_vertex;
-    }
-
-    color line_color;
-    line_color.R = 0.0;
-    line_color.G = 0.0;
-    line_color.B = 0.0;
-    unsigned int c = 0;
-    for (unsigned int i = 0; i < n_lines + 1; ++i)
-    {
-      vertex_colors[c + 0] = line_color.R;
-      vertex_colors[c + 1] = line_color.G;
-      vertex_colors[c + 2] = line_color.B;
-
-      //Add transparency to the edges
-      if (i < (n_lines + 1) / 6)
-        vertex_colors[c + 3] = 6 * float(i) / float(n_vertices);
-      else if (i > 4 * (n_lines + 1) / 6)
-        vertex_colors[c + 3] = 6 * float(n_lines + 1 - i) / float(n_lines + 1);
-      else
-        vertex_colors[c + 3] = 1.0;
-      c += colors_per_vertex + 1;
-    }
-
-    for (unsigned int i = 0; i < n_lines; ++i)
-    {
-      line_vertex_indices[vertices_per_line * i + 0] = i;
-      line_vertex_indices[vertices_per_line * i + 1] = i + 1;
-    }
-
-    //Fill the vertex information about the seismometer
-    line_vertex_indices[(n_lines * vertices_per_line) + 0] = n_vertices - 3;
-    line_vertex_indices[(n_lines * vertices_per_line) + 1] = n_vertices - 2;
-    line_vertex_indices[(n_lines * vertices_per_line) + 2] = n_vertices - 1;
-
-    for (int i = vertices_per_triangle; i > 0; --i)
-    {
-      vertex_colors[(n_vertices - i) * (colors_per_vertex + 1) + 0] = 0.0; //line_color.R;
-      vertex_colors[(n_vertices - i) * (colors_per_vertex + 1) + 1] = 0.3; //line_color.G;
-      vertex_colors[(n_vertices - i) * (colors_per_vertex + 1) + 2] = 1.0; //line_color.B;
-      vertex_colors[(n_vertices - i) * (colors_per_vertex + 1) + 3] = 0.8;
-    }
-
-    glGenBuffers(1, &plugin_line_vertex_indices);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_line_vertex_indices);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 sizeof(GLuint) * (n_lines * vertices_per_line + vertices_per_triangle),
-                 line_vertex_indices, GL_STATIC_DRAW);
-
-    glGenBuffers(1, &plugin_vertices);
-    glBindBuffer(GL_ARRAY_BUFFER, plugin_vertices);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n_vertices * coordinates_per_vertex, vertices,
-                 GL_DYNAMIC_DRAW);
-
-    glGenBuffers(1, &plugin_vertex_colors);
-    glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n_vertices * (colors_per_vertex + 1),
-                 vertex_colors, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    float alpha = 1.0f;
+    if (i < n_points / 6)
+      alpha = 6.f * float(i) / float(n_points);
+    else if (i > 5 * n_points / 6)
+      alpha = 6.f * float(n_points - i) / float(n_points);
+    for (int side = 0; side < 2; ++side)
+      colors.insert(colors.end(), {0.f, 0.f, 0.f, alpha});
   }
+  for (int i = 0; i < 3; ++i)
+    colors.insert(colors.end(), {0.f, 0.3f, 1.0f, 0.8f});
 
-  GLint compile_ok = GL_FALSE, link_ok = GL_FALSE;
+  //Two triangles per segment of the trace, then the seismometer
+  std::vector<GLuint> indices;
+  for (GLuint i = 0; i + 1 < GLuint(n_points); ++i)
+    indices.insert(indices.end(), {2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2});
+  for (GLuint i = 0; i < 3; ++i)
+    indices.push_back(2 * n_points + i);
 
-  GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-  const char *vs_source = IE_GLSL_VERTEX_PRELUDE "in vec2 plugin_coord2d;"
-                                                 "in vec4 plugin_v_color;"
-                                                 "out vec4 f_color;"
-                                                 "void main(void) {"
-                                                 "  f_color = plugin_v_color;"
-                                                 "  gl_Position = vec4(plugin_coord2d, 0.0, 1.0);"
-                                                 "}";
-
-  glShaderSource(vs, 1, &vs_source, NULL);
-  glCompileShader(vs);
-  glGetShaderiv(vs, GL_COMPILE_STATUS, &compile_ok);
-  if (!compile_ok)
-  {
-    fprintf(stderr, "Error in vertex shader\n");
-    return;
-  }
-
-  GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-  const char *fs_source = IE_GLSL_FRAGMENT_PRELUDE "in vec4 f_color;"
-                                                   "void main(void) {"
-                                                   "  frag_color = f_color;"
-                                                   "}";
-  glShaderSource(fs, 1, &fs_source, NULL);
-  glCompileShader(fs);
-  glGetShaderiv(fs, GL_COMPILE_STATUS, &compile_ok);
-  if (!compile_ok)
-  {
-    fprintf(stderr, "Error in fragment shader\n");
-    return;
-  }
-
-  plugin_program = glCreateProgram();
-  glAttachShader(plugin_program, vs);
-  glAttachShader(plugin_program, fs);
-  glLinkProgram(plugin_program);
-  glGetProgramiv(plugin_program, GL_LINK_STATUS, &link_ok);
-  if (!link_ok)
-  {
-    fprintf(stderr, "glLinkProgram:");
-    return;
-  }
-
-  const char *attribute_name = "plugin_coord2d";
-  plugin_attribute_coord2d = glGetAttribLocation(plugin_program, attribute_name);
-  if (plugin_attribute_coord2d == -1)
-  {
-    fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-    return;
-  }
-  attribute_name = "plugin_v_color";
-  plugin_attribute_v_color = glGetAttribLocation(plugin_program, attribute_name);
-  if (plugin_attribute_v_color == -1)
-  {
-    fprintf(stderr, "Could not bind attribute %s\n", attribute_name);
-    return;
-  }
-  return;
+  mesh.setup(n_vertices, vertices.data(), colors.data(), int(indices.size()), indices.data(),
+             "Seismograph");
 }
 
-void Seismograph::draw()
+void Seismograph::draw(float point_size)
 {
-  //Begin with vertices all recording zero
-  unsigned int v = 0;
-  for (unsigned int i = 0; i < n_lines + 1; ++i)
-  {
-    vertices[v + 1] = vertices[v + 3];
-    v += coordinates_per_vertex;
-  }
-  vertices[(n_lines + 1) * coordinates_per_vertex - 1] = sim.seismometer_reading() * 0.7 * r_inner;
+  //Scroll the record and add the newest reading
+  std::rotate(record.begin(), record.begin() + 1, record.end());
+  record.back() = float(sim.seismometer_reading() * 0.7 * r_inner);
 
-  //Fill the vertex information about the seismometer
+  //Lines wider than one pixel are not available in core GL or WebGL,
+  //so draw the trace as a strip of triangles, offset to either side of
+  //the line, two points wide.
+  const double half_width = 1.0 * point_size;
+  const double width = 1.8 * r_inner * (1.0 - flattening);
+  auto x = [&](int i) { return -0.5 * width + width * i / (n_points - 1); };
+  for (int i = 0; i < n_points; ++i)
+  {
+    const int prev = (i > 0 ? i - 1 : i), next = (i + 1 < n_points ? i + 1 : i);
+    const double tx = x(next) - x(prev), ty = record[next] - record[prev];
+    const double length = std::sqrt(tx * tx + ty * ty);
+    const double nx = -ty / length * half_width, ny = tx / length * half_width;
+    vertices[4 * i + 0] = float(x(i) + nx);
+    vertices[4 * i + 1] = float(record[i] + ny);
+    vertices[4 * i + 2] = float(x(i) - nx);
+    vertices[4 * i + 3] = float(record[i] - ny);
+  }
+
+  //The seismometer, at its position in the (possibly flattened) domain
   double theta, r;
   sim.seismometer_position(theta, r);
   r += r_inner;
+  double shape[4];
+  flattening_shape(sim.spin_angle(), false, shape);
+  const double px = r * std::cos(theta), py = r * std::sin(theta);
+  const double sx = shape[0] * px + shape[2] * py, sy = shape[1] * px + shape[3] * py;
+  GLfloat *marker = &vertices[4 * n_points];
+  marker[0] = float(sx - 0.04);
+  marker[1] = float(sy + 0.04);
+  marker[2] = float(sx + 0.04);
+  marker[3] = float(sy + 0.04);
+  marker[4] = float(sx);
+  marker[5] = float(sy - 0.04);
 
-  //Information about ellipticity
-  const float angle = sim.spin_angle();
-  const float a = 1.0f;
-  const float b = 1.0f - flattening;
+  mesh.update_positions(vertices.data());
 
-  //Position of the seismometer in (possibly) elliptical space
-  const float seis_x = r * (a + b) / 2. * std::cos(theta) +
-                       r * (a - b) / 2. * std::cos(-theta + 2. * (angle + M_PI / 2.));
-  const float seis_y = r * (a + b) / 2. * std::sin(theta) +
-                       r * (a - b) / 2. * std::sin(-theta + 2. * (angle + M_PI / 2.));
-
-  //Seismometer vertices
-  vertices[(n_lines + 1) * coordinates_per_vertex + 0] = seis_x - 0.04;
-  vertices[(n_lines + 1) * coordinates_per_vertex + 1] = seis_y + 0.04;
-  vertices[(n_lines + 2) * coordinates_per_vertex + 0] = seis_x + 0.04;
-  vertices[(n_lines + 2) * coordinates_per_vertex + 1] = seis_y + 0.04;
-  vertices[(n_lines + 3) * coordinates_per_vertex + 0] = seis_x;
-  vertices[(n_lines + 3) * coordinates_per_vertex + 1] = seis_y - 0.04;
-
+  GLfloat transform[4];
+  identity_transform(transform);
   glEnable(GL_BLEND);
-#ifndef __EMSCRIPTEN__
-  glEnable(GL_LINE_SMOOTH);
-#endif
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-  glLineWidth(2.0);
-  glUseProgram(plugin_program);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, plugin_line_vertex_indices);
-
-  glEnableVertexAttribArray(plugin_attribute_coord2d);
-
-  glBindBuffer(GL_ARRAY_BUFFER, plugin_vertices);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n_vertices * coordinates_per_vertex, vertices,
-               GL_DYNAMIC_DRAW);
-  glVertexAttribPointer(plugin_attribute_coord2d, // attribute
-                        2,                        // number of elements per vertex (x,y)
-                        GL_FLOAT,                 // the type of each element
-                        GL_FALSE,                 // take our values as-is
-                        0,                        // no extra data between each position
-                        0                         // offset of first element
-  );
-
-  glEnableVertexAttribArray(plugin_attribute_v_color);
-  glBindBuffer(GL_ARRAY_BUFFER, plugin_vertex_colors);
-  glVertexAttribPointer(plugin_attribute_v_color, // attribute
-                        4,                        // number of elements per verte (r,g,b,a)
-                        GL_FLOAT,                 // the type of each element
-                        GL_FALSE,                 // take our values as-is
-                        0,                        // no extra data between each position
-                        0);
-
-  glDrawElements(GL_LINES, n_lines * vertices_per_line, GL_UNSIGNED_INT, 0);
-
-  //Draw seismometer
-  //GL takes the byte offset into the index buffer as a pointer
-  const size_t seismometer_offset = n_lines * vertices_per_line * sizeof(GLuint);
-  glDrawElements(GL_TRIANGLES, vertices_per_triangle, GL_UNSIGNED_INT,
-                 (void *)seismometer_offset); // NOLINT(performance-no-int-to-ptr)
-
-  glDisableVertexAttribArray(plugin_attribute_coord2d);
-  glDisableVertexAttribArray(plugin_attribute_v_color);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-  glLineWidth(1.0);
+  mesh.draw(GL_TRIANGLES, 0, 6 * (n_points - 1) + 3, transform);
   glDisable(GL_BLEND);
-#ifndef __EMSCRIPTEN__
-  glDisable(GL_LINE_SMOOTH);
-#endif
 }
 
 void Seismograph::cleanup()
 {
-  delete[] vertices;
-  delete[] vertex_colors;
-  delete[] line_vertex_indices;
-
-  glDeleteProgram(plugin_program);
-  glDeleteBuffers(1, &plugin_vertices);
-  glDeleteBuffers(1, &plugin_vertex_colors);
-  glDeleteBuffers(1, &plugin_line_vertex_indices);
+  mesh.cleanup();
 }

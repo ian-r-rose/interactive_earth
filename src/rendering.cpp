@@ -23,7 +23,8 @@ void main()
 )";
 
 //Map each pixel back to polar coordinates, sample the field there, and
-//color it. The outer radius is 1 in normalized device coordinates.
+//color it. The outer radius is 1 in normalized device coordinates. Inside
+//the inner radius is the core, colored as the hottest temperature.
 static const char *fragment_source = R"(
 in vec2 position;
 uniform sampler2D field;          // (T or C, displacement), one texel per cell
@@ -36,10 +37,16 @@ const float two_pi = 6.28318530718;
 
 void main()
 {
+  int size = textureSize(colormap, 0).x;
   vec2 p = inverse_shape * position;
   float r = length(p);
-  if (r > 1.0 || r < r_inner)
+  if (r > 1.0)
     discard;
+  if (r < r_inner)
+  {
+    frag_color = vec4(texelFetch(colormap, ivec2(size - 1, 0), 0).rgb, 1.0);
+    return;
+  }
   float theta = atan(p.y, p.x);
   if (theta < 0.0)
     theta += two_pi;
@@ -51,7 +58,6 @@ void main()
   vec2 value = texture(field, vec2(u, v)).rg;
 
   // Same lookup as color.cpp: nearest entry to value * size, clamped
-  int size = textureSize(colormap, 0).x;
   int index = clamp(int(floor(value.r * float(size) + 0.5)), 0, size - 1);
   vec3 rgb = texelFetch(colormap, ivec2(index, 0), 0).rgb;
 
@@ -60,9 +66,24 @@ void main()
 }
 )";
 
+void flattening_shape(double spin_angle, bool inverse, double shape[4])
+{
+  const double angle = spin_angle + M_PI / 2.;
+  const double a = 1.0, b = 1.0 - flattening;
+  const double ia = inverse ? 1. / a : a, ib = inverse ? 1. / b : b;
+  const double c = std::cos(angle), s = std::sin(angle);
+  //Symmetric, so column-major order is the same as row-major
+  shape[0] = c * c * ia + s * s * ib;
+  shape[1] = c * s * (ia - ib);
+  shape[2] = c * s * (ia - ib);
+  shape[3] = s * s * ia + c * c * ib;
+}
+
 void Mantle::setup()
 {
   program = create_program(vertex_source, fragment_source, "Mantle");
+  //Core profile GL needs a vertex array bound to draw, even with no attributes
+  glGenVertexArrays(1, &vertex_array);
   uniform_field = glGetUniformLocation(program, "field");
   uniform_colormap = glGetUniformLocation(program, "colormap");
   uniform_inverse_shape = glGetUniformLocation(program, "inverse_shape");
@@ -113,6 +134,7 @@ void Mantle::upload_colormap()
 void Mantle::cleanup()
 {
   glDeleteProgram(program);
+  glDeleteVertexArrays(1, &vertex_array);
   glDeleteTextures(1, &field_texture);
   glDeleteTextures(1, &colormap_texture);
 }
@@ -140,16 +162,11 @@ void Mantle::draw(bool draw_composition)
   glBindTexture(GL_TEXTURE_2D, field_texture);
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, grid.ntheta, grid.nr, GL_RG, GL_FLOAT, staging.data());
 
-  //The domain is rendered flattened along the spin axis, as if under
-  //centrifugal forces: positions are R(angle) diag(a, b) R(-angle) applied
-  //to the circular ones. The shader needs the inverse of that.
-  const double angle = sim.spin_angle() + M_PI / 2.;
-  const double a = 1.0, b = 1.0 - flattening;
-  const double c = std::cos(angle), s = std::sin(angle);
-  const double ia = 1. / a, ib = 1. / b;
-  //Symmetric, so column-major order is the same as row-major
-  const GLfloat inverse_shape[4] = {float(c * c * ia + s * s * ib), float(c * s * (ia - ib)),
-                                    float(c * s * (ia - ib)), float(s * s * ia + c * c * ib)};
+  //The shader maps pixels back to the circular domain
+  double shape[4];
+  flattening_shape(sim.spin_angle(), true, shape);
+  const GLfloat inverse_shape[4] = {float(shape[0]), float(shape[1]), float(shape[2]),
+                                    float(shape[3])};
 
   glClearColor(0.0, 0.0, 0.0, 1.0);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -165,7 +182,9 @@ void Mantle::draw(bool draw_composition)
   glUniform1f(uniform_r_inner, float(grid.r_inner));
   glUniform2f(uniform_grid_size, float(grid.ntheta), float(grid.nr));
 
+  glBindVertexArray(vertex_array);
   glDrawArrays(GL_TRIANGLES, 0, 3);
+  glBindVertexArray(0);
 
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, 0);
