@@ -5,3 +5,4 @@ interactive_earth
 *.sh
 *.txt
 *.ps
+build/
