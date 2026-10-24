@@ -94,6 +94,9 @@ class ConvectionSimulator
     const double *displacement() const { return D; }
     const double *velocity_theta() const { return u; }
     const double *velocity_r() const { return v; }
+    const double *stream_function() const { return stream; }
+
+    void set_temperature(const double *values); //Overwrite the temperature field (ncells values)
 
     void earthquake(double x, double y);  //Add source term for wave equation
     void propagate_seismic_waves(); //evolve the wave equation

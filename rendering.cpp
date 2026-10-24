@@ -1,6 +1,7 @@
 #include <cmath>
 #include "rendering.h"
 #include "color.h"
+#include "profiler.h"
 
 //get access to some of the globals
 extern const double flattening;
@@ -169,6 +170,8 @@ void Mantle::draw( bool draw_composition )
   const float a = 1.0f;
   const float b = 1.0f-flattening;
 
+  {
+  IE_PROFILE(render_prep);
   unsigned long v=0, i=0;
   for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
@@ -201,7 +204,9 @@ void Mantle::draw( bool draw_composition )
     i += colors_per_vertex;
     v += coordinates_per_vertex;
   }
+  }
 
+  IE_PROFILE(render_gl);
   glClearColor(0.0, 0.0, 0.0, 1.0);
   glClear(GL_COLOR_BUFFER_BIT);
 

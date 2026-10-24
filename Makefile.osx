@@ -15,13 +15,13 @@ LINK_FLAGS=
 convection: convection.o main.o rendering.o rendering_plugins.o color.o
 	$(CXX) $(CXX_FLAGS) convection.o rendering.o main.o rendering_plugins.o color.o -o interactive_earth $(LINK_FLAGS) $(DEFINES) $(LIBRARY_DIRS) $(LIBRARIES)
 
-main.o: main.cpp rendering.h convection.h rendering_plugins.h
+main.o: main.cpp rendering.h convection.h rendering_plugins.h profiler.h harness.h
 	$(CXX) $(CXX_FLAGS) -c main.cpp  $(LINK_FLAGS) $(INCLUDE_DIRS) $(DEFINES) 
 
-convection.o: convection.cpp convection.h regular_grid.h tridiagonal_matrix_solver.h
+convection.o: convection.cpp convection.h regular_grid.h tridiagonal_matrix_solver.h profiler.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) convection.cpp
 
-rendering.o: rendering.cpp rendering.h convection.h regular_grid.h color.h
+rendering.o: rendering.cpp rendering.h convection.h regular_grid.h color.h profiler.h
 	$(CXX) -c $(CXX_FLAGS) $(INCLUDE_DIRS) $(DEFINES) rendering.cpp
 
 rendering_plugins.o: rendering_plugins.cpp rendering.h convection.h rendering_plugins.h color.h

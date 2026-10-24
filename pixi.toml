@@ -18,6 +18,9 @@ libgl-devel = "*"
 [tasks]
 # Legacy Makefile build of the windowed app (removed once CMake lands).
 build-legacy = 'make -f Makefile.linux INCLUDE_DIRS="-I$CONDA_PREFIX/include" LIBRARY_DIRS="-L$CONDA_PREFIX/lib -Wl,-rpath,$CONDA_PREFIX/lib"'
-# Temporary headless baseline harness (superseded by ie_bench).
-build-baseline = 'mkdir -p build && g++ -O3 -fopenmp -I$CONDA_PREFIX/include bench/baseline_bench.cpp convection.cpp -o build/baseline_bench -L$CONDA_PREFIX/lib -Wl,-rpath,$CONDA_PREFIX/lib -lfftw3'
-baseline = { cmd = "build/baseline_bench", depends-on = ["build-baseline"] }
+# Headless solver benchmark: pixi run bench --ra 1e6 --steps 300
+build-bench = 'mkdir -p build && g++ -std=c++17 -O3 -fopenmp -I$CONDA_PREFIX/include bench/ie_bench.cpp convection.cpp color.cpp -o build/ie_bench -L$CONDA_PREFIX/lib -Wl,-rpath,$CONDA_PREFIX/lib -lfftw3'
+bench = { cmd = "build/ie_bench", depends-on = ["build-bench"] }
+# Physics regression tests: pixi run test [conduction|stokes|waves|convection|threads]
+build-test = 'mkdir -p build && g++ -std=c++17 -O3 -fopenmp -I$CONDA_PREFIX/include tests/test_physics.cpp convection.cpp -o build/test_physics -L$CONDA_PREFIX/lib -Wl,-rpath,$CONDA_PREFIX/lib -lfftw3'
+test = { cmd = "build/test_physics", depends-on = ["build-test"] }

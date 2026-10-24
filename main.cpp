@@ -1,6 +1,8 @@
 #include "rendering.h"
 #include "rendering_plugins.h"
 #include "color.h"
+#include "profiler.h"
+#include "harness.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -238,6 +240,19 @@ void text_output()
   else
     std::cout<<"\tTime: "<<std::setprecision(2)<<simulation_time*timescale<<" billion years\t";
 
+  //Output performance information, averaged over recent frames
+  const Profiler &prof = profiler();
+  const double diffuse = prof.mean(Phase::diffuse_fft) + prof.mean(Phase::diffuse_tridiag)
+                         + prof.mean(Phase::diffuse_misc);
+  const double stokes = prof.mean(Phase::stokes_rhs) + prof.mean(Phase::stokes_fft)
+                        + prof.mean(Phase::stokes_tridiag) + prof.mean(Phase::stokes_velocity);
+  std::cout<<std::fixed<<std::setprecision(1)
+           <<"| step "<<prof.mean(Phase::step)<<" ms (stokes "<<stokes
+           <<", advect "<<prof.mean(Phase::advect)<<", diffuse "<<diffuse
+           <<")  render "<<prof.mean(Phase::render_prep)+prof.mean(Phase::render_gl)
+           <<" ms  | "<<1000./prof.mean(Phase::frame)<<" fps";
+  std::cout.unsetf(std::ios_base::floatfield);
+
   //clear the line
   std::cout<<std::endl;
 }
@@ -247,11 +262,14 @@ void timestep()
 {
   static int i=0;  //Keep track of timestep number
   mantle.draw( include_composition && draw_composition );  //Draw to screen
-  core.draw();
-  if (include_tpw && !seismic_mode)
-    axis.draw();
-  if (seismic_mode)
-    seismograph.draw();
+  {
+    IE_PROFILE(render_gl);
+    core.draw();
+    if (include_tpw && !seismic_mode)
+      axis.draw();
+    if (seismic_mode)
+      seismograph.draw();
+  }
 
   if (screenshot_path && i == screenshot_steps)
   {
@@ -262,6 +280,8 @@ void timestep()
   //Do the convection problem if not in seismic mode
   if( !seismic_mode )
   {
+    const double step_start = now_ms();
+
     //At the moment, the stokes solve is not the limiting factor,
     //so it does not hurt to do it every timestep
     simulator.solve_stokes();
@@ -273,13 +293,8 @@ void timestep()
       simulator.add_composition(click_theta, click_r);
 
     //Same fixed heat sources as the headless benchmark
-    if (screenshot_path && i < 30)
-    {
-      for (int k = 0; k < 4; ++k)
-        simulator.add_heat(0.3 + k*M_PI/2., 0.05, true);
-      for (int k = 0; k < 2; ++k)
-        simulator.add_heat(1.0 + k*M_PI, 0.45, false);
-    }
+    if (screenshot_path && i < seed_steps)
+      add_seed_heat_sources(simulator);
 
     //The user can do some neat painting by turning off advection and diffusion
     if (advection_diffusion)
@@ -297,9 +312,12 @@ void timestep()
     if (include_tpw)
       simulator.true_polar_wander();
 
+    profiler().accumulate(Phase::step, now_ms() - step_start);
+
 #ifndef __EMSCRIPTEN__
-    //Output scaling information
-    text_output();
+    //Output scaling and performance information about once a second
+    if (i % 60 == 0 && i > 0)
+      text_output();
 #endif
 
     //increment timestep
@@ -471,6 +489,13 @@ void loop()
   }
   timestep();
   SDL_GL_SwapWindow(window);
+
+  //Time between frames, including any wait for vsync
+  static double last_frame = now_ms();
+  const double frame_start = now_ms();
+  profiler().accumulate(Phase::frame, frame_start - last_frame);
+  last_frame = frame_start;
+  profiler().commit();
 }
 
 int main(int argc, char** argv)
@@ -503,6 +528,10 @@ double emscripten_rayleigh()
 {
   return simulator.rayleigh_number();
 }
+std::string emscripten_profile()
+{
+  return profiler().json();
+}
 double emscripten_nusselt()
 {
   return simulator.nusselt_number();
@@ -510,5 +539,6 @@ double emscripten_nusselt()
 EMSCRIPTEN_BINDINGS(my_module) {
   emscripten::function("rayleigh", &emscripten_rayleigh );
   emscripten::function("nusselt", &emscripten_nusselt );
+  emscripten::function("profile", &emscripten_profile );
 }
 #endif

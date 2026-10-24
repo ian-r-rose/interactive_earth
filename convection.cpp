@@ -1,5 +1,6 @@
 #include <cmath>
 #include "convection.h"
+#include "profiler.h"
 
 //standard math library functions can be unpredictibly slow in
 //some implementations, it seems, and not even available in others.
@@ -154,6 +155,7 @@ inline double ConvectionSimulator::react(const Point &p1, const Point &p2 )
    source is. */
 void ConvectionSimulator::add_heat(double theta, double r, bool hot)
 {
+  IE_PROFILE(heat);
   Point p; p.theta = theta; p.r=r;
   #pragma omp parallel for
   for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
@@ -168,6 +170,7 @@ void ConvectionSimulator::add_heat(double theta, double r, bool hot)
 /* Loop over all the cells and add composition, similar to add_heat*/
 void ConvectionSimulator::add_composition(double theta, double r)
 {
+  IE_PROFILE(heat);
   Point p; p.theta = theta; p.r=r;
   #pragma omp parallel for
   for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
@@ -220,6 +223,7 @@ void ConvectionSimulator::earthquake(double theta, double r)
 /* Explicitly propagate the wave equation. */
 void ConvectionSimulator::propagate_seismic_waves()
 {
+  IE_PROFILE(waves);
   const double reference_speed = 1.0;  //dummy wavespeed
   const double tstep = 0.6*dmin(grid.r_inner*grid.dtheta,grid.dr)/reference_speed; // Timestep to satisfy cfl
   double dissipation = 0.5;  //Empirically chosen dissipation
@@ -375,6 +379,7 @@ void ConvectionSimulator::semi_lagrangian_advect_composition()
    interpolation and use more iterations. */
 void ConvectionSimulator::semi_lagrangian_advect( const advection_field field )
 {
+  IE_PROFILE(advect);
   //The goal is to find the temperature at the Lagrangian point which will
   //be advected to the current grid point in one time step.  In general,
   //this point wil not be on the grid.  I find this point using a coarse
@@ -461,27 +466,42 @@ void ConvectionSimulator::semi_lagrangian_advect( const advection_field field )
 void ConvectionSimulator::diffuse_temperature()
 {
   //Apply boundary conditions
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
   {
-    if (cell->at_top_boundary())
-      T[cell->self()] = 0.0;
-    else if (cell->at_bottom_boundary())
-      T[cell->self()] = 1.0;
+    IE_PROFILE(diffuse_misc);
+    for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+    {
+      if (cell->at_top_boundary())
+        T[cell->self()] = 0.0;
+      else if (cell->at_bottom_boundary())
+        T[cell->self()] = 1.0;
+    }
   }
 
   //Execute the forward fourier transform
-  fftw_execute(dft_diffusion);  //X direction
+  {
+    IE_PROFILE(diffuse_fft);
+    fftw_execute(dft_diffusion);  //X direction
+  }
 
-  #pragma omp parallel for
-  for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
-    diffusion_matrices[l]->solve( T_spectral+l, grid.ntheta, scratch1_spectral+l);
+  {
+    IE_PROFILE(diffuse_tridiag);
+    #pragma omp parallel for
+    for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
+      diffusion_matrices[l]->solve( T_spectral+l, grid.ntheta, scratch1_spectral+l);
+  }
 
   //Execute the inverse Fourier transform
-  fftw_execute(idft_diffusion);  //X direction
+  {
+    IE_PROFILE(diffuse_fft);
+    fftw_execute(idft_diffusion);  //X direction
+  }
 
   //Renormalize
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    T[cell->self()] = scratch[cell->self()]/grid.ntheta;
+  {
+    IE_PROFILE(diffuse_misc);
+    for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+      T[cell->self()] = scratch[cell->self()]/grid.ntheta;
+  }
 }
 
 
@@ -615,6 +635,7 @@ double ConvectionSimulator::nusselt_number()
 //function calculation.  This calculates that curl.
 void ConvectionSimulator::assemble_curl_density_vector()
 {
+  IE_PROFILE(stokes_rhs);
   //Assemble curl_density vector
   if (include_composition)
   {
@@ -663,25 +684,35 @@ void ConvectionSimulator::solve_stokes()
   assemble_curl_density_vector();
 
   //Execute the forward fourier transform
-  fftw_execute(dft_stokes);  //X direction
-
-  #pragma omp parallel for
-  for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
   {
-     stokes_matrices[l]->solve( curl_density_spectral+l, grid.ntheta, scratch1_spectral+l);
-     stokes_matrices[l]->solve( scratch1_spectral+l, grid.ntheta, scratch2_spectral+l);
+    IE_PROFILE(stokes_fft);
+    fftw_execute(dft_stokes);  //X direction
+  }
+
+  {
+    IE_PROFILE(stokes_tridiag);
+    #pragma omp parallel for
+    for (unsigned int l = 0; l <= grid.ntheta/2; ++l)
+    {
+       stokes_matrices[l]->solve( curl_density_spectral+l, grid.ntheta, scratch1_spectral+l);
+       stokes_matrices[l]->solve( scratch1_spectral+l, grid.ntheta, scratch2_spectral+l);
+    }
   }
 
   //Execute the inverse Fourier transform
-  fftw_execute(idft_stokes);  //X direction
+  {
+    IE_PROFILE(stokes_fft);
+    fftw_execute(idft_stokes);  //X direction
 
-  //Renormalize
-  for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    stream[cell->self()] = scratch[cell->self()]/grid.ntheta;
+    //Renormalize
+    for( RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+      stream[cell->self()] = scratch[cell->self()]/grid.ntheta;
+  }
 
   //Come up with the velocities by taking finite differences of the stream function.
   //I could also take these derivatives in spectral space, but that would mean
   //more fourier transforms, so this should be considerably cheaper.
+  IE_PROFILE(stokes_velocity);
   #pragma omp parallel for
   for( unsigned int cell_index=0; cell_index<grid.ncells; ++cell_index)
   {
@@ -702,6 +733,7 @@ void ConvectionSimulator::solve_stokes()
 
 void ConvectionSimulator::true_polar_wander()
 {
+  IE_PROFILE(tpw);
 
   double moment_of_inertia[3] = {0., 0., 0.};
   double omega[2] = { std::cos(spin), std::sin(spin) };
@@ -795,6 +827,12 @@ void ConvectionSimulator::update_state(double rayleigh)
 
   setup_diffusion_problem();  //need to recompute the auxiliary vectors for the diffusion problem
 
+}
+
+void ConvectionSimulator::set_temperature(const double *values)
+{
+  for (int i = 0; i < grid.ncells; ++i)
+    T[i] = values[i];
 }
 
 double ConvectionSimulator::spin_angle() const
