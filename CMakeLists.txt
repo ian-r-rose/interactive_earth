@@ -16,6 +16,10 @@ if(EMSCRIPTEN)
   add_compile_options(-msimd128)
 endif()
 
+# Warnings for the project's own code. FFTW (built separately) and the sokol
+# implementation (included as a system header) are not affected.
+add_compile_options(-Wall -Wextra)
+
 # --- FFTW -------------------------------------------------------------------
 # Natively, use the installed FFTW. For WebAssembly, build a pinned release
 # from source with the same toolchain.

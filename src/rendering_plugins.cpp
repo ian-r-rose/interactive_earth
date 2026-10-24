@@ -14,9 +14,6 @@ void Core::setup()
     vertex_colors = new GLfloat[n_vertices * colors_per_vertex];
     triangle_vertex_indices = new GLuint[n_triangles * vertices_per_triangle];
 
-    const float dtheta = 2. * M_PI / n_triangles;
-    const float r = r_inner;
-
     color core_color = colormap(1.0);
 
     //one vertex at the origin
@@ -26,7 +23,7 @@ void Core::setup()
     vertex_colors[1] = core_color.G;
     vertex_colors[2] = core_color.B;
 
-    unsigned long v = 2, c = 3, i = 0; //start at the next vertex index
+    unsigned long c = 3, i = 0; //start at the next vertex index
     for (unsigned long n = 0; n < n_triangles; ++n)
     {
       vertex_colors[c + 0] = core_color.R;
@@ -37,7 +34,6 @@ void Core::setup()
       triangle_vertex_indices[i + 1] = n + 1;
       triangle_vertex_indices[i + 2] = (n == n_triangles - 1 ? 1 : n + 2);
 
-      v += coordinates_per_vertex;
       c += colors_per_vertex;
       i += vertices_per_triangle;
     }
@@ -204,8 +200,8 @@ void Axis::setup()
     arrow_color.R = 0.15;
     arrow_color.G = 0.15;
     arrow_color.B = 0.15;
-    unsigned short c = 0;
-    for (unsigned short i = 0; i < n_vertices; ++i)
+    unsigned int c = 0;
+    for (unsigned int i = 0; i < n_vertices; ++i)
     {
       vertex_colors[c + 0] = arrow_color.R;
       vertex_colors[c + 1] = arrow_color.G;
@@ -625,8 +621,10 @@ void Seismograph::draw()
   glDrawElements(GL_LINES, n_lines * vertices_per_line, GL_UNSIGNED_INT, 0);
 
   //Draw seismometer
+  //GL takes the byte offset into the index buffer as a pointer
+  const size_t seismometer_offset = n_lines * vertices_per_line * sizeof(GLuint);
   glDrawElements(GL_TRIANGLES, vertices_per_triangle, GL_UNSIGNED_INT,
-                 (void *)(((n_lines)*vertices_per_line) * sizeof(GLuint)));
+                 (void *)seismometer_offset); // NOLINT(performance-no-int-to-ptr)
 
   glDisableVertexAttribArray(plugin_attribute_coord2d);
   glDisableVertexAttribArray(plugin_attribute_v_color);

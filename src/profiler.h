@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -137,7 +138,7 @@ public:
     if (s.empty())
       return 0.;
     std::sort(s.begin(), s.end());
-    return s[std::min(s.size() - 1, size_t(q * (s.size() - 1) + 0.5))];
+    return s[std::min(s.size() - 1, size_t(std::lround(q * (s.size() - 1))))];
   }
 
   //JSON object of {phase: {mean, median, p95, max}} for phases with samples

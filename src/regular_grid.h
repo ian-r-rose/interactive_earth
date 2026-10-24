@@ -7,7 +7,9 @@ cartesian grids in serial finite difference
 calculations
 / ***********************/
 
+#include <cstddef>
 #include <iterator>
+#include <stdexcept>
 
 #ifndef REGULAR_GRID_H
 #define REGULAR_GRID_H
@@ -47,8 +49,8 @@ public:
   class Cell
   {
   public:
-    Cell(unsigned int i, const RegularGrid &g) : id(i), grid(g) {}
-    Cell(Cell &c) : id(c.id), grid(c.grid) {}
+    Cell(unsigned int i, const RegularGrid &g) : grid(g), id(i) {}
+    Cell(Cell &c) : grid(c.grid), id(c.id) {}
     Cell &operator=(const Cell &rhs)
     {
       id = rhs.id;
@@ -84,7 +86,7 @@ public:
     }
     int downright()
     {
-      return id + (id + grid.nx < 0 ? grid.nx * (grid.ny - 1) : -grid.nx) +
+      return id + (id - grid.nx < 0 ? grid.nx * (grid.ny - 1) : -grid.nx) +
              ((id + 1) % grid.nx == 0 ? -grid.nx + 1 : 1);
     }
     int self() { return id; };
@@ -120,8 +122,15 @@ public:
 
   //Lightweight iterator that starts at the first grid cell
   //(bottom left), and iterates over all the cells.
-  class iterator : public std::iterator<std::input_iterator_tag, Cell>
+  class iterator
   {
+  public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = Cell;
+    using difference_type = std::ptrdiff_t;
+    using pointer = Cell *;
+    using reference = Cell &;
+
   private:
     int id;
     const RegularGrid &grid;
@@ -144,8 +153,15 @@ public:
   };
   //Lightweight iterator that starts at the last grid cell (top right),
   //and iterates backwards over all the cells.
-  class reverse_iterator : public std::iterator<std::input_iterator_tag, Cell>
+  class reverse_iterator
   {
+  public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = Cell;
+    using difference_type = std::ptrdiff_t;
+    using pointer = Cell *;
+    using reference = Cell &;
+
   private:
     int id;
     const RegularGrid &grid;
@@ -180,10 +196,17 @@ public:
   const double r_inner, r_outer;
 
   RegularGrid(const double inner_radius, const unsigned int num_theta, const unsigned int num_r)
-      : r_inner(inner_radius), r_outer(1.0), ltheta(2.0 * M_PI), lr(1.0 - inner_radius),
-        ntheta(num_theta), nr(num_r), dtheta(ltheta / ntheta), dr(lr / (nr - 1)),
-        ncells(ntheta * nr)
+      //In declaration order, computed only from the arguments
+      : ltheta(2.0 * M_PI), lr(1.0 - inner_radius), ntheta(num_theta), nr(num_r),
+        dtheta(2.0 * M_PI / num_theta), dr((1.0 - inner_radius) / (num_r - 1)),
+        ncells(num_theta * num_r), r_inner(inner_radius), r_outer(1.0)
   {
+    //The radial finite differences need interior points, and the
+    //spectral solves need at least a few modes.
+    if (num_r < 3 || num_theta < 4)
+      throw std::invalid_argument("RegularGrid needs at least 3 radial and 4 angular cells");
+    if (!(inner_radius > 0. && inner_radius < 1.))
+      throw std::invalid_argument("RegularGrid inner radius must be in (0, 1)");
   }
   const iterator begin() const { return iterator(0, *this); }
   const iterator end() const { return iterator(ncells, *this); }

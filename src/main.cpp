@@ -105,7 +105,7 @@ void save_screenshot(const char *path)
   FILE *f = std::fopen(path, "wb");
   if (!f)
   {
-    std::cerr << "Could not open " << path << std::endl;
+    std::cerr << "Could not open " << path << '\n';
     return;
   }
   std::fprintf(f, "P6\n%d %d\n255\n", n, n);
@@ -139,9 +139,8 @@ inline void compute_simulator_location(const float x, const float y, float *thet
     float xp = x * std::cos(-rot_angle) - y * std::sin(-rot_angle);
     float yp = x * std::sin(-rot_angle) + y * std::cos(-rot_angle);
 
-    //Do the inverse flattening
+    //Do the inverse flattening (only along y)
     yp = yp / (1. - flattening);
-    xp = xp;
 
     //Rotate back to the initial angle
     xpp = xp * std::cos(rot_angle) - yp * std::sin(rot_angle);
@@ -203,7 +202,7 @@ inline void handle_mouse_button(const sapp_event *event)
   }
 }
 
-inline bool in_domain(const float theta, const float r)
+inline bool in_domain(const float /*theta*/, const float r)
 {
   return (r + r_inner < 1.) && (r > 0.);
 }
@@ -262,8 +261,8 @@ void text_output()
             << 1000. / prof.mean(Phase::frame) << " fps";
   std::cout.unsetf(std::ios_base::floatfield);
 
-  //clear the line
-  std::cout << std::endl;
+  //End the line, and flush so the output appears even when piped
+  std::cout << '\n' << std::flush;
 }
 
 //Actually perform the timestep
@@ -456,7 +455,7 @@ void event(const sapp_event *event)
   }
 }
 
-sapp_desc sokol_main(int argc, char **argv)
+sapp_desc sokol_main(int /*argc*/, char ** /*argv*/)
 {
   sapp_desc desc = {};
   desc.init_cb = init;

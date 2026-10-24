@@ -3,8 +3,9 @@
 //length of data arrays for matplotlib colormaps
 const unsigned int len_colormap = 256;
 
-inline color interpolate_from_cmap_data(const double x, const double *data, const unsigned int len)
+inline color interpolate_from_cmap_data(const double x, const double *data, const int len)
 {
+  //Signed, so that negative values clamp to the bottom of the colormap
   int index = int(round(x * len));
   //clamp the index to be within array bounds
   index = index > len - 1 ? len - 1 : index;

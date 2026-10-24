@@ -10,6 +10,8 @@ cxx-compiler = "*"
 pkg-config = "*"
 # Pinned to a major version, since formatting output changes between releases
 clang-format = "23.*"
+clang-tools = "23.*"  # clang-tidy
+clang = "23.*"  # clang's builtin headers, needed by clang-tidy
 fftw = "3.3.11.*"
 
 # Windowing and GL for sokol_app on Linux (X11 + GLX)
@@ -29,6 +31,8 @@ bench = { cmd = "build/native-release/ie_bench", depends-on = ["build"] }
 start = { cmd = "build/native-release/interactive_earth", depends-on = ["build"] }
 format = "clang-format -i src/*.cpp src/*.h bench/*.cpp tests/*.cpp"
 format-check = "clang-format --dry-run --Werror src/*.cpp src/*.h bench/*.cpp tests/*.cpp"
+# The environment's include directory is implicit for conda's gcc, so tell clang-tidy about it
+lint = { cmd = "run-clang-tidy -p build/native-release -quiet -extra-arg=-isystem$CONDA_PREFIX/include '/(src|bench|tests)/'", depends-on = ["configure"] }
 # Format staged C++ files on commit (tools/git-hooks/pre-commit)
 install-hooks = "git config core.hooksPath tools/git-hooks"
 

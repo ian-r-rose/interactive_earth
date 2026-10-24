@@ -7,20 +7,24 @@
 #define TRIDIAGONAL_MATRIX_SOLVER_H
 
 #include <complex>
+#include <stdexcept>
+#include <vector>
 
 template <typename T> class TridiagonalMatrixSolver
 {
 public:
-  TridiagonalMatrixSolver() : size(0) {}
-
   TridiagonalMatrixSolver(const unsigned int n) : size(n)
   {
+    //The factorization and solve loops assume at least two rows
+    if (n < 2)
+      throw std::invalid_argument("TridiagonalMatrixSolver needs at least 2 rows");
+
     //Allocate space
-    upper_diag = new double[size];
-    diag = new double[size];
-    lower_diag = new double[size];
-    upper_diag_prime = new double[size];
-    rhs_prime = new T[size];
+    upper_diag.resize(size);
+    diag.resize(size);
+    lower_diag.resize(size);
+    upper_diag_prime.resize(size);
+    rhs_prime.resize(size);
   }
 
   void initialize(const double *lower_diagonal, const double *diagonal,
@@ -43,15 +47,6 @@ public:
     }
   }
 
-  ~TridiagonalMatrixSolver()
-  {
-    delete[] upper_diag;
-    delete[] diag;
-    delete[] lower_diag;
-    delete[] upper_diag_prime;
-    delete[] rhs_prime;
-  }
-
   void solve(const T *rhs, const unsigned int stride, T *x)
   {
     unsigned int n = size;
@@ -71,9 +66,9 @@ public:
 
 private:
   unsigned int size;
-  double *upper_diag, *diag, *lower_diag;
-  double *upper_diag_prime;
-  T *rhs_prime;
+  std::vector<double> upper_diag, diag, lower_diag;
+  std::vector<double> upper_diag_prime;
+  std::vector<T> rhs_prime;
 };
 
 #endif

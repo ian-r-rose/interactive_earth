@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -57,14 +58,14 @@ static bool dump_temperature(const ConvectionSimulator &sim, const char *path, i
         double theta = std::atan2(y, x);
         if (theta < 0.)
           theta += 2. * M_PI;
-        const int i = int(theta / grid.dtheta + 0.5) % grid.ntheta;
-        const int j = std::min(grid.nr - 1, int((r - grid.r_inner) / grid.dr + 0.5));
+        const int i = int(std::lround(theta / grid.dtheta)) % grid.ntheta;
+        const int j = std::min(grid.nr - 1, int(std::lround((r - grid.r_inner) / grid.dr)));
         c = hot(T[j * grid.ntheta + i]);
       }
       unsigned char *p = &img[3 * (py * size + px)];
-      p[0] = (unsigned char)(255. * std::min(1., std::max(0., c.R)) + 0.5);
-      p[1] = (unsigned char)(255. * std::min(1., std::max(0., c.G)) + 0.5);
-      p[2] = (unsigned char)(255. * std::min(1., std::max(0., c.B)) + 0.5);
+      p[0] = (unsigned char)std::lround(255. * std::min(1., std::max(0., c.R)));
+      p[1] = (unsigned char)std::lround(255. * std::min(1., std::max(0., c.G)));
+      p[2] = (unsigned char)std::lround(255. * std::min(1., std::max(0., c.B)));
     }
   FILE *f = std::fopen(path, "wb");
   if (!f)
@@ -85,13 +86,14 @@ int main(int argc, char **argv)
   for (int i = 1; i < argc; ++i)
   {
     const std::string a = argv[i];
-    const bool has_value = i + 1 < argc;
+    const bool is_flag = a == "--composition" || a == "--json";
+    if (!is_flag && i + 1 >= argc)
+      usage(); //Option is missing its value
+
     if (a == "--composition")
       composition = true;
     else if (a == "--json")
       json = true;
-    else if (!has_value)
-      usage();
     else if (a == "--ntheta")
       ntheta = std::atoi(argv[++i]);
     else if (a == "--nr")
@@ -130,7 +132,18 @@ int main(int argc, char **argv)
   //Keep every sample, so the statistics cover the whole run
   profiler().set_window(0);
 
-  ConvectionSimulator sim(0.5, ntheta, nr, composition);
+  ConvectionSimulator sim = [&]
+  {
+    try
+    {
+      return ConvectionSimulator(0.5, ntheta, nr, composition);
+    }
+    catch (const std::invalid_argument &e)
+    {
+      std::fprintf(stderr, "ie_bench: %s\n", e.what());
+      std::exit(2);
+    }
+  }();
   sim.update_state(ra);
 
   for (int s = 0; s < warmup + steps; ++s)

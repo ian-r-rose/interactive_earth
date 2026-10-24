@@ -82,11 +82,7 @@ private:
 class Seismograph : RenderingPlugin
 {
 public:
-  Seismograph(const ConvectionSimulator &sim)
-      : RenderingPlugin(sim), n_lines(1000),
-        n_vertices(n_lines + 1 /*endpoint*/ + vertices_per_triangle /*seismometer*/)
-  {
-  }
+  Seismograph(const ConvectionSimulator &sim) : RenderingPlugin(sim) {}
   void setup();
   void draw();
   void cleanup();
@@ -94,8 +90,9 @@ public:
   void clear_record();
 
 private:
-  const unsigned int n_lines;
-  const unsigned int n_vertices;
+  static const unsigned int n_lines = 1000;
+  static const unsigned int n_vertices =
+      n_lines + 1 /*endpoint*/ + vertices_per_triangle /*seismometer*/;
 
   //Data for rendering with OpenGL
   GLfloat *vertices;

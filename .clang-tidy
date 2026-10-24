@@ -1,0 +1,15 @@
+# Checks aimed at finding bugs, not restyling numerical code.
+# Run with `pixi run lint`.
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  clang-analyzer-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-throwing-static-initialization,
+  -bugprone-unchecked-string-to-number-conversion,
+  -performance-enum-size
+WarningsAsErrors: '*'
+HeaderFilterRegex: '/(src|bench|tests)/'

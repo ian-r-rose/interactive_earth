@@ -1,4 +1,5 @@
 #include <cmath>
+#include <vector>
 #include "convection.h"
 #include "profiler.h"
 
@@ -27,7 +28,7 @@ inline double dmax(double x, double y)
 */
 ConvectionSimulator::ConvectionSimulator(double inner_radius, int ntheta, int nr,
                                          bool include_composition)
-    : grid(inner_radius, ntheta, nr), include_composition(include_composition)
+    : include_composition(include_composition), grid(inner_radius, ntheta, nr)
 {
   //Allocate memory for data vectors
   T = new double[grid.ncells];
@@ -51,7 +52,7 @@ ConvectionSimulator::ConvectionSimulator(double inner_radius, int ntheta, int nr
 
   stokes_matrices = new TridiagonalMatrixSolver<std::complex<double>> *[grid.ntheta / 2 + 1];
   diffusion_matrices = new TridiagonalMatrixSolver<std::complex<double>> *[grid.ntheta / 2 + 1];
-  for (unsigned int i = 0; i <= grid.ntheta / 2; ++i)
+  for (int i = 0; i <= grid.ntheta / 2; ++i)
   {
     stokes_matrices[i] = new TridiagonalMatrixSolver<std::complex<double>>(grid.nr);
     diffusion_matrices[i] = new TridiagonalMatrixSolver<std::complex<double>>(grid.nr);
@@ -95,7 +96,7 @@ ConvectionSimulator::~ConvectionSimulator()
   if (include_composition)
     delete[] C;
 
-  for (unsigned int i = 0; i <= grid.ntheta / 2; ++i)
+  for (int i = 0; i <= grid.ntheta / 2; ++i)
   {
     delete stokes_matrices[i];
     delete diffusion_matrices[i];
@@ -112,7 +113,7 @@ ConvectionSimulator::~ConvectionSimulator()
 
 /* Functional form of initial temperature field.
    Just start with a constant value based on a guess of the steady state average.*/
-double ConvectionSimulator::initial_temperature(const Point &p)
+double ConvectionSimulator::initial_temperature(const Point & /*p*/)
 {
   //Guess of internal temperature based on isoviscous boundary layer theory
   //in a cylinder.
@@ -121,7 +122,7 @@ double ConvectionSimulator::initial_temperature(const Point &p)
 
 /* Functional form of initial composition.
    Just start with zero.*/
-double ConvectionSimulator::initial_composition(const Point &p)
+double ConvectionSimulator::initial_composition(const Point & /*p*/)
 {
   return 0.0;
 }
@@ -172,7 +173,7 @@ void ConvectionSimulator::add_heat(double theta, double r, bool hot)
   p.theta = theta;
   p.r = r;
 #pragma omp parallel for
-  for (unsigned int cell_index = 0; cell_index < grid.ncells; ++cell_index)
+  for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
   {
     RegularGrid::iterator cell(cell_index, grid);
     double temperature = T[cell->self()] + (hot ? 1.0 : -1.0) * heat(p, cell->location()) * dt;
@@ -189,7 +190,7 @@ void ConvectionSimulator::add_composition(double theta, double r)
   p.theta = theta;
   p.r = r;
 #pragma omp parallel for
-  for (unsigned int cell_index = 0; cell_index < grid.ncells; ++cell_index)
+  for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
   {
     RegularGrid::iterator cell(cell_index, grid);
     double composition = C[cell->self()] + react(p, cell->location()) * dt;
@@ -250,7 +251,7 @@ void ConvectionSimulator::propagate_seismic_waves()
 //We can get away with an explicit timestepping scheme for the wave equation,
 //so no complicated tridiagonal matrix inversion or any such nonsense here
 #pragma omp parallel for
-  for (unsigned int cell_index = 0; cell_index < grid.ncells; ++cell_index)
+  for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
   {
     RegularGrid::iterator cell(cell_index, grid);
 
@@ -403,7 +404,7 @@ void ConvectionSimulator::semi_lagrangian_advect(const advection_field field)
   //iterated predictor corrector.
 
 #pragma omp parallel for
-  for (unsigned int cell_index = 0; cell_index < grid.ncells; ++cell_index)
+  for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
   {
     RegularGrid::iterator cell(cell_index, grid);
 
@@ -508,7 +509,7 @@ void ConvectionSimulator::diffuse_temperature()
   {
     IE_PROFILE(diffuse_tridiag);
 #pragma omp parallel for
-    for (unsigned int l = 0; l <= grid.ntheta / 2; ++l)
+    for (int l = 0; l <= grid.ntheta / 2; ++l)
       diffusion_matrices[l]->solve(T_spectral + l, grid.ntheta, scratch1_spectral + l);
   }
 
@@ -529,12 +530,12 @@ void ConvectionSimulator::diffuse_temperature()
 void ConvectionSimulator::setup_diffusion_problem()
 {
   //Setup the tridiagonal matrices in the y direction
-  double *upper_diag = new double[grid.nr];
-  double *lower_diag = new double[grid.nr];
+  std::vector<double> upper_diag(grid.nr);
+  std::vector<double> lower_diag(grid.nr);
 
   const double dr = grid.dr;
   //Upper and lower diagonals are the same for each frequency
-  for (unsigned int i = 0; i < grid.nr; ++i)
+  for (int i = 0; i < grid.nr; ++i)
   {
     const double r = grid.r_inner + i * dr;
     upper_diag[i] = -dt / dr / dr * (1. + 0.5 * dr / r);
@@ -545,24 +546,20 @@ void ConvectionSimulator::setup_diffusion_problem()
 
 //Diagonals include a term for the frequency in the x-direction
 #pragma omp parallel for
-  for (unsigned int l = 0; l <= grid.ntheta / 2; ++l)
+  for (int l = 0; l <= grid.ntheta / 2; ++l)
   {
     double factor = (l * l);
-    double *diag = new double[grid.nr];
+    std::vector<double> diag(grid.nr);
     diag[0] = 1.0;
     diag[grid.nr - 1] = 1.0;
-    for (unsigned int i = 1; i < grid.nr - 1; ++i)
+    for (int i = 1; i < grid.nr - 1; ++i)
     {
       const double r = grid.r_inner + i * dr;
       diag[i] = 1. + 2. * dt / dr / dr + factor * dt / r / r;
     }
 
-    diffusion_matrices[l]->initialize(lower_diag, diag, upper_diag);
-    delete[] diag;
+    diffusion_matrices[l]->initialize(lower_diag.data(), diag.data(), upper_diag.data());
   }
-
-  delete[] upper_diag;
-  delete[] lower_diag;
 
   int n[1];
   int stride, dist, howmany;
@@ -585,12 +582,12 @@ void ConvectionSimulator::setup_diffusion_problem()
    eigenmodes, as well as tell FFTW how to do the transforms */
 void ConvectionSimulator::setup_stokes_problem()
 {
-  double *upper_diag = new double[grid.nr];
-  double *diag = new double[grid.nr];
-  double *lower_diag = new double[grid.nr];
+  std::vector<double> upper_diag(grid.nr);
+  std::vector<double> diag(grid.nr);
+  std::vector<double> lower_diag(grid.nr);
 
   const double dr = grid.dr;
-  for (unsigned int i = 0; i < grid.nr; ++i)
+  for (int i = 0; i < grid.nr; ++i)
   {
     const double r = grid.r_inner + i * dr;
     upper_diag[i] = 1. / dr / dr + 0.5 / dr / r;
@@ -599,23 +596,19 @@ void ConvectionSimulator::setup_stokes_problem()
   upper_diag[0] = 0.0;           //fix for lower B.C.
   lower_diag[grid.nr - 1] = 0.0; //fix for upper B.C.
 
-  for (unsigned int l = 0; l <= grid.ntheta / 2; ++l)
+  for (int l = 0; l <= grid.ntheta / 2; ++l)
   {
     double factor = (l * l);
     diag[0] = 1.0;
     diag[grid.nr - 1] = 1.0;
-    for (unsigned int i = 1; i < grid.nr - 1; ++i)
+    for (int i = 1; i < grid.nr - 1; ++i)
     {
       const double r = grid.r_inner + i * dr;
       diag[i] = -2. / dr / dr - factor / r / r;
     }
 
-    stokes_matrices[l]->initialize(lower_diag, diag, upper_diag);
+    stokes_matrices[l]->initialize(lower_diag.data(), diag.data(), upper_diag.data());
   }
-
-  delete[] upper_diag;
-  delete[] diag;
-  delete[] lower_diag;
 
   int n[1];
   int stride, dist, howmany;
@@ -659,11 +652,12 @@ double ConvectionSimulator::nusselt_number()
 void ConvectionSimulator::assemble_curl_density_vector()
 {
   IE_PROFILE(stokes_rhs);
-  //Assemble curl_density vector
-  if (include_composition)
+  //Assemble curl_density vector. clang-tidy sees the two OpenMP loops below
+  //as identical outlined regions, but they differ.
+  if (include_composition) // NOLINT(bugprone-branch-clone)
   {
 #pragma omp parallel for
-    for (unsigned int cell_index = 0; cell_index < grid.ncells; ++cell_index)
+    for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
     {
       RegularGrid::iterator cell(cell_index, grid);
       const double r = cell->radius();
@@ -686,7 +680,7 @@ void ConvectionSimulator::assemble_curl_density_vector()
   else
   {
 #pragma omp parallel for
-    for (unsigned int cell_index = 0; cell_index < grid.ncells; ++cell_index)
+    for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
     {
       RegularGrid::iterator cell(cell_index, grid);
       const double r = cell->radius();
@@ -714,7 +708,7 @@ void ConvectionSimulator::solve_stokes()
   {
     IE_PROFILE(stokes_tridiag);
 #pragma omp parallel for
-    for (unsigned int l = 0; l <= grid.ntheta / 2; ++l)
+    for (int l = 0; l <= grid.ntheta / 2; ++l)
     {
       stokes_matrices[l]->solve(curl_density_spectral + l, grid.ntheta, scratch1_spectral + l);
       stokes_matrices[l]->solve(scratch1_spectral + l, grid.ntheta, scratch2_spectral + l);
@@ -736,7 +730,7 @@ void ConvectionSimulator::solve_stokes()
   //more fourier transforms, so this should be considerably cheaper.
   IE_PROFILE(stokes_velocity);
 #pragma omp parallel for
-  for (unsigned int cell_index = 0; cell_index < grid.ncells; ++cell_index)
+  for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
   {
     RegularGrid::iterator cell(cell_index, grid);
     const double r = cell->radius();
