@@ -35,6 +35,7 @@ enum class Phase
   step,        //One full solver timestep
   render_prep, //CPU-side preparation of vertex data
   render_gl,   //GL calls (CPU submission time only; GL is asynchronous)
+  simulate,    //All solver steps in one frame
   frame,       //Wall time between frames
   count
 };
@@ -44,7 +45,8 @@ inline const char *phase_name(Phase p)
   static const char *names[] = {
       "stokes_rhs", "stokes_fft",  "stokes_tridiag",  "stokes_velocity", "heat",
       "advect",     "diffuse_fft", "diffuse_tridiag", "diffuse_misc",    "waves",
-      "tpw",        "step",        "render_prep",     "render_gl",       "frame"};
+      "tpw",        "step",        "render_prep",     "render_gl",       "simulate",
+      "frame"};
   return names[static_cast<int>(p)];
 }
 

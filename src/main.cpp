@@ -3,6 +3,7 @@
 #include "color.h"
 #include "profiler.h"
 #include "harness.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -254,7 +255,8 @@ void text_output()
                         prof.mean(Phase::stokes_tridiag) + prof.mean(Phase::stokes_velocity);
   std::cout << std::fixed << std::setprecision(1) << "| step " << prof.mean(Phase::step)
             << " ms (stokes " << stokes << ", advect " << prof.mean(Phase::advect) << ", diffuse "
-            << diffuse << ")  render " << prof.mean(Phase::render_prep) << " + "
+            << diffuse << ")  x " << prof.mean(Phase::simulate) / prof.mean(Phase::step)
+            << " per frame  | render " << prof.mean(Phase::render_prep) << " + "
             << prof.mean(Phase::render_gl) << " ms  | " << 1000. / prof.mean(Phase::frame)
             << " fps";
   std::cout.unsetf(std::ios_base::floatfield);
@@ -263,87 +265,105 @@ void text_output()
   std::cout << '\n' << std::flush;
 }
 
-//Actually perform the timestep
-void timestep()
+//Number of convection timesteps taken
+int step_count = 0;
+
+//One convection timestep
+void convection_step()
 {
-  static int i = 0;                                     //Keep track of timestep number
-  mantle.draw(include_composition && draw_composition); //Draw to screen
+  const double step_start = now_ms();
+
+  //At the moment, the stokes solve is not the limiting factor,
+  //so it does not hurt to do it every timestep
+  simulator.solve_stokes();
+
+  //Add heat if the user is clicking
+  if (click_state != 0 && ((include_composition && !draw_composition) || (!include_composition)) &&
+      in_domain(click_theta, click_r))
+    simulator.add_heat(click_theta, click_r, (click_state == 1 ? true : false));
+  if (click_state != 0 && include_composition && draw_composition &&
+      in_domain(click_theta, click_r))
+    simulator.add_composition(click_theta, click_r);
+
+  //Same fixed heat sources as the headless benchmark
+  if (screenshot_path && step_count < seed_steps)
+    add_seed_heat_sources(simulator);
+
+  //The user can do some neat painting by turning off advection and diffusion
+  if (advection_diffusion)
   {
-    IE_PROFILE(render_gl);
-    if (include_tpw && !seismic_mode)
-      axis.draw();
-    if (seismic_mode)
-      seismograph.draw(point_size);
+    //Advect temperature and composition fields
+    simulator.semi_lagrangian_advect_temperature();
+    if (include_composition)
+      simulator.semi_lagrangian_advect_composition();
+
+    //Diffuse temperature
+    simulator.diffuse_temperature();
   }
 
-  if (screenshot_path && i == screenshot_steps)
+  //Do TPW
+  if (include_tpw)
+    simulator.true_polar_wander();
+
+  //One sample per step for the solver phases
+  profiler().accumulate(Phase::step, now_ms() - step_start);
+  profiler().commit();
+
+  ++step_count;
+  simulation_time += simulator.timestep();
+}
+
+//One step of the seismic waves
+void seismic_step()
+{
+  //Make earthquakes
+  if (click_state == 1 && in_domain(click_theta, click_r))
+    simulator.earthquake(click_theta, click_r);
+  else if (click_state == -1 && in_domain(click_theta, click_r))
+    simulator.place_seismometer(click_theta, click_r);
+  //Propagate waves
+  simulator.propagate_seismic_waves();
+}
+
+/* Frame pacing. Drawing waits for the display's refresh (vsync), so with
+   one step per frame a fast machine sits idle for most of each frame.
+   Instead, take as many convection steps as fit in a budget, leaving the
+   rest of the frame for rendering and the system. When a step takes
+   longer than that (slow machines, large grids), this is one step per
+   frame, as before.
+
+   The budget is for 60 frames per second, whatever the display: on faster
+   displays, simulation gets the time that more frames would have taken.
+   (Estimating the refresh rate from frame intervals is unreliable, since
+   compositors make the intervals jitter by several milliseconds.) The
+   budget is measured after drawing, which is where the wait for vsync
+   happens, so most of the frame is still ahead. */
+const double step_budget_ms = 0.8 * 1000. / 60.;
+const int max_steps_per_frame = 8;
+
+void simulate()
+{
+  if (seismic_mode)
   {
-    save_screenshot(screenshot_path);
-    sapp_quit();
+    //The waves and the seismograph are paced by the frame
+    seismic_step();
     return;
   }
 
-  //Do the convection problem if not in seismic mode
-  if (!seismic_mode)
+  //Screenshots must be deterministic, so take one step per frame
+  const int max_steps = (screenshot_path ? 1 : max_steps_per_frame);
+  const double budget = step_budget_ms;
+  const double start = now_ms();
+  int steps = 0;
+  double last_step = 0.;
+  do
   {
     const double step_start = now_ms();
-
-    //At the moment, the stokes solve is not the limiting factor,
-    //so it does not hurt to do it every timestep
-    simulator.solve_stokes();
-
-    //Add heat if the user is clicking
-    if (click_state != 0 &&
-        ((include_composition && !draw_composition) || (!include_composition)) &&
-        in_domain(click_theta, click_r))
-      simulator.add_heat(click_theta, click_r, (click_state == 1 ? true : false));
-    if (click_state != 0 && include_composition && draw_composition &&
-        in_domain(click_theta, click_r))
-      simulator.add_composition(click_theta, click_r);
-
-    //Same fixed heat sources as the headless benchmark
-    if (screenshot_path && i < seed_steps)
-      add_seed_heat_sources(simulator);
-
-    //The user can do some neat painting by turning off advection and diffusion
-    if (advection_diffusion)
-    {
-      //Advect temperature and composition fields
-      simulator.semi_lagrangian_advect_temperature();
-      if (include_composition)
-        simulator.semi_lagrangian_advect_composition();
-
-      //Diffuse temperature
-      simulator.diffuse_temperature();
-    }
-
-    //Do TPW
-    if (include_tpw)
-      simulator.true_polar_wander();
-
-    profiler().accumulate(Phase::step, now_ms() - step_start);
-
-#ifndef __EMSCRIPTEN__
-    //Output scaling and performance information about once a second
-    if (i % 60 == 0 && i > 0)
-      text_output();
-#endif
-
-    //increment timestep
-    ++i;
-    simulation_time += simulator.timestep();
-  }
-  //If we are in seismic mode
-  else
-  {
-    //Make earthquakes
-    if (click_state == 1 && in_domain(click_theta, click_r))
-      simulator.earthquake(click_theta, click_r);
-    else if (click_state == -1 && in_domain(click_theta, click_r))
-      simulator.place_seismometer(click_theta, click_r);
-    //Propagate waves
-    simulator.propagate_seismic_waves();
-  }
+    convection_step();
+    last_step = now_ms() - step_start;
+    ++steps;
+  } while (steps < max_steps && (now_ms() - start) + last_step < budget);
+  profiler().accumulate(Phase::simulate, now_ms() - start);
 }
 
 //Set up all the OpenGL stuff, once the window and context exist
@@ -376,7 +396,24 @@ void frame()
   glViewport(view_x, view_y, view_size, view_size);
   point_size = 2.f * sapp_dpi_scale() / float(view_size);
 
-  timestep();
+  //Draw the current state
+  mantle.draw(include_composition && draw_composition);
+  {
+    IE_PROFILE(render_gl);
+    if (include_tpw && !seismic_mode)
+      axis.draw();
+    if (seismic_mode)
+      seismograph.draw(point_size);
+  }
+
+  if (screenshot_path && step_count == screenshot_steps)
+  {
+    save_screenshot(screenshot_path);
+    sapp_quit();
+    return;
+  }
+
+  simulate();
 
   //Time between frames, including any wait for vsync
   static double last_frame = now_ms();
@@ -384,6 +421,16 @@ void frame()
   profiler().accumulate(Phase::frame, frame_start - last_frame);
   last_frame = frame_start;
   profiler().commit();
+
+#ifndef __EMSCRIPTEN__
+  //Output scaling and performance information about once a second
+  static double last_output = frame_start;
+  if (!seismic_mode && frame_start - last_output >= 1000.)
+  {
+    text_output();
+    last_output = frame_start;
+  }
+#endif
 }
 
 void event(const sapp_event *event)

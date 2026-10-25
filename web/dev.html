@@ -28,6 +28,7 @@
       var lines = [
         'Ra ' + Module.rayleigh().toExponential(1) + '   Nu ' + Module.nusselt().toFixed(1),
         'fps ' + (1000 / mean('frame')).toFixed(1) +
+          '   steps/frame ' + (mean('step') ? mean('simulate') / mean('step') : 0).toFixed(1) +
           '   canvas ' + Module.canvas.width + 'x' + Module.canvas.height,
       ];
       Object.keys(p).forEach(function (k) {
