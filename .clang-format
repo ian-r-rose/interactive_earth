@@ -1,0 +1,18 @@
+# Formatting for the project's own sources (third_party/ is excluded).
+# Run with `pixi run format`; CI checks it with `pixi run format-check`.
+BasedOnStyle: LLVM
+ColumnLimit: 100
+IndentWidth: 2
+BreakBeforeBraces: Allman
+AccessModifierOffset: -2
+PointerAlignment: Right
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+# Leave comments as written, including the //no-space style and ASCII boxes
+ReflowComments: false
+SpacesInLineCommentPrefix:
+  Minimum: 0
+  Maximum: -1
+# Include order matters for the GL and sokol headers
+SortIncludes: Never

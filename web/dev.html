@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- Minimal page for running the WebAssembly build locally.
+     Not the published site. Serve the build directory over HTTP. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Interactive Earth (dev)</title>
+  <style>
+    body { margin: 0; background: #000; color: #ccc; font: 12px/1.4 monospace; }
+    canvas { display: block; margin: 0 auto; }
+    #stats { position: fixed; top: 8px; left: 8px; white-space: pre; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" width="800" height="800" oncontextmenu="event.preventDefault()"></canvas>
+  <div id="stats">loading...</div>
+  <script>
+    var params = new URLSearchParams(location.search);
+    var Module = {
+      canvas: document.getElementById('canvas'),
+      // ?grid=2048x256 sets the grid size, as IE_GRID does natively
+      preRun: [function () { if (params.get('grid')) ENV.IE_GRID = params.get('grid'); }],
+    };
+    // With ?log, also write the stats to the console (for headless smoke tests).
+    var logStats = params.has('log');
+
+    // Once a second, show Ra, Nu, and the per-phase timings.
+    setInterval(function () {
+      if (!Module.profile) return;
+      var p = JSON.parse(Module.profile());
+      var mean = function (k) { return p[k] ? p[k].mean : 0; };
+      var lines = [
+        'Ra ' + Module.rayleigh().toExponential(1) + '   Nu ' + Module.nusselt().toFixed(1),
+        'fps ' + (1000 / mean('frame')).toFixed(1) +
+          '   steps/frame ' + (mean('step') ? mean('simulate') / mean('step') : 0).toFixed(1) +
+          '   canvas ' + Module.canvas.width + 'x' + Module.canvas.height,
+      ];
+      Object.keys(p).forEach(function (k) {
+        lines.push((k + '            ').slice(0, 16) + p[k].mean.toFixed(2) + ' ms');
+      });
+      document.getElementById('stats').textContent = lines.join('\n');
+      if (logStats) console.log(lines.join(' | '));
+    }, 1000);
+  </script>
+  <script src="interactive_earth.js"></script>
+</body>
+</html>

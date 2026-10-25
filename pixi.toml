@@ -1,0 +1,46 @@
+[workspace]
+name = "interactive_earth"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+cmake = ">=3.25"
+ninja = "*"
+cxx-compiler = "*"
+pkg-config = "*"
+# Pinned to a major version, since formatting output changes between releases
+clang-format = "23.*"
+clang-tools = "23.*"  # clang-tidy
+clang = "23.*"  # clang's builtin headers, needed by clang-tidy
+fftw = "3.3.11.*"
+
+# Windowing and GL for sokol_app on Linux (X11 + GLX)
+[target.linux-64.dependencies]
+libgl-devel = "*"
+xorg-libx11 = "*"
+xorg-libxi = "*"
+xorg-libxcursor = "*"
+
+# Thin wrappers around the CMake presets; `cmake --preset ...` works the same
+# outside pixi given the dependencies above.
+[tasks]
+configure = "cmake --preset native-release"
+build = { cmd = "cmake --build --preset native-release", depends-on = ["configure"] }
+test = { cmd = "ctest --preset native-release", depends-on = ["build"] }
+bench = { cmd = "build/native-release/ie_bench", depends-on = ["build"] }
+start = { cmd = "build/native-release/interactive_earth", depends-on = ["build"] }
+format = "clang-format -i src/*.cpp src/*.h bench/*.cpp tests/*.cpp"
+format-check = "clang-format --dry-run --Werror src/*.cpp src/*.h bench/*.cpp tests/*.cpp"
+# The environment's include directory is implicit for conda's gcc, so tell clang-tidy about it
+lint = { cmd = "run-clang-tidy -p build/native-release -quiet -extra-arg=-isystem$CONDA_PREFIX/include '/(src|bench|tests)/'", depends-on = ["configure"] }
+# Format staged C++ files on commit (tools/git-hooks/pre-commit)
+install-hooks = "git config core.hooksPath tools/git-hooks"
+
+# WebAssembly: the Emscripten SDK is pinned in .emsdk-version and installed
+# into .emsdk/ by `pixi run setup-emsdk`.
+setup-emsdk = "tools/setup-emsdk.sh"
+configure-wasm = "tools/with-emsdk.sh emcmake cmake --preset wasm-release"
+build-wasm = { cmd = "tools/with-emsdk.sh cmake --build --preset wasm-release", depends-on = ["configure-wasm"] }
+test-wasm = { cmd = "tools/with-emsdk.sh ctest --preset wasm-release", depends-on = ["build-wasm"] }
+bench-wasm = { cmd = "tools/with-emsdk.sh node build/wasm-release/ie_bench.js", depends-on = ["build-wasm"] }
+serve-wasm = { cmd = "python3 -m http.server 8000 --bind 127.0.0.1 --directory build/wasm-release", depends-on = ["build-wasm"] }

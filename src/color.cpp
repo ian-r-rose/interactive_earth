@@ -3,18 +3,19 @@
 //length of data arrays for matplotlib colormaps
 const unsigned int len_colormap = 256;
 
-inline color interpolate_from_cmap_data( const double x, const double* data, const unsigned int len)
+inline color interpolate_from_cmap_data(const double x, const double *data, const int len)
 {
-  int index = int(round(x*len));
+  //Signed, so that negative values clamp to the bottom of the colormap
+  int index = int(round(x * len));
   //clamp the index to be within array bounds
-  index = index > len-1 ? len-1 : index;
+  index = index > len - 1 ? len - 1 : index;
   index = index < 0 ? 0 : index;
   //create the color
-  color c = { data[3*index+0], data[3*index+1], data[3*index+2]};
+  color c = {data[3 * index + 0], data[3 * index + 1], data[3 * index + 2]};
   return c;
 }
 
-
+// clang-format off
 double hot_data[len_colormap*3] = {
   0.0 , 0.0 , 0.0 ,
   0.0078431372549 , 0.0 , 0.0 ,
@@ -272,12 +273,12 @@ double hot_data[len_colormap*3] = {
   1.0 , 1.0 , 0.98431372549 ,
   1.0 , 1.0 , 0.992156862745 ,
   1.0 , 1.0 , 1.0 };
+// clang-format on
 
 color hot(double x)
 {
   return interpolate_from_cmap_data(x, hot_data, len_colormap);
 }
-
 
 /*******************************
   Matplotlib colormaps thanks
@@ -286,7 +287,7 @@ color hot(double x)
   Firing.
 *******************************/
 
-
+// clang-format off
 double magma_data[len_colormap*3] = {
   0.001462 , 0.000466 , 0.013866 ,
   0.002258 , 0.001295 , 0.018331 ,
@@ -544,12 +545,14 @@ double magma_data[len_colormap*3] = {
   0.987691 , 0.977154 , 0.734536 ,
   0.987387 , 0.984288 , 0.742002 ,
   0.987053 , 0.991438 , 0.749504 };
+// clang-format on
 
 color magma(double x)
 {
   return interpolate_from_cmap_data(x, magma_data, len_colormap);
 }
 
+// clang-format off
 double viridis_data[len_colormap*3] = {
   0.267004 , 0.004874 , 0.329415 ,
   0.26851 , 0.009605 , 0.335427 ,
@@ -807,12 +810,14 @@ double viridis_data[len_colormap*3] = {
   0.974417 , 0.90359 , 0.130215 ,
   0.983868 , 0.904867 , 0.136897 ,
   0.993248 , 0.906157 , 0.143936 };
+// clang-format on
 
 color viridis(double x)
 {
   return interpolate_from_cmap_data(x, viridis_data, len_colormap);
 }
 
+// clang-format off
 double plasma_data[len_colormap*3] = {
   0.050383 , 0.029803 , 0.527975 ,
   0.063536 , 0.028426 , 0.533124 ,
@@ -1070,13 +1075,14 @@ double plasma_data[len_colormap*3] = {
   0.944152 , 0.961916 , 0.146861 ,
   0.941896 , 0.96859 , 0.140956 ,
   0.940015 , 0.975158 , 0.131326 };
-
+// clang-format on
 
 color plasma(double x)
 {
   return interpolate_from_cmap_data(x, plasma_data, len_colormap);
 }
 
+// clang-format off
 double inferno_data[len_colormap*3] = {
   0.001462 , 0.000466 , 0.013866 ,
   0.002267 , 0.00127 , 0.01857 ,
@@ -1334,13 +1340,14 @@ double inferno_data[len_colormap*3] = {
   0.976511 , 0.989753 , 0.61676 ,
   0.982257 , 0.994109 , 0.631017 ,
   0.988362 , 0.998364 , 0.644924 };
-
+// clang-format on
 
 color inferno(double x)
 {
   return interpolate_from_cmap_data(x, inferno_data, len_colormap);
 }
 
+// clang-format off
 double seismic_data[len_colormap*3] = {
   0.0196078438312 , 0.188235297799 , 0.380392163992 ,
   0.0239138802258 , 0.196539796158 , 0.391926189848 ,
@@ -1598,12 +1605,14 @@ double seismic_data[len_colormap*3] = {
   0.426989626066 , 0.00738177638428 , 0.12525951614 ,
   0.41545560021 , 0.00369088819214 , 0.123414071898 ,
   0.403921574354 , 0.0 , 0.121568627656 };
+// clang-format on
 
 color seismic(double x)
 {
   return interpolate_from_cmap_data(x, seismic_data, len_colormap);
 }
 
+// clang-format off
 double gist_earth_data[len_colormap*3] = {
   0.0 , 0.0 , 0.0 ,
   0.00261345331334 , 0.0 , 0.168692006033 ,
@@ -1861,6 +1870,7 @@ double gist_earth_data[len_colormap*3] = {
   0.983427388028 , 0.961784532284 , 0.96065949564 ,
   0.987813694014 , 0.973237011365 , 0.97247974782 ,
   0.9922 , 0.9843 , 0.9843 };
+// clang-format on
 
 color gist_earth(double x)
 {

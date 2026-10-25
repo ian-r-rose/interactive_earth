@@ -1,0 +1,63 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "CMAKE_EXPORT_COMPILE_COMMANDS": "ON" }
+    },
+    {
+      "name": "native-release",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "native-debug",
+      "description": "Debug build with AddressSanitizer and UndefinedBehaviorSanitizer",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
+    },
+    {
+      "name": "wasm-release",
+      "description": "WebAssembly build; configure with `emcmake cmake --preset wasm-release`",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "IE_EXPECT_WASM": "ON" }
+    },
+    {
+      "name": "wasm-debug",
+      "description": "WebAssembly debug build; configure with `emcmake cmake --preset wasm-debug`",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "IE_EXPECT_WASM": "ON" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "native-release", "configurePreset": "native-release" },
+    { "name": "native-debug", "configurePreset": "native-debug" },
+    { "name": "wasm-release", "configurePreset": "wasm-release" },
+    { "name": "wasm-debug", "configurePreset": "wasm-debug" }
+  ],
+  "testPresets": [
+    {
+      "name": "native-release",
+      "configurePreset": "native-release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "native-debug",
+      "configurePreset": "native-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "wasm-release",
+      "configurePreset": "wasm-release",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

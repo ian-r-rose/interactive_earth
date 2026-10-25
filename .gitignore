@@ -1,7 +1,9 @@
-*.o
-Makefile
+# Build output
+build/
+
+# Toolchains installed by pixi and tools/setup-emsdk.sh
+.pixi/
+.emsdk/
+
+# Editors
 *.swp
-interactive_earth
-*.sh
-*.txt
-*.ps

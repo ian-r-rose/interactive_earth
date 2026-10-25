@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Format staged C++ files with the project's pinned clang-format before
+# committing. Enable with `pixi run install-hooks`.
+#
+# Fully staged files are formatted and re-staged. Partially staged files
+# (some changes not staged) are only checked, since formatting them in place
+# would also format, and then stage, the unstaged changes.
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+
+clang_format="$root/.pixi/envs/default/bin/clang-format"
+if [ ! -x "$clang_format" ]; then
+  echo "pre-commit: clang-format not found; run \`pixi install\` (or commit with --no-verify)" >&2
+  exit 1
+fi
+
+mapfile -t files < <(git diff --cached --name-only --diff-filter=ACMR -- \
+  '*.cpp' '*.h' ':(exclude)third_party/**')
+[ ${#files[@]} -eq 0 ] && exit 0
+
+unstaged=$(git diff --name-only -- "${files[@]}")
+status=0
+for f in "${files[@]}"; do
+  if grep -qxF "$f" <<<"$unstaged"; then
+    if ! git show ":$f" | "$clang_format" --assume-filename="$f" --dry-run --Werror >/dev/null 2>&1; then
+      echo "pre-commit: $f is partially staged and needs formatting;" \
+           "run \`pixi run format\` and stage the result" >&2
+      status=1
+    fi
+  else
+    "$clang_format" -i "$root/$f"
+    git add "$root/$f"
+  fi
+done
+exit $status
