@@ -1,0 +1,98 @@
+# Build, check, and test the native and WebAssembly builds. The toolchain
+# comes from pixi.lock (and .emsdk-version for wasm), the same as locally.
+name: CI
+
+on:
+  push:
+    # modernize only until this workflow is verified there
+    branches: [main, modernize]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: prefix-dev/setup-pixi@v0.11.2
+        with:
+          pixi-version: v0.83.0
+          locked: true
+          cache: true
+
+      - name: Check formatting (clang-format)
+        run: pixi run format-check
+
+      - name: Build
+        run: pixi run build
+
+      - name: Lint (clang-tidy)
+        run: pixi run lint
+
+      - name: Test
+        run: pixi run test
+
+      # Shared runners are too noisy to gate on timings, so this only checks
+      # that the benchmark runs, and keeps its numbers for reference. (Run
+      # directly, not as the bench task, whose build output would go to stdout.)
+      - name: Benchmark
+        run: pixi run build/native-release/ie_bench --steps 200 --warmup 20 --json > bench-native.json
+
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: bench-native
+          path: bench-native.json
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: prefix-dev/setup-pixi@v0.11.2
+        with:
+          pixi-version: v0.83.0
+          locked: true
+          cache: true
+
+      - name: Cache the Emscripten SDK
+        uses: actions/cache@v6.1.0
+        with:
+          path: .emsdk
+          key: emsdk-${{ hashFiles('.emsdk-version') }}
+
+      - name: Install the Emscripten SDK
+        run: pixi run setup-emsdk
+
+      - name: Build
+        run: pixi run build-wasm
+
+      - name: Test
+        run: pixi run test-wasm
+
+      - name: Benchmark
+        run: >-
+          pixi run tools/with-emsdk.sh node build/wasm-release/ie_bench.js
+          --steps 100 --warmup 10 --json > bench-wasm.json
+
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: bench-wasm
+          path: bench-wasm.json
+
+      # The page and its files, to download and serve locally
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: interactive-earth-web
+          path: |
+            build/wasm-release/index.html
+            build/wasm-release/interactive_earth.js
+            build/wasm-release/interactive_earth.wasm
