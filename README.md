@@ -7,7 +7,7 @@ It enables a mantle convection model to be run much more quickly than the codes 
 It solves the same governing equations, but makes comprimises for accuracy for the sake of achieving speed.
 This speed enables the code to be very responsive to user input.
 
-The simulations can be run in a browser without running any local code [here](http://ian-r-rose.angithub.io/interactive_earth/thermal_hires.html).
+The simulations can be run in a browser without running any local code [here](http://ian-r-rose.github.io/interactive_earth/thermal_hires.html).
 
 More about the project can be found [here](http://ian-r-rose.github.io/interactive_earth/about.html).
 
@@ -52,7 +52,28 @@ pixi run bench-wasm    # single-threaded benchmark under node
 ```
 
 `web/dev.html` is a minimal page for local testing; add `?log` to the URL to also
-log the timing overlay to the console.
+log the timing overlay to the console, and `?grid=` to set the grid size (see below),
+e.g. `http://127.0.0.1:8000/?grid=2048x256`.
+
+## Resolution and run-time settings
+
+The grid size sets both the cost of a step and the highest Rayleigh number the model
+allows, which goes as the cube of the number of radial cells (so that the thermal
+boundary layers stay resolved). The default is 1536x192, for a maximum Ra of about 1.4e8.
+To choose another, set `IE_GRID` (or `?grid=` on the web page):
+
+```
+IE_GRID=2048x256 pixi run start   # maximum Ra about 3.4e8
+IE_GRID=1024x128 pixi run start   # maximum Ra about 4.2e7, and faster
+```
+
+The app takes as many solver steps per frame as fit in a 60 fps frame, and reports the
+step cost, steps per frame, and frame rate in the terminal (or the web page's overlay)
+about once a second. Natively it uses OpenMP threads; set `OMP_NUM_THREADS` to limit them.
+
+For regression checks, `IE_SCREENSHOT=out.ppm` seeds convection with fixed heat sources,
+runs `IE_SCREENSHOT_STEPS` steps (default 200), saves the window to that file, and quits.
+User input is ignored in this mode, so the result is repeatable.
 
 ## Development
 
@@ -61,18 +82,29 @@ Code is formatted with clang-format (`.clang-format`, pinned to one major versio
 ```
 pixi run format          # format all sources
 pixi run install-hooks   # once per clone: format staged files on every commit
+pixi run lint            # clang-tidy (.clang-tidy)
 ```
+
+CI (`.github/workflows/ci.yml`) checks formatting, lints, builds, and runs the tests for
+both the native and WebAssembly builds, on pushes and pull requests to `main`.
 
 ## User input
 With the simulation running, the user can make the following changes:
 - put in positive temperature anomalies (add heat) by clicking
-- put in negative thermal anomalies (remove heat) by right-clicking
+- put in negative thermal anomalies (remove heat) by right-clicking (or Ctrl-clicking)
 - change the Rayleigh number (the vigor of convection) by scrolling
-- press space to pause the simulation. while it is paused one can click to add earthquakes.
+- press space to pause convection and switch to seismic mode, where clicking makes
+  earthquakes and right-clicking places the seismometer; press space again to resume
+- press `c` to cycle through the color scales
+- press Backspace to turn advection and diffusion off (and on again), to paint with heat
+- press Tab to switch between the temperature and composition fields, when the model
+  includes a chemical field; clicking then adds composition
+- press Escape to quit (natively)
 
 ## Changing simulation behavior for advanced users
 The behavior of the simulation can be modified by changing parameters within the upper part of `src/main.cpp`. The parameters that readily exposed for being modified include:
-- the resolution of the simulation (and thereby how quickly it runs)
+- the default resolution of the simulation (and thereby how quickly it runs), which
+  `IE_GRID` overrides
 - whether or not to do a true polar wander (TPW) calculation
 - whether to included a chemical field
 - whether to render the simulation with flattened with an equatorial bulge
