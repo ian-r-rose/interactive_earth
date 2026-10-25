@@ -132,72 +132,65 @@ void ConvectionSimulator::initialize_composition()
     C[cell->self()] = initial_composition(cell->location());
 }
 
-/* Given a heat source centered on p1, calculate the heating at
-   point p2, using a simple Gaussian source term */
-inline double ConvectionSimulator::heat(const Point &p1, const Point &p2)
+/* Call f(k, rsq) for every cell k, with rsq its squared distance from
+   the point (theta, r), split between threads. */
+template <typename F>
+void ConvectionSimulator::for_each_cell_distance(double theta, double r, F f) const
 {
-  const double x1 = (p1.r + grid.r_inner) * std::cos(p1.theta),
-               y1 = (p1.r + grid.r_inner) * std::sin(p1.theta);
-  const double x2 = (p2.r + grid.r_inner) * std::cos(p2.theta),
-               y2 = (p2.r + grid.r_inner) * std::sin(p2.theta);
-  const double rsq = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
-  return heat_source * std::exp(-rsq / 2.0 / heat_source_radius / heat_source_radius);
+  const double x1 = (r + grid.r_inner) * std::cos(theta), y1 = (r + grid.r_inner) * std::sin(theta);
+#pragma omp parallel for
+  for (int j = 0; j < grid.nr; ++j)
+  {
+    const double radius = grid.r_inner + j * grid.dr;
+    for (int i = 0; i < grid.ntheta; ++i)
+    {
+      const double dx = x1 - radius * grid_cos_theta[i], dy = y1 - radius * grid_sin_theta[i];
+      f(j * grid.ntheta + i, dx * dx + dy * dy);
+    }
+  }
 }
 
-/* Given a heat source centered on p1, calculate the composition addition at point p2*/
-inline double ConvectionSimulator::react(const Point &p1, const Point &p2)
-{
-  const double x1 = (p1.r + grid.r_inner) * std::cos(p1.theta),
-               y1 = (p1.r + grid.r_inner) * std::sin(p1.theta);
-  const double x2 = (p2.r + grid.r_inner) * std::cos(p2.theta),
-               y2 = (p2.r + grid.r_inner) * std::sin(p2.theta);
-  const double rsq = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
-  return rsq < composition_source_radius * composition_source_radius ? composition_source : 0.0;
-}
+//Gaussians are not evaluated beyond exp(-gaussian_cutoff), about 4e-18,
+//which is too small to change the fields they are added to.
+static const double gaussian_cutoff = 40.;
 
 /* Loop over all the cells and add heat according to where the current heat
    source is. */
 void ConvectionSimulator::add_heat(double theta, double r, bool hot)
 {
   IE_PROFILE(heat);
-  Point p;
-  p.theta = theta;
-  p.r = r;
-#pragma omp parallel for
-  for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
-  {
-    RegularGrid::iterator cell(cell_index, grid);
-    double temperature = T[cell->self()] + (hot ? 1.0 : -1.0) * heat(p, cell->location()) * dt;
-    temperature = dmax(dmin(temperature, 1.0), 0.0);
-    T[cell->self()] = temperature;
-  }
+  //A Gaussian source term
+  const double amplitude = (hot ? 1.0 : -1.0) * heat_source * dt;
+  const double inv_two_variance = 1. / (2. * heat_source_radius * heat_source_radius);
+  for_each_cell_distance(theta, r,
+                         [&](int k, double rsq)
+                         {
+                           const double arg = rsq * inv_two_variance;
+                           const double heat = (arg < gaussian_cutoff ? std::exp(-arg) : 0.);
+                           T[k] = dmax(dmin(T[k] + amplitude * heat, 1.0), 0.0);
+                         });
 }
 
 /* Loop over all the cells and add composition, similar to add_heat*/
 void ConvectionSimulator::add_composition(double theta, double r)
 {
   IE_PROFILE(heat);
-  Point p;
-  p.theta = theta;
-  p.r = r;
-#pragma omp parallel for
-  for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
-  {
-    RegularGrid::iterator cell(cell_index, grid);
-    double composition = C[cell->self()] + react(p, cell->location()) * dt;
-    composition = dmax(dmin(composition, 1.0), 0.0);
-    C[cell->self()] = composition;
-  }
+  //A uniform source within composition_source_radius
+  const double radius_sq = composition_source_radius * composition_source_radius;
+  const double amount = composition_source * dt;
+  for_each_cell_distance(theta, r,
+                         [&](int k, double rsq)
+                         {
+                           const double composition = C[k] + (rsq < radius_sq ? amount : 0.0);
+                           C[k] = dmax(dmin(composition, 1.0), 0.0);
+                         });
 }
 
 /* Loop over the cells and zero out the displacement vectors */
 void ConvectionSimulator::clear_seismic_waves()
 {
-  for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    D[cell->self()] = 0.;
-    Dp[cell->self()] = 0.;
-  }
+  std::fill(D, D + grid.ncells, 0.);
+  std::fill(Dp, Dp + grid.ncells, 0.);
 }
 
 /* Place the seismometer at a point (theta,r)*/
@@ -212,20 +205,15 @@ void ConvectionSimulator::place_seismometer(double theta, double r)
   functional form is best.  */
 void ConvectionSimulator::earthquake(double theta, double r)
 {
-  const double x1 = (r + grid.r_inner) * std::cos(theta), y1 = (r + grid.r_inner) * std::sin(theta);
-
   const double earthquake_radius = grid.dr * 4.; //Somewhat arbitrary radius
   const double prefactor = 2.e-1 / M_E;
 
-  for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    Point p2 = cell->location();
-    const double x2 = (p2.r + grid.r_inner) * std::cos(p2.theta),
-                 y2 = (p2.r + grid.r_inner) * std::sin(p2.theta);
-    const double rsq = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
-    const double dist = rsq / 2. / earthquake_radius / earthquake_radius;
-    D[cell->self()] += prefactor * (1. - dist) * std::exp(-dist);
-  }
+  for_each_cell_distance(theta, r,
+                         [&](int k, double rsq)
+                         {
+                           const double dist = rsq / 2. / earthquake_radius / earthquake_radius;
+                           D[k] += prefactor * (1. - dist) * std::exp(-dist);
+                         });
 }
 
 /* Explicitly propagate the wave equation. */
@@ -238,60 +226,64 @@ void ConvectionSimulator::propagate_seismic_waves()
   double dissipation = 0.5; //Empirically chosen dissipation
   double dispersion =
       1.0e-1; //Used to damp out any total displacment that is caused by lots of earthquake sources
+  const int ntheta = grid.ntheta, nr = grid.nr;
 
 //We can get away with an explicit timestepping scheme for the wave equation,
 //so no complicated tridiagonal matrix inversion or any such nonsense here
 #pragma omp parallel for
-  for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
-  {
-    RegularGrid::iterator cell(cell_index, grid);
+  for (int j = 0; j < nr; ++j)
+    for (int i = 0; i < ntheta; ++i)
+    {
+      const int self = j * ntheta + i;
+      const int right = j * ntheta + (i == ntheta - 1 ? 0 : i + 1);
+      const int left = j * ntheta + (i == 0 ? ntheta - 1 : i - 1);
+      const int up = self + ntheta, down = self - ntheta;
 
-    double laplacian;
-    const double r = cell->radius();
-    const double dr = grid.dr;
-    const double dtheta = grid.dtheta;
+      double laplacian;
+      const double r = grid.r_inner + j * grid.dr;
+      const double dr = grid.dr;
+      const double dtheta = grid.dtheta;
 
-    //Make the wavespeed temperature dependent.  This is a HUGE
-    //temperature dependence so it is pretty obvious.
-    double speed = reference_speed * (1.0 - 0.7 * T[cell->self()]);
-    speed = (speed < 0.1 ? 0.1 : (speed > 1.0 ? 1.0 : speed));
+      //Make the wavespeed temperature dependent.  This is a HUGE
+      //temperature dependence so it is pretty obvious.
+      double speed = reference_speed * (1.0 - 0.7 * T[self]);
+      speed = (speed < 0.1 ? 0.1 : (speed > 1.0 ? 1.0 : speed));
 
-    //Five point laplacian stencil
-    if (cell->at_top_boundary())
-      laplacian = (1. / dr / dr + 0.5 / r / dr) * D[cell->down()] +
-                  (1. / dr / dr - 0.5 / r / dr) * D[cell->down()] +
-                  1. / r / r / dtheta / dtheta * (D[cell->right()] + D[cell->left()]) -
-                  (2. / r / r / dtheta / dtheta + 2. / dr / dr) * D[cell->self()];
-    else if (cell->at_bottom_boundary())
-      laplacian = (1. / dr / dr + 0.5 / r / dr) * D[cell->up()] +
-                  (1. / dr / dr - 0.5 / r / dr) * D[cell->up()] +
-                  1. / r / r / dtheta / dtheta * (D[cell->right()] + D[cell->left()]) -
-                  (2. / r / r / dtheta / dtheta + 2. / dr / dr) * D[cell->self()];
-    else
-      laplacian = (1. / dr / dr + 0.5 / r / dr) * D[cell->up()] +
-                  (1. / dr / dr - 0.5 / r / dr) * D[cell->down()] +
-                  1. / r / r / dtheta / dtheta * (D[cell->right()] + D[cell->left()]) -
-                  (2. / r / r / dtheta / dtheta + 2. / dr / dr) * D[cell->self()];
+      //Five point laplacian stencil
+      if (j == nr - 1) //Top boundary
+        laplacian = (1. / dr / dr + 0.5 / r / dr) * D[down] +
+                    (1. / dr / dr - 0.5 / r / dr) * D[down] +
+                    1. / r / r / dtheta / dtheta * (D[right] + D[left]) -
+                    (2. / r / r / dtheta / dtheta + 2. / dr / dr) * D[self];
+      else if (j == 0) //Bottom boundary
+        laplacian = (1. / dr / dr + 0.5 / r / dr) * D[up] + (1. / dr / dr - 0.5 / r / dr) * D[up] +
+                    1. / r / r / dtheta / dtheta * (D[right] + D[left]) -
+                    (2. / r / r / dtheta / dtheta + 2. / dr / dr) * D[self];
+      else
+        laplacian = (1. / dr / dr + 0.5 / r / dr) * D[up] +
+                    (1. / dr / dr - 0.5 / r / dr) * D[down] +
+                    1. / r / r / dtheta / dtheta * (D[right] + D[left]) -
+                    (2. / r / r / dtheta / dtheta + 2. / dr / dr) * D[self];
 
-    //Explicitly propagate wave
-    scratch[cell->self()] =
-        (2.0 * D[cell->self()] - Dp[cell->self()] + tstep * tstep * speed * speed * laplacian +
-         tstep * dissipation * D[cell->self()] - tstep * tstep * dispersion * D[cell->self()]) /
-        (1.0 + dissipation * tstep);
-  }
+      //Explicitly propagate wave
+      scratch[self] = (2.0 * D[self] - Dp[self] + tstep * tstep * speed * speed * laplacian +
+                       tstep * dissipation * D[self] - tstep * tstep * dispersion * D[self]) /
+                      (1.0 + dissipation * tstep);
+    }
 
-  for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+#pragma omp parallel for
+  for (int k = 0; k < grid.ncells; ++k)
   {
     //Current displacement becomes previous displacement
-    Dp[cell->self()] = D[cell->self()];
+    Dp[k] = D[k];
     //Copy over new displacement
-    D[cell->self()] = scratch[cell->self()];
+    D[k] = scratch[k];
 
     //clip field to tamp down on instabilities and keep it in reasonable values
-    if (D[cell->self()] > 1.0)
-      D[cell->self()] = 1.0;
-    if (D[cell->self()] < -1.0)
-      D[cell->self()] = -1.0;
+    if (D[k] > 1.0)
+      D[k] = 1.0;
+    if (D[k] < -1.0)
+      D[k] = -1.0;
   }
 }
 
@@ -635,15 +627,10 @@ void ConvectionSimulator::ifft_rows(std::complex<double> *in, double *out)
 double ConvectionSimulator::nusselt_number()
 {
   double heat_flux = 0;
+  const double *top = T + (grid.nr - 1) * grid.ntheta, *below = top - grid.ntheta;
+  for (int i = 0; i < grid.ntheta; ++i)
+    heat_flux += (top[i] - below[i]) / grid.dr;
 
-  for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-  {
-    if (cell->at_top_boundary())
-    {
-      double grad_T = (T[cell->self()] - T[cell->down()]) / grid.dr;
-      heat_flux += grad_T;
-    }
-  }
   return -heat_flux *                           //sum of fluxes
          grid.r_outer / grid.ntheta *           //metric terms
          std::log(grid.r_outer / grid.r_inner); //geometry factor.
@@ -654,44 +641,31 @@ double ConvectionSimulator::nusselt_number()
 void ConvectionSimulator::assemble_curl_density_vector()
 {
   IE_PROFILE(stokes_rhs);
-  //Assemble curl_density vector. clang-tidy sees the two OpenMP loops below
-  //as identical outlined regions, but they differ.
-  if (include_composition) // NOLINT(bugprone-branch-clone)
+  const int ntheta = grid.ntheta;
+  //Centered differences in theta of each row of the field, scaled by factor
+  //and added to out
+  auto add_dtheta = [ntheta](const double *field, double factor, double *out)
   {
+    out[0] += factor * (field[1] - field[ntheta - 1]);
+    for (int i = 1; i < ntheta - 1; ++i)
+      out[i] += factor * (field[i + 1] - field[i - 1]);
+    out[ntheta - 1] += factor * (field[0] - field[ntheta - 2]);
+  };
+
 #pragma omp parallel for
-    for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
-    {
-      RegularGrid::iterator cell(cell_index, grid);
-      const double r = cell->radius();
-      double dTdtheta, dCdtheta;
-
-      if (cell->at_bottom_boundary() || cell->at_top_boundary())
-      {
-        dTdtheta = 0.0;
-        dCdtheta = 0.0;
-      }
-      else
-      {
-        dTdtheta = (T[cell->right()] - T[cell->left()]) / 2. / grid.dtheta;
-        dCdtheta = (C[cell->right()] - C[cell->left()]) / 2. / grid.dtheta;
-      }
-
-      curl_density[cell->self()] = Ra * (dTdtheta - buoyancy_number * dCdtheta) / r;
-    }
-  }
-  else
+  for (int j = 0; j < grid.nr; ++j)
   {
-#pragma omp parallel for
-    for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
-    {
-      RegularGrid::iterator cell(cell_index, grid);
-      const double r = cell->radius();
-      if (cell->at_bottom_boundary() || cell->at_top_boundary())
-        curl_density[cell->self()] = 0.0;
-      else
-        curl_density[cell->self()] =
-            Ra * (T[cell->right()] - T[cell->left()]) / r / 2.0 / grid.dtheta;
-    }
+    double *out = curl_density + j * ntheta;
+    std::fill(out, out + ntheta, 0.0);
+    if (j == 0 || j == grid.nr - 1)
+      continue; //Zero at the boundaries
+
+    //Ra / r times the theta derivative of the density
+    const double r = grid.r_inner + j * grid.dr;
+    const double factor = Ra / r / 2. / grid.dtheta;
+    add_dtheta(T + j * ntheta, factor, out);
+    if (include_composition)
+      add_dtheta(C + j * ntheta, -buoyancy_number * factor, out);
   }
 }
 
@@ -732,20 +706,25 @@ void ConvectionSimulator::solve_stokes()
   //Come up with the velocities by taking finite differences of the stream function.
   //I could also take these derivatives in spectral space, but that would mean
   //more fourier transforms, so this should be considerably cheaper.
+  //At the boundaries, the radial derivative is one sided.
   IE_PROFILE(stokes_velocity);
+  const int ntheta = grid.ntheta;
 #pragma omp parallel for
-  for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
+  for (int j = 0; j < grid.nr; ++j)
   {
-    RegularGrid::iterator cell(cell_index, grid);
-    const double r = cell->radius();
-    if (cell->at_top_boundary())
-      u[cell->self()] = (stream[cell->self()] - stream[cell->down()]) / grid.dr;
-    else if (cell->at_bottom_boundary())
-      u[cell->self()] = (stream[cell->up()] - stream[cell->self()]) / grid.dr;
-    else
-      u[cell->self()] = (stream[cell->up()] - stream[cell->down()]) / 2.0 / grid.dr;
-
-    v[cell->self()] = -(stream[cell->right()] - stream[cell->left()]) / 2.0 / grid.dtheta / r;
+    const int above = (j == grid.nr - 1 ? j : j + 1), below = (j == 0 ? j : j - 1);
+    const double u_factor = 1.0 / ((above - below) * grid.dr);
+    const double r = grid.r_inner + j * grid.dr;
+    const double v_factor = -1.0 / (2.0 * grid.dtheta * r);
+    const double *s_row = stream + j * ntheta;
+    const double *s_above = stream + above * ntheta, *s_below = stream + below * ntheta;
+    double *u_row = u + j * ntheta, *v_row = v + j * ntheta;
+    for (int i = 0; i < ntheta; ++i)
+    {
+      const int left = (i == 0 ? ntheta - 1 : i - 1), right = (i == ntheta - 1 ? 0 : i + 1);
+      u_row[i] = (s_above[i] - s_below[i]) * u_factor;
+      v_row[i] = (s_row[right] - s_row[left]) * v_factor;
+    }
   }
 }
 
@@ -756,28 +735,43 @@ void ConvectionSimulator::true_polar_wander()
   double moment_of_inertia[3] = {0., 0., 0.};
   double omega[2] = {std::cos(spin), std::sin(spin)};
 
-  //First, calculate the moment of inertia tensor
-  for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
+  //First, calculate the moment of inertia tensor. Each row is summed by
+  //one thread, then the rows in order, so the result does not depend on
+  //the number of threads.
+  std::vector<double> row_moments(3 * grid.nr);
+#pragma omp parallel for
+  for (int j = 0; j < grid.nr; ++j)
   {
-    double density;
-    if (include_composition)
-      density = -(T[cell->self()] - buoyancy_number * C[cell->self()]);
-    else
-      density = -T[cell->self()];
-
-    //The TPW calculation can go wonky when the temperature gets
-    //cold enough that the sign changes. Not really sure what is
-    //going on at the moment, but this fixes it
-    density = dmin(density, 0.0);
-
-    const double r = cell->radius();
-    const double theta = cell->location().theta;
-    const double x = r * std::cos(theta);
-    const double y = r * std::sin(theta);
+    const double r = grid.r_inner + j * grid.dr;
     const double volume = r * grid.dr * grid.dtheta;
-    moment_of_inertia[0] += density * y * y * volume; // E_11
-    moment_of_inertia[1] += density * x * x * volume; // E_22
-    moment_of_inertia[2] -= density * x * y * volume; // E_21 E12
+    double yy = 0., xx = 0., xy = 0.;
+    for (int i = 0; i < grid.ntheta; ++i)
+    {
+      const int k = j * grid.ntheta + i;
+      double density = -T[k];
+      if (include_composition)
+        density = -(T[k] - buoyancy_number * C[k]);
+
+      //The TPW calculation can go wonky when the temperature gets
+      //cold enough that the sign changes. Not really sure what is
+      //going on at the moment, but this fixes it
+      density = dmin(density, 0.0);
+
+      const double x = r * grid_cos_theta[i];
+      const double y = r * grid_sin_theta[i];
+      yy += density * y * y;
+      xx += density * x * x;
+      xy += density * x * y;
+    }
+    row_moments[3 * j + 0] = yy * volume;
+    row_moments[3 * j + 1] = xx * volume;
+    row_moments[3 * j + 2] = xy * volume;
+  }
+  for (int j = 0; j < grid.nr; ++j)
+  {
+    moment_of_inertia[0] += row_moments[3 * j + 0]; // E_11
+    moment_of_inertia[1] += row_moments[3 * j + 1]; // E_22
+    moment_of_inertia[2] -= row_moments[3 * j + 2]; // E_21 E12
   }
 
   //Not strictly necessary, but doesn't hurt to subtract the trace

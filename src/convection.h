@@ -63,14 +63,12 @@ private:
   //workhorse functions
   void initialize_temperature(); //just like it says
   void initialize_composition(); //just like it says
-  double heat(const Point &,
-              const Point &); //heating term at a point, given where the click has happened
-  double react(const Point &,
-               const Point &); //heating term at a point, given where the click has happened
-  void setup_fft_plans();      //Plan the transforms, once
-  void fft_rows(const double *in, std::complex<double> *out); //Transform each row
-  void ifft_rows(std::complex<double> *in, double *out);      //Inverse transform each row
-  void setup_stokes_problem();                                //Setup for spectral solve
+  template <typename F>
+  void for_each_cell_distance(double theta, double r, F f) const; //For sources at a point
+  void setup_fft_plans();                                         //Plan the transforms, once
+  void fft_rows(const double *in, std::complex<double> *out);     //Transform each row
+  void ifft_rows(std::complex<double> *in, double *out);          //Inverse transform each row
+  void setup_stokes_problem();                                    //Setup for spectral solve
   void
   setup_diffusion_problem(); //Setup for diffusion solve (needs to be called every time the Ra is changed)
   void assemble_curl_density_vector(); //Assembling RHS for spectral solve.  Called every timestep
