@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <vector>
 #include "convection.h"
@@ -30,6 +31,15 @@ ConvectionSimulator::ConvectionSimulator(double inner_radius, int ntheta, int nr
                                          bool include_composition)
     : include_composition(include_composition), grid(inner_radius, ntheta, nr)
 {
+  //Sines and cosines of the grid angles, for advection
+  grid_cos_theta.resize(grid.ntheta);
+  grid_sin_theta.resize(grid.ntheta);
+  for (int i = 0; i < grid.ntheta; ++i)
+  {
+    grid_cos_theta[i] = std::cos(i * grid.dtheta);
+    grid_sin_theta[i] = std::sin(i * grid.dtheta);
+  }
+
   //Allocate memory for data vectors
   T = new double[grid.ncells];
   D = new double[grid.ncells];
@@ -304,89 +314,14 @@ void ConvectionSimulator::propagate_seismic_waves()
   }
 }
 
-/* Interpolate the velocity onto an arbitrary point
-   A bit complicated*/
-Point ConvectionSimulator::evaluate_velocity(const Point &p)
-{
-  Point vel;
-
-  //Get the relevant lower-left cells for the velocities
-  RegularGrid::iterator cell = grid.lower_left_cell(p);
-
-  //Determine the local x and y coordinates for the velocity
-  double local_theta = fast_fmod(p.theta, grid.dtheta) / grid.dtheta;
-  double local_r = (p.r - cell->location().r) / grid.dr;
-
-  unsigned int ul, ur, dl, dr;
-  if (cell->at_top_boundary())
-  {
-    ul = cell->self();
-    ur = cell->right();
-  }
-  else
-  {
-    ul = cell->up();
-    ur = cell->right();
-  }
-  dl = cell->self();
-  dr = cell->right();
-
-  //get interpolated vx
-  vel.theta = linear_interp_2d(local_theta, local_r, u[ul], u[ur], u[dl], u[dr]);
-  vel.r = linear_interp_2d(local_theta, local_r, v[ul], v[ur], v[dl], v[dr]);
-
-  return vel;
-}
-
-/* Interpolate the temperature onto an arbitrary point. */
-inline double ConvectionSimulator::evaluate_temperature(const Point &p)
-{
-  double temp;
-  RegularGrid::iterator cell = grid.lower_left_cell(p);
-  double local_theta = fast_fmod(p.theta, grid.dtheta) / grid.dtheta;
-  double local_r = (p.r - cell->location().r) / grid.dr;
-
-  if (cell->at_top_boundary())
-    temp = linear_interp_2d(local_theta, local_r, -T[cell->self()], -T[cell->right()],
-                            T[cell->self()], T[cell->right()]);
-  else
-    temp = linear_interp_2d(local_theta, local_r, T[cell->up()], T[cell->upright()],
-                            T[cell->self()], T[cell->right()]);
-
-  return temp;
-}
-
-/* Interpolate the composition onto an arbitrary point. */
-inline double ConvectionSimulator::evaluate_composition(const Point &p)
-{
-  if (p.r < 0.0 || p.r > grid.lr)
-    return 0.0;
-
-  double comp;
-  RegularGrid::iterator cell = grid.lower_left_cell(p);
-  double local_theta = fast_fmod(p.theta, grid.dtheta) / grid.dtheta;
-  double local_r = (p.r - cell->location().r) / grid.dr;
-
-  if (cell->at_top_boundary())
-    comp = linear_interp_2d(local_theta, local_r, C[cell->self()], C[cell->right()],
-                            C[cell->self()], C[cell->right()]);
-  else
-    comp = linear_interp_2d(local_theta, local_r, C[cell->up()], C[cell->upright()],
-                            C[cell->self()], C[cell->right()]);
-
-  return comp;
-}
-
 void ConvectionSimulator::semi_lagrangian_advect_temperature()
 {
-  advection_field field = advection_field::temperature;
-  semi_lagrangian_advect(field);
+  semi_lagrangian_advect(advection_field::temperature);
 }
 
 void ConvectionSimulator::semi_lagrangian_advect_composition()
 {
-  advection_field field = advection_field::composition;
-  semi_lagrangian_advect(field);
+  semi_lagrangian_advect(advection_field::composition);
 }
 
 /* Advect the temperature field through the velocity field using
@@ -402,83 +337,163 @@ void ConvectionSimulator::semi_lagrangian_advect(const advection_field field)
   //be advected to the current grid point in one time step.  In general,
   //this point wil not be on the grid.  I find this point using a coarse
   //iterated predictor corrector.
+  //
+  //This is the innermost loop of the simulation, so it avoids the cell
+  //iterators and trigonometry: cell indices are computed directly, the
+  //grid angles' sines and cosines are precomputed, and those of the
+  //takeoff points come from their Cartesian coordinates.
 
-#pragma omp parallel for
-  for (int cell_index = 0; cell_index < grid.ncells; ++cell_index)
+  const int ntheta = grid.ntheta, nr = grid.nr;
+  const double dtheta = grid.dtheta, dr = grid.dr;
+  const double r_inner = grid.r_inner, lr = grid.lr;
+  const double half_dt = dt / 2.0;
+  const double inv_dtheta = 1.0 / dtheta, inv_dr = 1.0 / dr;
+  const double *cos_theta = grid_cos_theta.data(), *sin_theta = grid_sin_theta.data();
+  const double *field_values = (field == advection_field::temperature ? T : C);
+
+  //Locate a point (r measured from the inner radius, already clamped to
+  //[0, lr]) on the grid: the cell at its lower left, the cells to the right
+  //and above (wrapping in theta), and the local coordinates in that cell.
+  struct Location
   {
-    RegularGrid::iterator cell(cell_index, grid);
-
-    Point vel_final, vel_final_cart;         //Velocity at the grid point
-    Point vel_takeoff, vel_takeoff_cart;     //Velocity at the candidate takeoff point
-    Point takeoff_point, takeoff_point_cart; //Candidate takeoff point
-    Point final_point, final_point_cart;     //grid point
-
-    //These points are known, as they are the grid points in question.  They will
-    //not change for this cell.
-    vel_final.theta = u[cell_index];
-    vel_final.r = v[cell_index];
-    final_point = cell->location();
-    const double final_r = final_point.r + grid.r_inner;
-    const double cos_f = std::cos(final_point.theta);
-    const double sin_f = std::sin(final_point.theta);
-    final_point_cart.x = final_r * cos_f;
-    final_point_cart.y = final_r * sin_f;
-    vel_final_cart.x = -vel_final.theta * sin_f + vel_final.r * cos_f;
-    vel_final_cart.y = vel_final.theta * cos_f + vel_final.r * sin_f;
-
-    //Calculate the initial guess for the takeoff point using a basic predictor
-    //with a forward euler step
-    takeoff_point_cart.x = final_point_cart.x - vel_final_cart.x * dt;
-    takeoff_point_cart.y = final_point_cart.y - vel_final_cart.y * dt;
-    takeoff_point.theta = std::atan2(takeoff_point_cart.y, takeoff_point_cart.x);
-    takeoff_point.r = std::sqrt(takeoff_point_cart.x * takeoff_point_cart.x +
-                                takeoff_point_cart.y * takeoff_point_cart.y) -
-                      grid.r_inner;
-    //Keep it in the domain
-    takeoff_point.theta = fast_fmod(takeoff_point.theta + grid.lx, grid.lx);
-    takeoff_point.r = dmin(grid.lr, dmax(takeoff_point.r, 0.0));
-
-    //Iterate on the corrector.  Here I only do one iteration for
-    //performance reasons, but in principle we could do more to get
-    //a better estimate.
-    for (unsigned int i = 0; i < 1; ++i)
+    int self, right, up, upright;
+    bool at_top;
+    double local_theta, local_r;
+  };
+  //
+  //The takeoff point's angle is found relative to the grid point's, which
+  //is almost always a small angle, where a short series is far cheaper
+  //than std::atan2 and agrees with it to about 1e-11 (|z| <= tan(pi/12),
+  //where the first omitted term is z^17/17). Larger angles fall back to
+  //std::atan2. The branch is almost never taken, so it predicts well.
+  const double tan_pi_12 = 0.2679491924311227;
+  auto locate = [&](double x, double y, double r, double theta_f, double cos_f, double sin_f)
+  {
+    //Coordinates in a frame rotated to the grid point's angle
+    const double along = x * cos_f + y * sin_f, across = y * cos_f - x * sin_f;
+    double offset;
+    if (along > 0. && std::fabs(across) <= tan_pi_12 * along)
     {
-      //Evaluate the velocity at the predictor
-      vel_takeoff = evaluate_velocity(takeoff_point);
-      const double takeoff_r = takeoff_point.r + grid.r_inner;
-      const double cos_t = std::cos(takeoff_point.theta);
-      const double sin_t = std::sin(takeoff_point.theta);
-      takeoff_point_cart.x = takeoff_r * cos_t;
-      takeoff_point_cart.y = takeoff_r * sin_t;
-      vel_takeoff_cart.x = -vel_takeoff.theta * sin_t + vel_takeoff.r * cos_t;
-      vel_takeoff_cart.y = vel_takeoff.theta * cos_t + vel_takeoff.r * sin_t;
-
-      //Come up with the corrector using a midpoint rule
-      takeoff_point_cart.x =
-          final_point_cart.x - (vel_final_cart.x + vel_takeoff_cart.x) * dt / 2.0;
-      takeoff_point_cart.y =
-          final_point_cart.y - (vel_final_cart.y + vel_takeoff_cart.y) * dt / 2.0;
-      takeoff_point.theta = std::atan2(takeoff_point_cart.y, takeoff_point_cart.x);
-      takeoff_point.r = std::sqrt(takeoff_point_cart.x * takeoff_point_cart.x +
-                                  takeoff_point_cart.y * takeoff_point_cart.y) -
-                        grid.r_inner;
-      //Keep in domain
-      takeoff_point.theta = fast_fmod(takeoff_point.theta + grid.lx, grid.lx);
-      takeoff_point.r = dmin(grid.lr, dmax(takeoff_point.r, 0.0));
+      const double z = across / along, z2 = z * z;
+      offset =
+          z *
+          (1. + z2 * (-1. / 3. +
+                      z2 * (1. / 5. +
+                            z2 * (-1. / 7. +
+                                  z2 * (1. / 9. +
+                                        z2 * (-1. / 11. + z2 * (1. / 13. + z2 * (-1. / 15.))))))));
     }
-    if (field == advection_field::temperature)
-      scratch[cell->self()] = evaluate_temperature(takeoff_point); //Store the temperature we found
-    else if (field == advection_field::composition)
-      scratch[cell->self()] = evaluate_composition(takeoff_point); //Store the composition we found
-  }
+    else
+      offset = std::atan2(across, along);
+
+    //Angle in [0, 2 pi)
+    double theta = theta_f + offset;
+    if (theta < 0.)
+      theta += grid.lx;
+    else if (theta >= grid.lx)
+      theta -= grid.lx;
+    const double theta_cells = theta * inv_dtheta;
+    int i = fast_floor(theta_cells);
+    const double local_theta = theta_cells - i;
+    if (i >= ntheta)
+      i -= ntheta;
+    else if (i < 0)
+      i += ntheta;
+    const double r_cells = r * inv_dr;
+    int j = fast_floor(r_cells);
+    j = (j < 0 ? 0 : (j >= nr ? nr - 1 : j));
+
+    Location loc;
+    loc.self = j * ntheta + i;
+    loc.right = j * ntheta + (i + 1 == ntheta ? 0 : i + 1);
+    loc.at_top = (j == nr - 1);
+    loc.up = loc.self + ntheta;
+    loc.upright = loc.right + ntheta;
+    loc.local_theta = local_theta;
+    loc.local_r = r_cells - j;
+    return loc;
+  };
+
+#pragma omp parallel for collapse(2)
+  for (int j = 0; j < nr; ++j)
+    for (int i = 0; i < ntheta; ++i)
+    {
+      const int k = j * ntheta + i;
+
+      //These points are known, as they are the grid points in question.  They will
+      //not change for this cell.
+      const double cos_f = cos_theta[i], sin_f = sin_theta[i];
+      const double final_r = j * dr + r_inner;
+      const double final_x = final_r * cos_f, final_y = final_r * sin_f;
+      const double vel_final_x = -u[k] * sin_f + v[k] * cos_f;
+      const double vel_final_y = u[k] * cos_f + v[k] * sin_f;
+
+      //Calculate the initial guess for the takeoff point using a basic predictor
+      //with a forward euler step
+      double x = final_x - vel_final_x * dt;
+      double y = final_y - vel_final_y * dt;
+      double rho = std::sqrt(x * x + y * y);
+      //Keep it in the domain
+      double r = dmin(lr, dmax(rho - r_inner, 0.0));
+      Location loc = locate(x, y, r, i * dtheta, cos_f, sin_f);
+
+      //Iterate on the corrector.  Here I only do one iteration for
+      //performance reasons, but in principle we could do more to get
+      //a better estimate.
+      {
+        //Evaluate the velocity at the predictor, interpolating linearly.
+        //NOTE: the upper right corner uses the lower right value, as the
+        //original code did; upright would be the expected neighbor.
+        const int ul = (loc.at_top ? loc.self : loc.up), ur = loc.right;
+        const int dl = loc.self, dr_ = loc.right;
+        const double vel_theta =
+            linear_interp_2d(loc.local_theta, loc.local_r, u[ul], u[ur], u[dl], u[dr_]);
+        const double vel_r =
+            linear_interp_2d(loc.local_theta, loc.local_r, v[ul], v[ur], v[dl], v[dr_]);
+
+        //The takeoff angle's cosine and sine, from its Cartesian position
+        const double inv_rho = 1.0 / rho;
+        const double cos_t = x * inv_rho, sin_t = y * inv_rho;
+        const double vel_takeoff_x = -vel_theta * sin_t + vel_r * cos_t;
+        const double vel_takeoff_y = vel_theta * cos_t + vel_r * sin_t;
+
+        //Come up with the corrector using a midpoint rule
+        x = final_x - (vel_final_x + vel_takeoff_x) * half_dt;
+        y = final_y - (vel_final_y + vel_takeoff_y) * half_dt;
+        rho = std::sqrt(x * x + y * y);
+        //Keep in domain
+        r = dmin(lr, dmax(rho - r_inner, 0.0));
+        loc = locate(x, y, r, i * dtheta, cos_f, sin_f);
+      }
+
+      //Interpolate the field at the takeoff point
+      const double *f = field_values;
+      double value;
+      if (field == advection_field::temperature)
+      {
+        //Above the top boundary the temperature is reflected about zero
+        if (loc.at_top)
+          value = linear_interp_2d(loc.local_theta, loc.local_r, -f[loc.self], -f[loc.right],
+                                   f[loc.self], f[loc.right]);
+        else
+          value = linear_interp_2d(loc.local_theta, loc.local_r, f[loc.up], f[loc.upright],
+                                   f[loc.self], f[loc.right]);
+      }
+      else
+      {
+        if (loc.at_top)
+          value = linear_interp_2d(loc.local_theta, loc.local_r, f[loc.self], f[loc.right],
+                                   f[loc.self], f[loc.right]);
+        else
+          value = linear_interp_2d(loc.local_theta, loc.local_r, f[loc.up], f[loc.upright],
+                                   f[loc.self], f[loc.right]);
+      }
+      scratch[k] = value;
+    }
 
   //Copy the scratch vector into the temperature or composition vector.
-  if (field == advection_field::temperature)
-    for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-      T[cell->self()] = scratch[cell->self()];
-  else if (field == advection_field::composition)
-    for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-      C[cell->self()] = scratch[cell->self()];
+  double *destination = (field == advection_field::temperature ? T : C);
+  std::copy(scratch, scratch + grid.ncells, destination);
 }
 
 /* Solve the diffusion equation implicitly with reverse Euler.

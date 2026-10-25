@@ -2,6 +2,7 @@
 #define STOKES_H
 
 #include <complex>
+#include <vector>
 #include "fftw3.h"
 #include "regular_grid.h"
 #include "tridiagonal_matrix_solver.h"
@@ -32,12 +33,13 @@ private:
   RegularGrid grid;
 
   //Vectors which are used in the solve
-  double *T;            //Temperature
-  double *C;            //Composition
-  double *D;            //Displacement
-  double *Dp;           //Previous displacement
-  double *scratch;      //Scratch vectors for storing temporary information
-  double *stream;       //Stream function solution
+  double *T;       //Temperature
+  double *C;       //Composition
+  double *D;       //Displacement
+  double *Dp;      //Previous displacement
+  double *scratch; //Scratch vectors for storing temporary information
+  std::vector<double> grid_cos_theta, grid_sin_theta; //Of the angle of each grid column
+  double *stream;                                     //Stream function solution
   double *curl_density; //Curl of temperature for the stream function solution
   double *u;            //velocity in the x direction
   double *v;            //Velocity in the y direction
@@ -76,9 +78,6 @@ private:
   //functions for evaluating field at points
   double initial_temperature(const Point &);
   double initial_composition(const Point &);
-  double evaluate_temperature(const Point &);
-  double evaluate_composition(const Point &);
-  Point evaluate_velocity(const Point &);
 
 public:
   //Constructor and destructor
