@@ -4,8 +4,7 @@ name: CI
 
 on:
   push:
-    # modernize only until this workflow is verified there
-    branches: [main, modernize]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
