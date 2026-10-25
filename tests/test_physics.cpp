@@ -233,7 +233,8 @@ static void test_wave_arrival()
 
 /* Time-averaged Nusselt number and RMS velocity from the fixed heat
    sources, compared with values recorded from the original code
-   (247ae78). At these Rayleigh numbers 1000 steps is not yet chaotic,
+   (247ae78), updated once for the advection velocity interpolation fix
+   (which moved them by 0.15% at Ra 1e5 and 0.3% at Ra 1e6). At these Rayleigh numbers 1000 steps is not yet chaotic,
    so the tolerances allow roundoff-level changes (FFT library, loop
    order) but catch real changes to the physics. */
 static void check_convection(double ra, double nu_ref, double vrms_ref, double rel_tol)
@@ -268,8 +269,8 @@ static void check_convection(double ra, double nu_ref, double vrms_ref, double r
 
 static void test_convection_regression()
 {
-  check_convection(1.e5, 5.130927, 103.9836, 0.01);
-  check_convection(1.e6, 10.494390, 453.0153, 0.03);
+  check_convection(1.e5, 5.138751, 104.1309, 0.01);
+  check_convection(1.e6, 10.527008, 454.5279, 0.03);
 }
 
 /* Results should not depend on the number of threads. This holds

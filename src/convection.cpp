@@ -442,9 +442,9 @@ void ConvectionSimulator::semi_lagrangian_advect(const advection_field field)
       //a better estimate.
       {
         //Evaluate the velocity at the predictor, interpolating linearly.
-        //NOTE: the upper right corner uses the lower right value, as the
-        //original code did; upright would be the expected neighbor.
-        const int ul = (loc.at_top ? loc.self : loc.up), ur = loc.right;
+        //At the top row there is nothing above, so use the top values.
+        const int ul = (loc.at_top ? loc.self : loc.up);
+        const int ur = (loc.at_top ? loc.right : loc.upright);
         const int dl = loc.self, dr_ = loc.right;
         const double vel_theta =
             linear_interp_2d(loc.local_theta, loc.local_r, u[ul], u[ur], u[dl], u[dr_]);
