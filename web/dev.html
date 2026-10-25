@@ -16,9 +16,14 @@
   <canvas id="canvas" width="800" height="800" oncontextmenu="event.preventDefault()"></canvas>
   <div id="stats">loading...</div>
   <script>
-    var Module = { canvas: document.getElementById('canvas') };
+    var params = new URLSearchParams(location.search);
+    var Module = {
+      canvas: document.getElementById('canvas'),
+      // ?grid=1536x192 sets the grid size, as IE_GRID does natively
+      preRun: [function () { if (params.get('grid')) ENV.IE_GRID = params.get('grid'); }],
+    };
     // With ?log, also write the stats to the console (for headless smoke tests).
-    var logStats = new URLSearchParams(location.search).has('log');
+    var logStats = params.has('log');
 
     // Once a second, show Ra, Nu, and the per-phase timings.
     setInterval(function () {

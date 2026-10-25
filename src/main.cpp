@@ -31,9 +31,29 @@ bool include_tpw = false;
 
 //Number of cells in the theta and r directions.
 //This is the primary control on resolution,
-//as well as performance.
-const unsigned int ntheta = 1024;
-const unsigned int nr = 128;
+//as well as performance, and sets the maximum
+//Rayleigh number (which goes as nr^3).
+//Override with IE_GRID=NTHETAxNR, e.g. IE_GRID=1536x192
+//(on the web, the grid parameter of the page URL).
+struct GridSize
+{
+  int ntheta, nr;
+};
+GridSize grid_size()
+{
+  GridSize size = {1024, 128};
+  const char *setting = std::getenv("IE_GRID");
+  if (setting && *setting)
+  {
+    int ntheta = 0, nr = 0;
+    if (std::sscanf(setting, "%dx%d", &ntheta, &nr) == 2 && ntheta >= 8 && nr >= 4)
+      size = {ntheta, nr};
+    else
+      std::fprintf(stderr, "Ignoring IE_GRID=%s; expected NTHETAxNR, such as 1536x192\n", setting);
+  }
+  return size;
+}
+const GridSize grid = grid_size();
 
 //Aspect ratio of the computational domain
 //is set by the inner radius, where the outer
@@ -83,7 +103,7 @@ color (*colormap)(double) = &hot;
 double simulation_time = 0.0;
 
 //Global solver
-ConvectionSimulator simulator(r_inner, ntheta, nr, include_composition);
+ConvectionSimulator simulator(r_inner, grid.ntheta, grid.nr, include_composition);
 Mantle mantle(simulator);
 Axis axis(simulator);
 Seismograph seismograph(simulator);
@@ -498,6 +518,8 @@ void event(const sapp_event *event)
 
 sapp_desc sokol_main(int /*argc*/, char ** /*argv*/)
 {
+  std::printf("Grid %dx%d, maximum Ra %.2g\n", grid.ntheta, grid.nr, simulator.rayleigh_number());
+
   sapp_desc desc = {};
   desc.init_cb = init;
   desc.frame_cb = frame;

@@ -78,6 +78,7 @@ if(EMSCRIPTEN)
   target_link_options(interactive_earth PRIVATE
     -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2
     -sINITIAL_MEMORY=64MB -sALLOW_MEMORY_GROWTH=1
+    -sEXPORTED_RUNTIME_METHODS=ENV
     -lembind)
   configure_file(web/dev.html ${CMAKE_CURRENT_BINARY_DIR}/index.html COPYONLY)
 else()
