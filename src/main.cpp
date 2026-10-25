@@ -33,7 +33,7 @@ bool include_tpw = false;
 //This is the primary control on resolution,
 //as well as performance, and sets the maximum
 //Rayleigh number (which goes as nr^3).
-//Override with IE_GRID=NTHETAxNR, e.g. IE_GRID=1536x192
+//Override with IE_GRID=NTHETAxNR, e.g. IE_GRID=2048x256
 //(on the web, the grid parameter of the page URL).
 struct GridSize
 {
@@ -41,7 +41,7 @@ struct GridSize
 };
 GridSize grid_size()
 {
-  GridSize size = {1024, 128};
+  GridSize size = {1536, 192};
   const char *setting = std::getenv("IE_GRID");
   if (setting && *setting)
   {
@@ -49,7 +49,7 @@ GridSize grid_size()
     if (std::sscanf(setting, "%dx%d", &ntheta, &nr) == 2 && ntheta >= 8 && nr >= 4)
       size = {ntheta, nr};
     else
-      std::fprintf(stderr, "Ignoring IE_GRID=%s; expected NTHETAxNR, such as 1536x192\n", setting);
+      std::fprintf(stderr, "Ignoring IE_GRID=%s; expected NTHETAxNR, such as 2048x256\n", setting);
   }
   return size;
 }

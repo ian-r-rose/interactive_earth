@@ -19,7 +19,7 @@
     var params = new URLSearchParams(location.search);
     var Module = {
       canvas: document.getElementById('canvas'),
-      // ?grid=1536x192 sets the grid size, as IE_GRID does natively
+      // ?grid=2048x256 sets the grid size, as IE_GRID does natively
       preRun: [function () { if (params.get('grid')) ENV.IE_GRID = params.get('grid'); }],
     };
     // With ?log, also write the stats to the console (for headless smoke tests).
