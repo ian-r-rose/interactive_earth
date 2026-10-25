@@ -29,7 +29,8 @@ inline double dmax(double x, double y)
 */
 ConvectionSimulator::ConvectionSimulator(double inner_radius, int ntheta, int nr,
                                          bool include_composition)
-    : include_composition(include_composition), grid(inner_radius, ntheta, nr)
+    : include_composition(include_composition), grid(inner_radius, ntheta, nr),
+      stokes_matrices(grid.nr, n_modes()), diffusion_matrices(grid.nr, n_modes())
 {
   //Sines and cosines of the grid angles, for advection
   grid_cos_theta.resize(grid.ntheta);
@@ -44,7 +45,7 @@ ConvectionSimulator::ConvectionSimulator(double inner_radius, int ntheta, int nr
   T = fftw_alloc_real(grid.ncells);
   D = new double[grid.ncells];
   Dp = new double[grid.ncells];
-  stream = new double[grid.ncells];
+  stream = fftw_alloc_real(grid.ncells);
   curl_density = fftw_alloc_real(grid.ncells);
   u = new double[grid.ncells];
   v = new double[grid.ncells];
@@ -57,16 +58,6 @@ ConvectionSimulator::ConvectionSimulator(double inner_radius, int ntheta, int nr
   //spectral vector, but this way it makes the indexing simpler
   curl_density_spectral = reinterpret_cast<std::complex<double> *>(fftw_alloc_complex(grid.ncells));
   T_spectral = reinterpret_cast<std::complex<double> *>(fftw_alloc_complex(grid.ncells));
-  scratch1_spectral = reinterpret_cast<std::complex<double> *>(fftw_alloc_complex(grid.ncells));
-  scratch2_spectral = reinterpret_cast<std::complex<double> *>(fftw_alloc_complex(grid.ncells));
-
-  stokes_matrices = new TridiagonalMatrixSolver<std::complex<double>> *[grid.ntheta / 2 + 1];
-  diffusion_matrices = new TridiagonalMatrixSolver<std::complex<double>> *[grid.ntheta / 2 + 1];
-  for (int i = 0; i <= grid.ntheta / 2; ++i)
-  {
-    stokes_matrices[i] = new TridiagonalMatrixSolver<std::complex<double>>(grid.nr);
-    diffusion_matrices[i] = new TridiagonalMatrixSolver<std::complex<double>>(grid.nr);
-  }
 
   //Plan the transforms before initializing anything, since planning may
   //overwrite the arrays it is given.
@@ -96,26 +87,16 @@ ConvectionSimulator::~ConvectionSimulator()
   fftw_free(T);
   delete[] D;
   delete[] Dp;
-  delete[] stream;
+  fftw_free(stream);
   fftw_free(curl_density);
   delete[] u;
   delete[] v;
   fftw_free(scratch);
   fftw_free(curl_density_spectral);
   fftw_free(T_spectral);
-  fftw_free(scratch1_spectral);
-  fftw_free(scratch2_spectral);
 
   if (include_composition)
     delete[] C;
-
-  for (int i = 0; i <= grid.ntheta / 2; ++i)
-  {
-    delete stokes_matrices[i];
-    delete diffusion_matrices[i];
-  }
-  delete[] stokes_matrices;
-  delete[] diffusion_matrices;
 
   fftw_destroy_plan(row_dft);
   fftw_destroy_plan(row_idft);
@@ -491,9 +472,12 @@ void ConvectionSimulator::semi_lagrangian_advect(const advection_field field)
       scratch[k] = value;
     }
 
-  //Copy the scratch vector into the temperature or composition vector.
+  //Copy the scratch vector into the temperature or composition vector,
+  //each thread the part it just computed
   double *destination = (field == advection_field::temperature ? T : C);
-  std::copy(scratch, scratch + grid.ncells, destination);
+#pragma omp parallel for
+  for (int k = 0; k < grid.ncells; ++k)
+    destination[k] = scratch[k];
 }
 
 /* Solve the diffusion equation implicitly with reverse Euler.
@@ -506,13 +490,8 @@ void ConvectionSimulator::diffuse_temperature()
   //Apply boundary conditions
   {
     IE_PROFILE(diffuse_misc);
-    for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-    {
-      if (cell->at_top_boundary())
-        T[cell->self()] = 0.0;
-      else if (cell->at_bottom_boundary())
-        T[cell->self()] = 1.0;
-    }
+    std::fill(T, T + grid.ntheta, 1.0);                               //Bottom row
+    std::fill(T + (grid.nr - 1) * grid.ntheta, T + grid.ncells, 0.0); //Top row
   }
 
   //Execute the forward fourier transform
@@ -521,24 +500,20 @@ void ConvectionSimulator::diffuse_temperature()
     fft_rows(T, T_spectral); //X direction
   }
 
+  //Solve in place, normalizing for the unnormalized inverse transform
   {
     IE_PROFILE(diffuse_tridiag);
+    const double normalization = 1.0 / grid.ntheta;
 #pragma omp parallel for
-    for (int l = 0; l <= grid.ntheta / 2; ++l)
-      diffusion_matrices[l]->solve(T_spectral + l, grid.ntheta, scratch1_spectral + l);
+    for (int b = 0; b < n_mode_blocks(); ++b)
+      diffusion_matrices.solve(T_spectral, T_spectral, grid.ntheta, b * mode_block,
+                               std::min((b + 1) * mode_block, n_modes()), normalization);
   }
 
   //Execute the inverse Fourier transform
   {
     IE_PROFILE(diffuse_fft);
-    ifft_rows(scratch1_spectral, scratch); //X direction
-  }
-
-  //Renormalize
-  {
-    IE_PROFILE(diffuse_misc);
-    for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-      T[cell->self()] = scratch[cell->self()] / grid.ntheta;
+    ifft_rows(T_spectral, T); //X direction
   }
 }
 
@@ -573,7 +548,7 @@ void ConvectionSimulator::setup_diffusion_problem()
       diag[i] = 1. + 2. * dt / dr / dr + factor * dt / r / r;
     }
 
-    diffusion_matrices[l]->initialize(lower_diag.data(), diag.data(), upper_diag.data());
+    diffusion_matrices.initialize(l, lower_diag.data(), diag.data(), upper_diag.data());
   }
 }
 
@@ -607,7 +582,7 @@ void ConvectionSimulator::setup_stokes_problem()
       diag[i] = -2. / dr / dr - factor / r / r;
     }
 
-    stokes_matrices[l]->initialize(lower_diag.data(), diag.data(), upper_diag.data());
+    stokes_matrices.initialize(l, lower_diag.data(), diag.data(), upper_diag.data());
   }
 }
 
@@ -629,7 +604,7 @@ void ConvectionSimulator::setup_fft_plans()
 
   row_dft =
       fftw_plan_dft_r2c_1d(grid.ntheta, T, reinterpret_cast<fftw_complex *>(T_spectral), flags);
-  row_idft = fftw_plan_dft_c2r_1d(grid.ntheta, reinterpret_cast<fftw_complex *>(scratch1_spectral),
+  row_idft = fftw_plan_dft_c2r_1d(grid.ntheta, reinterpret_cast<fftw_complex *>(T_spectral),
                                   scratch, flags);
 }
 
@@ -732,24 +707,26 @@ void ConvectionSimulator::solve_stokes()
     fft_rows(curl_density, curl_density_spectral); //X direction
   }
 
+  //The biharmonic operator is the square of the Laplacian, so solve with
+  //the Laplacian twice, each block of modes while it is in cache. Solve in
+  //place, normalizing for the unnormalized inverse transform.
   {
     IE_PROFILE(stokes_tridiag);
+    const double normalization = 1.0 / grid.ntheta;
 #pragma omp parallel for
-    for (int l = 0; l <= grid.ntheta / 2; ++l)
+    for (int b = 0; b < n_mode_blocks(); ++b)
     {
-      stokes_matrices[l]->solve(curl_density_spectral + l, grid.ntheta, scratch1_spectral + l);
-      stokes_matrices[l]->solve(scratch1_spectral + l, grid.ntheta, scratch2_spectral + l);
+      const int first = b * mode_block, last = std::min((b + 1) * mode_block, n_modes());
+      stokes_matrices.solve(curl_density_spectral, curl_density_spectral, grid.ntheta, first, last);
+      stokes_matrices.solve(curl_density_spectral, curl_density_spectral, grid.ntheta, first, last,
+                            normalization);
     }
   }
 
   //Execute the inverse Fourier transform
   {
     IE_PROFILE(stokes_fft);
-    ifft_rows(scratch2_spectral, scratch); //X direction
-
-    //Renormalize
-    for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
-      stream[cell->self()] = scratch[cell->self()] / grid.ntheta;
+    ifft_rows(curl_density_spectral, stream); //X direction
   }
 
   //Come up with the velocities by taking finite differences of the stream function.

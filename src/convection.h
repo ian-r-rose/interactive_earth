@@ -47,15 +47,18 @@ private:
   double spin;
   Point seismometer_location;
 
-  TridiagonalMatrixSolver<std::complex<double>> **stokes_matrices;
-  TridiagonalMatrixSolver<std::complex<double>> **diffusion_matrices;
+  //One system per Fourier mode, for the radial direction
+  int n_modes() const { return grid.ntheta / 2 + 1; }
+  BatchedTridiagonalSolver stokes_matrices;
+  BatchedTridiagonalSolver diffusion_matrices;
+  //The solves split the modes into blocks of this many, between threads
+  static const int mode_block = 32;
+  int n_mode_blocks() const { return (n_modes() + mode_block - 1) / mode_block; }
 
   //FFTW stuff
   fftw_plan row_dft, row_idft; //FFTW plans for the forward and inverse transforms of one row
   std::complex<double> *curl_density_spectral; //Curl of density in spectral space
   std::complex<double> *T_spectral;            //Temperature in spectral space
-  std::complex<double> *scratch1_spectral,
-      *scratch2_spectral; //Scratch complex vectors for temporary stuff
 
   //workhorse functions
   void initialize_temperature(); //just like it says
