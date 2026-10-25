@@ -51,9 +51,7 @@ private:
   TridiagonalMatrixSolver<std::complex<double>> **diffusion_matrices;
 
   //FFTW stuff
-  fftw_plan dft_stokes, idft_stokes; //FFTW plans for doing the forward and inverse transforms
-  fftw_plan dft_diffusion,
-      idft_diffusion; //FFTW plans for doing the forward and inverse transforms
+  fftw_plan row_dft, row_idft; //FFTW plans for the forward and inverse transforms of one row
   std::complex<double> *curl_density_spectral; //Curl of density in spectral space
   std::complex<double> *T_spectral;            //Temperature in spectral space
   std::complex<double> *scratch1_spectral,
@@ -66,7 +64,10 @@ private:
               const Point &); //heating term at a point, given where the click has happened
   double react(const Point &,
                const Point &); //heating term at a point, given where the click has happened
-  void setup_stokes_problem(); //Setup for spectral solve
+  void setup_fft_plans();      //Plan the transforms, once
+  void fft_rows(const double *in, std::complex<double> *out); //Transform each row
+  void ifft_rows(std::complex<double> *in, double *out);      //Inverse transform each row
+  void setup_stokes_problem();                                //Setup for spectral solve
   void
   setup_diffusion_problem(); //Setup for diffusion solve (needs to be called every time the Ra is changed)
   void assemble_curl_density_vector(); //Assembling RHS for spectral solve.  Called every timestep

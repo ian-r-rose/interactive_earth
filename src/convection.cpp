@@ -41,24 +41,24 @@ ConvectionSimulator::ConvectionSimulator(double inner_radius, int ntheta, int nr
   }
 
   //Allocate memory for data vectors
-  T = new double[grid.ncells];
+  T = fftw_alloc_real(grid.ncells);
   D = new double[grid.ncells];
   Dp = new double[grid.ncells];
   stream = new double[grid.ncells];
-  curl_density = new double[grid.ncells];
+  curl_density = fftw_alloc_real(grid.ncells);
   u = new double[grid.ncells];
   v = new double[grid.ncells];
-  scratch = new double[grid.ncells];
+  scratch = fftw_alloc_real(grid.ncells);
 
   if (include_composition)
     C = new double[grid.ncells];
 
   //I actually allocate more memory than necessary for the
   //spectral vector, but this way it makes the indexing simpler
-  curl_density_spectral = new std::complex<double>[grid.ncells];
-  T_spectral = new std::complex<double>[grid.ncells];
-  scratch1_spectral = new std::complex<double>[grid.ncells];
-  scratch2_spectral = new std::complex<double>[grid.ncells];
+  curl_density_spectral = reinterpret_cast<std::complex<double> *>(fftw_alloc_complex(grid.ncells));
+  T_spectral = reinterpret_cast<std::complex<double> *>(fftw_alloc_complex(grid.ncells));
+  scratch1_spectral = reinterpret_cast<std::complex<double> *>(fftw_alloc_complex(grid.ncells));
+  scratch2_spectral = reinterpret_cast<std::complex<double> *>(fftw_alloc_complex(grid.ncells));
 
   stokes_matrices = new TridiagonalMatrixSolver<std::complex<double>> *[grid.ntheta / 2 + 1];
   diffusion_matrices = new TridiagonalMatrixSolver<std::complex<double>> *[grid.ntheta / 2 + 1];
@@ -67,6 +67,10 @@ ConvectionSimulator::ConvectionSimulator(double inner_radius, int ntheta, int nr
     stokes_matrices[i] = new TridiagonalMatrixSolver<std::complex<double>>(grid.nr);
     diffusion_matrices[i] = new TridiagonalMatrixSolver<std::complex<double>>(grid.nr);
   }
+
+  //Plan the transforms before initializing anything, since planning may
+  //overwrite the arrays it is given.
+  setup_fft_plans();
 
   //Initialize the state
   buoyancy_number = 1.0;
@@ -81,27 +85,26 @@ ConvectionSimulator::ConvectionSimulator(double inner_radius, int ntheta, int nr
   //Initialize displacement to zero
   clear_seismic_waves();
 
-  //Do some setup work for solving stokes and
-  //diffustion problems.
+  //The Stokes matrices do not depend on the state; the diffusion
+  //matrices are set up by update_state.
   setup_stokes_problem();
-  setup_diffusion_problem();
 }
 
 /* Destructor for the solver.*/
 ConvectionSimulator::~ConvectionSimulator()
 {
-  delete[] T;
+  fftw_free(T);
   delete[] D;
   delete[] Dp;
   delete[] stream;
-  delete[] curl_density;
+  fftw_free(curl_density);
   delete[] u;
   delete[] v;
-  delete[] scratch;
-  delete[] curl_density_spectral;
-  delete[] T_spectral;
-  delete[] scratch1_spectral;
-  delete[] scratch2_spectral;
+  fftw_free(scratch);
+  fftw_free(curl_density_spectral);
+  fftw_free(T_spectral);
+  fftw_free(scratch1_spectral);
+  fftw_free(scratch2_spectral);
 
   if (include_composition)
     delete[] C;
@@ -114,11 +117,8 @@ ConvectionSimulator::~ConvectionSimulator()
   delete[] stokes_matrices;
   delete[] diffusion_matrices;
 
-  fftw_destroy_plan(dft_diffusion);
-  fftw_destroy_plan(idft_diffusion);
-  fftw_destroy_plan(dft_stokes);
-  fftw_destroy_plan(idft_stokes);
-  fftw_cleanup();
+  fftw_destroy_plan(row_dft);
+  fftw_destroy_plan(row_idft);
 }
 
 /* Functional form of initial temperature field.
@@ -518,7 +518,7 @@ void ConvectionSimulator::diffuse_temperature()
   //Execute the forward fourier transform
   {
     IE_PROFILE(diffuse_fft);
-    fftw_execute(dft_diffusion); //X direction
+    fft_rows(T, T_spectral); //X direction
   }
 
   {
@@ -531,7 +531,7 @@ void ConvectionSimulator::diffuse_temperature()
   //Execute the inverse Fourier transform
   {
     IE_PROFILE(diffuse_fft);
-    fftw_execute(idft_diffusion); //X direction
+    ifft_rows(scratch1_spectral, scratch); //X direction
   }
 
   //Renormalize
@@ -575,21 +575,6 @@ void ConvectionSimulator::setup_diffusion_problem()
 
     diffusion_matrices[l]->initialize(lower_diag.data(), diag.data(), upper_diag.data());
   }
-
-  int n[1];
-  int stride, dist, howmany;
-
-  //transform in the x direction with a full dft
-  n[0] = grid.ntheta;
-  stride = 1;
-  dist = grid.ntheta;
-  howmany = grid.nr;
-  dft_diffusion = fftw_plan_many_dft_r2c(1, n, howmany, T, NULL, stride, dist,
-                                         reinterpret_cast<fftw_complex *>(T_spectral), NULL, stride,
-                                         dist, FFTW_ESTIMATE);
-  idft_diffusion =
-      fftw_plan_many_dft_c2r(1, n, howmany, reinterpret_cast<fftw_complex *>(scratch1_spectral),
-                             NULL, stride, dist, scratch, NULL, stride, dist, FFTW_ESTIMATE);
 }
 
 /* Setup the stokes solve with the stream function formulation.
@@ -624,21 +609,48 @@ void ConvectionSimulator::setup_stokes_problem()
 
     stokes_matrices[l]->initialize(lower_diag.data(), diag.data(), upper_diag.data());
   }
+}
 
-  int n[1];
-  int stride, dist, howmany;
+/* Tell FFTW how to do the transforms in the x direction: a real DFT of
+   one row of the grid. The same plans serve every row of every array,
+   through FFTW's new-array execute functions (see fft_rows), which are
+   safe to call from several threads at once. They are made once, since
+   planning is expensive (and with anything other than FFTW_ESTIMATE,
+   overwrites the arrays). */
+void ConvectionSimulator::setup_fft_plans()
+{
+  //New-array execution needs every row to have the alignment the plans
+  //were made with. That holds for the usual power of two ntheta, since the
+  //arrays come from fftw_alloc; otherwise, give up on aligned SIMD.
+  //FFTW_MEASURE finds plans about 10% faster, but that is under 1% of a
+  //step, costs about 0.3 s of planning, and makes results depend on timing.
+  const bool rows_aligned = (grid.ntheta * sizeof(double)) % 64 == 0;
+  const unsigned flags = FFTW_ESTIMATE | (rows_aligned ? 0u : unsigned(FFTW_UNALIGNED));
 
-  //transform in the x direction with a full dft
-  n[0] = grid.ntheta;
-  stride = 1;
-  dist = grid.ntheta;
-  howmany = grid.ny;
-  dft_stokes = fftw_plan_many_dft_r2c(1, n, howmany, curl_density, NULL, stride, dist,
-                                      reinterpret_cast<fftw_complex *>(curl_density_spectral), NULL,
-                                      stride, dist, FFTW_ESTIMATE);
-  idft_stokes =
-      fftw_plan_many_dft_c2r(1, n, howmany, reinterpret_cast<fftw_complex *>(scratch2_spectral),
-                             NULL, stride, dist, scratch, NULL, stride, dist, FFTW_ESTIMATE);
+  row_dft =
+      fftw_plan_dft_r2c_1d(grid.ntheta, T, reinterpret_cast<fftw_complex *>(T_spectral), flags);
+  row_idft = fftw_plan_dft_c2r_1d(grid.ntheta, reinterpret_cast<fftw_complex *>(scratch1_spectral),
+                                  scratch, flags);
+}
+
+/* Forward and inverse transforms of every row. The rows are independent,
+   so they are split between threads; each one is computed the same way
+   regardless of the number of threads. Like all of FFTW's real inverse
+   transforms, the inverse overwrites its input. */
+void ConvectionSimulator::fft_rows(const double *in, std::complex<double> *out)
+{
+#pragma omp parallel for
+  for (int j = 0; j < grid.nr; ++j)
+    fftw_execute_dft_r2c(row_dft, const_cast<double *>(in) + j * grid.ntheta,
+                         reinterpret_cast<fftw_complex *>(out + j * grid.ntheta));
+}
+
+void ConvectionSimulator::ifft_rows(std::complex<double> *in, double *out)
+{
+#pragma omp parallel for
+  for (int j = 0; j < grid.nr; ++j)
+    fftw_execute_dft_c2r(row_idft, reinterpret_cast<fftw_complex *>(in + j * grid.ntheta),
+                         out + j * grid.ntheta);
 }
 
 /*Calculate the Nusselt number for the given temperature field.
@@ -717,7 +729,7 @@ void ConvectionSimulator::solve_stokes()
   //Execute the forward fourier transform
   {
     IE_PROFILE(stokes_fft);
-    fftw_execute(dft_stokes); //X direction
+    fft_rows(curl_density, curl_density_spectral); //X direction
   }
 
   {
@@ -733,7 +745,7 @@ void ConvectionSimulator::solve_stokes()
   //Execute the inverse Fourier transform
   {
     IE_PROFILE(stokes_fft);
-    fftw_execute(idft_stokes); //X direction
+    ifft_rows(scratch2_spectral, scratch); //X direction
 
     //Renormalize
     for (RegularGrid::iterator cell = grid.begin(); cell != grid.end(); ++cell)
@@ -858,7 +870,7 @@ void ConvectionSimulator::update_state(double rayleigh)
   composition_source_radius = grid.lr / 10.;   //Size of compositional blob
   composition_source = heat_source;            //Strength of compositional reaction
 
-  setup_diffusion_problem(); //need to recompute the auxiliary vectors for the diffusion problem
+  setup_diffusion_problem(); //The diffusion matrices depend on dt
 }
 
 void ConvectionSimulator::set_temperature(const double *values)
